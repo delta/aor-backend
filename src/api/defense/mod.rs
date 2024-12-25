@@ -223,25 +223,28 @@ async fn post_batch_transfer_artifacts(
         let mut conn = pg_pool
             .get()
             .map_err(|err| error::handle_error(err.into()))?;
-        let bank_block_type_id = web::block(move || util::get_block_id_of_bank(&mut conn, &user_id))
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
-
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        let current_layout_id =
-            web::block(move || util::check_valid_map_id(&mut conn, &user_id, &transfer.map_space_id))
+        let bank_block_type_id =
+            web::block(move || util::get_block_id_of_bank(&mut conn, &user_id))
                 .await?
                 .map_err(|err| error::handle_error(err.into()))?;
 
         let mut conn = pg_pool
             .get()
             .map_err(|err| error::handle_error(err.into()))?;
-        let is_valid_map_space_building =
-            web::block(move || util::check_valid_map_space_building(&mut conn, &transfer.map_space_id))
-                .await?
-                .map_err(|err| error::handle_error(err.into()))?;
+        let current_layout_id = web::block(move || {
+            util::check_valid_map_id(&mut conn, &user_id, &transfer.map_space_id)
+        })
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+        let mut conn = pg_pool
+            .get()
+            .map_err(|err| error::handle_error(err.into()))?;
+        let is_valid_map_space_building = web::block(move || {
+            util::check_valid_map_space_building(&mut conn, &transfer.map_space_id)
+        })
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
 
         if !is_valid_map_space_building {
             return Err(ErrorBadRequest(
