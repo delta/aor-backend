@@ -10,6 +10,8 @@ use diesel::RunQueryDsl;
 use diesel::{PgConnection, QueryDsl};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use super::BlockCategory;
+
 const NO_BLOCK: i32 = -1;
 
 //running shortest path simulation
@@ -20,7 +22,8 @@ pub fn run_shortest_paths(
     let roads_list: Vec<(i32, i32)> = map_spaces::table
         .inner_join(block_type::table)
         .filter(map_spaces::map_id.eq(input_map_layout_id))
-        .filter(block_type::building_type.eq(ROAD_ID))
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .filter(block_type::category_id.eq(ROAD_ID))
         .select((map_spaces::x_coordinate, map_spaces::y_coordinate))
         .load::<(i32, i32)>(conn)
         .map_err(|err| DieselError {

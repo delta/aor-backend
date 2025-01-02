@@ -6,7 +6,7 @@ RUN apt-get update -y && apt-get install -y \
     pkg-config \
     libssl-dev
 RUN cargo install diesel_cli --no-default-features --features postgres
-RUN cargo install cargo-watch
+RUN cargo install cargo-watch --locked
 RUN cargo install cargo-chef
 
 FROM base AS planner

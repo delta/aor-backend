@@ -271,17 +271,25 @@ async fn set_base_details(
     let defender_id = user.0;
     let map_spaces = map_spaces.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let (map, blocks, buildings) = web::block(move || {
+    let (map, blocks, buildings, defenders) = web::block(move || {
+        let map = util::fetch_map_layout(&mut conn, &defender_id)?;
         Ok((
-            util::fetch_map_layout(&mut conn, &defender_id)?,
+            map.clone(),
             util::fetch_blocks(&mut conn, &defender_id)?,
             util::fetch_buildings(&mut conn)?,
-        )) as anyhow::Result<(MapLayout, HashMap<i32, BlockType>, Vec<BuildingType>)>
+            util::fetch_defender_types(&mut conn, &defender_id)?,
+        ))
+            as anyhow::Result<(
+                MapLayout,
+                HashMap<i32, BlockType>,
+                Vec<BuildingType>,
+                Vec<DefenderTypeResponse>,
+            )>
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
 
-    validate::is_valid_update_layout(&map_spaces, &blocks, &buildings)?;
+    validate::is_valid_update_layout(&map_spaces, &blocks, &buildings, &defenders)?;
 
     web::block(move || {
         let mut conn = pool.get()?;

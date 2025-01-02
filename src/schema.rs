@@ -35,6 +35,7 @@ diesel::table! {
         level -> Int4,
         cost -> Int4,
         name -> Varchar,
+        prop_id -> Int4,
     }
 }
 
@@ -58,10 +59,8 @@ diesel::table! {
 
     block_type (id) {
         id -> Int4,
-        defender_type -> Nullable<Int4>,
-        mine_type -> Nullable<Int4>,
         category -> BlockCategory,
-        building_type -> Int4,
+        category_id -> Int4,
     }
 }
 
@@ -75,6 +74,7 @@ diesel::table! {
         level -> Int4,
         cost -> Int4,
         hp -> Int4,
+        prop_id -> Int4,
     }
 }
 
@@ -83,10 +83,10 @@ diesel::table! {
         id -> Int4,
         speed -> Int4,
         damage -> Int4,
-        radius -> Int4,
         level -> Int4,
         cost -> Int4,
         name -> Varchar,
+        prop_id -> Int4,
     }
 }
 
@@ -159,11 +159,19 @@ diesel::table! {
 diesel::table! {
     mine_type (id) {
         id -> Int4,
-        radius -> Int4,
         damage -> Int4,
         level -> Int4,
         cost -> Int4,
         name -> Varchar,
+        prop_id -> Int4,
+    }
+}
+
+diesel::table! {
+    prop (id) {
+        id -> Int4,
+        range -> Int4,
+        frequency -> Int4,
     }
 }
 
@@ -202,13 +210,13 @@ diesel::table! {
 }
 
 diesel::joinable!(artifact -> map_spaces (map_space_id));
+diesel::joinable!(attacker_type -> prop (prop_id));
 diesel::joinable!(available_blocks -> attacker_type (attacker_type_id));
 diesel::joinable!(available_blocks -> block_type (block_type_id));
 diesel::joinable!(available_blocks -> emp_type (emp_type_id));
 diesel::joinable!(available_blocks -> user (user_id));
-diesel::joinable!(block_type -> building_type (building_type));
-diesel::joinable!(block_type -> defender_type (defender_type));
-diesel::joinable!(block_type -> mine_type (mine_type));
+diesel::joinable!(building_type -> prop (prop_id));
+diesel::joinable!(defender_type -> prop (prop_id));
 diesel::joinable!(game -> map_layout (map_layout_id));
 diesel::joinable!(level_constraints -> block_type (block_id));
 diesel::joinable!(level_constraints -> levels_fixture (level_id));
@@ -216,6 +224,7 @@ diesel::joinable!(map_layout -> levels_fixture (level_id));
 diesel::joinable!(map_layout -> user (player));
 diesel::joinable!(map_spaces -> block_type (block_type_id));
 diesel::joinable!(map_spaces -> map_layout (map_id));
+diesel::joinable!(mine_type -> prop (prop_id));
 diesel::joinable!(shortest_path -> map_layout (base_id));
 diesel::joinable!(simulation_log -> game (game_id));
 
@@ -234,6 +243,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     map_layout,
     map_spaces,
     mine_type,
+    prop,
     shortest_path,
     simulation_log,
     user,
