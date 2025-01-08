@@ -24,9 +24,10 @@ DELETE FROM public.game;
 DELETE FROM public.map_layout;
 DELETE FROM public.user;
 DELETE FROM public.levels_fixture;
+DELETE FROM public.prop;
 
 COPY public.levels_fixture FROM stdin;
-1	2024_01_01 00:00:00	2025_01_01 00:00:00	40	1	3
+1	2025_01_01 00:00:00	2026_01_01 00:00:00	40	1	3
 \.
 
 COPY public.user FROM stdin;
@@ -37,65 +38,82 @@ COPY public.map_layout FROM stdin;
 1	1	1	t
 \.
 
+COPY public.prop FROM stdin;
+0	0	0
+1	8	0
+2	10	0
+3	6	0
+4	7	0
+5	8	0
+6	9	0
+7	9	0
+8	10	0
+9	8	0
+10	5	0
+11	6	0
+12	7	0
+\.
+
+
 COPY public.building_type FROM stdin;
-0	Road	1	1	0	0	0	0
-1	Bank	3	3	2147483647	1	10	120
-2	Building_2	4	4	120	1	10	140
-3	Building_3	5	5	140	1	10	160
-4	Building_4	3	3	90	1	10	110
-5	Building_5	4	4	110	1	10	130
-6	Building_6	5	5	130	1	10	150
-7	Building_7	3	3	80	1	10	100
-8	Building_8	4	4	100	1	10	120
-9	Building_9	5	5	120	1	10	140
-10	Building_10	3	3	70	1	10	90
-11	Building_11	4	4	90	1	10	110
-12	Building_12	5	5	110	1	10	130
-13	Building_13	3	3	60	1	10	80
-14	Building_14	4	4	80	1	10	100
-15	Building_15	5	5	100	1	10	120
-16	Bank	3	3	2147483647	2	50	140
-17	Building_2	4	4	130	2	75	160
-18	Building_3	5	5	150	2	100	180
-19	Building_4	3	3	100	2	25	120
-20	Building_5	4	4	120	2	50	140
-21	Building_6	5	5	140	2	75	160
-22	Building_7	3	3	90	2	20	110
-23	Building_8	4	4	110	2	45	130
-24	Building_9	5	5	130	2	70	150
-25	Building_10	3	3	80	2	15	100
-26	Building_11	4	4	100	2	40	120
-27	Building_12	5	5	120	2	65	140
-28	Building_13	3	3	70	2	10	90
-29	Building_14	4	4	90	2	35	110
-30	Building_15	5	5	110	2	60	130
-31	Bank	3	3	2147483647	3	-1	160
-32	Building_2	4	4	140	3	-1	180
-33	Building_3	5	5	160	3	-1	200
-34	Building_4	3	3	110	3	-1	140
-35	Building_5	4	4	130	3	-1	160
-36	Building_6	5	5	150	3	-1	180
-37	Building_7	3	3	100	3	-1	120
-38	Building_8	4	4	120	3	-1	140
-39	Building_9	5	5	140	3	-1	160
-40	Building_10	3	3	90	3	-1	110
-41	Building_11	4	4	110	3	-1	130
-42	Building_12	5	5	130	3	-1	150
-43	Building_13	3	3	80	3	-1	100
-44	Building_14	4	4	100	3	-1	120
-45	Building_15	5	5	120	3	-1	140
+0	Road	1	1	0	0	0	0	0
+1	Bank	3	3	2147483647	1	10	120	0
+2	Building_2	4	4	120	1	10	140	0
+3	Building_3	5	5	140	1	10	160	0
+4	Building_4	3	3	90	1	10	110	0
+5	Building_5	4	4	110	1	10	130	0
+6	Building_6	5	5	130	1	10	150	0
+7	Building_7	3	3	80	1	10	100	0
+8	Building_8	4	4	100	1	10	120	0
+9	Building_9	5	5	120	1	10	140	0
+10	Building_10	3	3	70	1	10	90	0
+11	Building_11	4	4	90	1	10	110	0
+12	Building_12	5	5	110	1	10	130	0
+13	Building_13	3	3	60	1	10	80	0
+14	Building_14	4	4	80	1	10	100	0
+15	Building_15	5	5	100	1	10	120	0
+16	Bank	3	3	2147483647	2	50	140	0
+17	Building_2	4	4	130	2	75	160	0
+18	Building_3	5	5	150	2	100	180	0
+19	Building_4	3	3	100	2	25	120	0
+20	Building_5	4	4	120	2	50	140	0
+21	Building_6	5	5	140	2	75	160	0
+22	Building_7	3	3	90	2	20	110	0
+23	Building_8	4	4	110	2	45	130	0
+24	Building_9	5	5	130	2	70	150	0
+25	Building_10	3	3	80	2	15	100	0
+26	Building_11	4	4	100	2	40	120	0
+27	Building_12	5	5	120	2	65	140	0
+28	Building_13	3	3	70	2	10	90	0
+29	Building_14	4	4	90	2	35	110	0
+30	Building_15	5	5	110	2	60	130	0
+31	Bank	3	3	2147483647	3	-1	160	0
+32	Building_2	4	4	140	3	-1	180	0
+33	Building_3	5	5	160	3	-1	200	0
+34	Building_4	3	3	110	3	-1	140	0
+35	Building_5	4	4	130	3	-1	160	0
+36	Building_6	5	5	150	3	-1	180	0
+37	Building_7	3	3	100	3	-1	120	0
+38	Building_8	4	4	120	3	-1	140	0
+39	Building_9	5	5	140	3	-1	160	0
+40	Building_10	3	3	90	3	-1	110	0
+41	Building_11	4	4	110	3	-1	130	0
+42	Building_12	5	5	130	3	-1	150	0
+43	Building_13	3	3	80	3	-1	100	0
+44	Building_14	4	4	100	3	-1	120	0
+45	Building_15	5	5	120	3	-1	140	0
 \.
 
 COPY public.defender_type FROM stdin;
-1	4	50	8	1	10	Defender_1
-2	4	40	10	1	10	Defender_2
-3	4	30	6	1	10	Defender_3
-4	4	60	7	2	150	Defender_1
-5	4	50	8	2	250	Defender_2
-6	4	40	9	2	350	Defender_3
-7	4	70	9	3	-1	Defender_1
-8	4	60	10	3	-1	Defender_2
-9	4	50	8	3	-1	Defender_3
+1	4	50	1	10	Defender_1	1
+2	4	40	1	10	Defender_2	2
+3	4	30	1	10	Defender_3	3
+4	4	60	2	150	Defender_1	4
+5	4	50	2	250	Defender_2	5
+6	4	40	2	350	Defender_3	6
+7	4	70	3	-1	Defender_1	7
+8	4	60	3	-1	Defender_2	8
+9	4	50	3	-1	Defender_3	9
 \.
 
 COPY public.emp_type FROM stdin;
@@ -111,82 +129,82 @@ COPY public.emp_type FROM stdin;
 \.
 
 COPY public.mine_type FROM stdin;
-1	5	50	1	10	Mine_1
-2	6	70	2	120	Mine_1
-3	7	90	3	-1	Mine_1
+1	50	1	10	Mine_1	10
+2	70	2	120	Mine_1	11
+3	90	3	-1	Mine_1	12
 \.
 
 COPY public.attacker_type FROM stdin;
-1	100	4	10	1	10	Attacker_1
-2	120	4	12	1	10	Attacker_2
-3	80	4	8	1	10	Attacker_3
-4	150	4	15	2	80	Attacker_1
-5	180	4	18	2	100	Attacker_2
-6	120	4	12	2	60	Attacker_3
-7	200	4	20	3	-1	Attacker_1
-8	240	4	24	3	-1	Attacker_2
-9	160	4	16	3	-1	Attacker_3
+1	100	4	10	1	10	Attacker_1	0
+2	120	4	12	1	10	Attacker_2	0
+3	80	4	8	1	10	Attacker_3	0
+4	150	4	15	2	80	Attacker_1	0
+5	180	4	18	2	100	Attacker_2	0
+6	120	4	12	2	60	Attacker_3	0
+7	200	4	20	3	-1	Attacker_1	0
+8	240	4	24	3	-1	Attacker_2	0
+9	160	4	16	3	-1	Attacker_3	0
 \.
 
 COPY public.block_type FROM stdin;
-0	\N	\N	building	0
-1	\N	\N	building	1
-2	\N	\N	building	2
-3	\N	\N	building	3
-4	\N	\N	building	4
-5	\N	\N	building	5
-6	\N	\N	building	6
-7	\N	\N	building	7
-8	\N	\N	building	8
-9	\N	\N	building	9
-10	\N	\N	building	10
-11	\N	\N	building	11
-12	\N	\N	building	12
-13	\N	\N	building	13
-14	\N	\N	building	14
-15	\N	\N	building	15
-16	\N	\N	building	16
-17	\N	\N	building	17
-18	\N	\N	building	18
-19	\N	\N	building	19
-20	\N	\N	building	20
-21	\N	\N	building	21
-22	\N	\N	building	22
-23	\N	\N	building	23
-24	\N	\N	building	24
-25	\N	\N	building	25
-26	\N	\N	building	26
-27	\N	\N	building	27
-28	\N	\N	building	28
-29	\N	\N	building	29
-30	\N	\N	building	30
-31	\N	\N	building	31
-32	\N	\N	building	32
-33	\N	\N	building	33
-34	\N	\N	building	34
-35	\N	\N	building	35
-36	\N	\N	building	36
-37	\N	\N	building	37
-38	\N	\N	building	38
-39	\N	\N	building	39
-40	\N	\N	building	40
-41	\N	\N	building	41
-42	\N	\N	building	42
-43	\N	\N	building	43
-44	\N	\N	building	44
-45	\N	\N	building	45
-46	1	\N	defender	0
-47	2	\N	defender	0
-48	3	\N	defender	0
-49	4	\N	defender	0
-50	5	\N	defender	0
-51	6	\N	defender	0
-52	7	\N	defender	0
-53	8	\N	defender	0
-54	9	\N	defender	0
-55	\N	1	mine	0
-56	\N	2	mine	0
-57	\N	3	mine	0
+0	building	0
+1	building	1
+2	building	2
+3	building	3
+4	building	4
+5	building	5
+6	building	6
+7	building	7
+8	building	8
+9	building	9
+10	building	10
+11	building	11
+12	building	12
+13	building	13
+14	building	14
+15	building	15
+16	building	16
+17	building	17
+18	building	18
+19	building	19
+20	building	20
+21	building	21
+22	building	22
+23	building	23
+24	building	24
+25	building	25
+26	building	26
+27	building	27
+28	building	28
+29	building	29
+30	building	30
+31	building	31
+32	building	32
+33	building	33
+34	building	34
+35	building	35
+36	building	36
+37	building	37
+38	building	38
+39	building	39
+40	building	40
+41	building	41
+42	building	42
+43	building	43
+44	building	44
+45	building	45
+46	defender	1
+47	defender	2
+48	defender	3
+49	defender	4
+50	defender	5
+51	defender	6
+52	defender	7
+53	defender	8
+54	defender	9
+55	mine	1
+56	mine	2
+57	mine	3
 \.
 
 COPY public.available_blocks FROM stdin;

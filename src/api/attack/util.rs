@@ -16,9 +16,10 @@ use crate::constants::*;
 use crate::error::DieselError;
 use crate::models::{
     Artifact, AttackerType, AvailableBlocks, BlockCategory, BlockType, BuildingType, DefenderType,
-    EmpType, Game, LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, User,
+    EmpType, Game, LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop,
+    User,
 };
-use crate::schema::user;
+use crate::schema::{prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
@@ -123,8 +124,9 @@ pub fn get_valid_road_paths(map_id: i32, conn: &mut PgConnection) -> Result<Hash
     use crate::schema::{block_type, map_spaces};
     let valid_road_paths: HashSet<(i32, i32)> = map_spaces::table
         .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Building))
         .filter(map_spaces::map_id.eq(map_id))
-        .filter(block_type::building_type.eq(ROAD_ID))
+        .filter(block_type::category_id.eq(ROAD_ID))
         .select((map_spaces::x_coordinate, map_spaces::y_coordinate))
         .load::<(i32, i32)>(conn)
         .map_err(|err| DieselError {
@@ -276,6 +278,7 @@ pub fn get_attacker_types(conn: &mut PgConnection) -> Result<HashMap<i32, Attack
                     amt_of_emps: attacker.amt_of_emps,
                     level: attacker.level,
                     cost: attacker.cost,
+                    prop_id: attacker.prop_id,
                 },
             )
         })
@@ -537,16 +540,20 @@ pub fn get_mines(conn: &mut PgConnection, map_id: i32) -> Result<Vec<MineDetails
 
     let joined_table = map_spaces::table
         .filter(map_spaces::map_id.eq(map_id))
-        .inner_join(block_type::table.inner_join(mine_type::table));
+        .inner_join(
+            block_type::table
+                .inner_join(mine_type::table.on(block_type::category_id.eq(mine_type::id))),
+        )
+        .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)));
 
     let mines: Vec<MineDetails> = joined_table
-        .load::<(MapSpaces, (BlockType, MineType))>(conn)?
+        .load::<(MapSpaces, (BlockType, MineType), Prop)>(conn)?
         .into_iter()
         .enumerate()
-        .map(|(mine_id, (map_space, (_, mine_type)))| MineDetails {
+        .map(|(mine_id, (map_space, (_, mine_type), prop))| MineDetails {
             id: mine_id as i32,
             damage: mine_type.damage,
-            radius: mine_type.radius,
+            radius: prop.range,
             position: Coords {
                 x: map_space.x_coordinate,
                 y: map_space.y_coordinate,
@@ -562,23 +569,38 @@ pub fn get_defenders(
     map_id: i32,
     user_id: i32,
 ) -> Result<Vec<DefenderDetails>> {
-    use crate::schema::{available_blocks, block_type, building_type, defender_type, map_spaces};
-    let result: Vec<(
-        MapSpaces,
-        (BlockType, AvailableBlocks, BuildingType, DefenderType),
-    )> = map_spaces::table
-        .inner_join(
-            block_type::table
-                .inner_join(available_blocks::table)
-                .inner_join(building_type::table)
-                .inner_join(defender_type::table),
-        )
+    use crate::schema::{available_blocks, block_type, defender_type, map_spaces};
+    // let result: Vec<(
+    //     MapSpaces,
+    //     (BlockType, AvailableBlocks, BuildingType, DefenderType),
+    // )> = map_spaces::table
+    //     .inner_join(
+    //         block_type::table
+    //             .inner_join(available_blocks::table)
+    //             .inner_join(building_type::table)
+    //             .inner_join(defender_type::table),
+    //     )
+    //     .filter(map_spaces::map_id.eq(map_id))
+    //     .filter(available_blocks::user_id.eq(user_id))
+    //     .load::<(
+    //         MapSpaces,
+    //         (BlockType, AvailableBlocks, BuildingType, DefenderType),
+    //     )>(conn)
+    //     .map_err(|err| DieselError {
+    //         table: "map_spaces",
+    //         function: function!(),
+    //         error: err,
+    //     })?;
+
+    let result = available_blocks::table
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+        .inner_join(map_spaces::table.on(block_type::id.eq(map_spaces::block_type_id)))
         .filter(map_spaces::map_id.eq(map_id))
         .filter(available_blocks::user_id.eq(user_id))
-        .load::<(
-            MapSpaces,
-            (BlockType, AvailableBlocks, BuildingType, DefenderType),
-        )>(conn)
+        .load::<(AvailableBlocks, BlockType, DefenderType, Prop, MapSpaces)>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
             function: function!(),
@@ -587,12 +609,12 @@ pub fn get_defenders(
 
     let mut defenders: Vec<DefenderDetails> = Vec::new();
 
-    for (map_space, (_, _, _, defender_type)) in result.iter() {
+    for (_, _, defender_type, prop, map_space) in result.iter() {
         let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {
             id: defender_type.id,
-            radius: defender_type.radius,
+            radius: prop.range,
             speed: defender_type.speed,
             damage: defender_type.damage,
             defender_pos: Coords { x: hut_x, y: hut_y },
@@ -611,19 +633,21 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
     use crate::schema::{block_type, building_type, map_spaces};
 
     let joined_table = map_spaces::table
-        .inner_join(block_type::table.inner_join(building_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
         .filter(map_spaces::map_id.eq(map_id))
         .filter(building_type::id.ne(ROAD_ID));
 
     let buildings: Vec<BuildingDetails> = joined_table
-        .load::<(MapSpaces, (BlockType, BuildingType))>(conn)
+        .load::<(MapSpaces, BlockType, BuildingType)>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(map_space, (_, building_type))| BuildingDetails {
+        .map(|(map_space, _, building_type)| BuildingDetails {
             id: map_space.id,
             current_hp: building_type.hp,
             total_hp: building_type.hp,

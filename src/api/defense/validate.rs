@@ -26,11 +26,15 @@ pub fn is_valid_update_layout(
             return Err(BaseInvalidError::InvalidBuildingType(block_type));
         }
         let block = blocks.get(&block_type).unwrap();
-
-        let building_type = block.building_type;
-        if !buildings.contains_key(&building_type) {
-            return Err(BaseInvalidError::InvalidBlockType(building_type));
-        }
+        let building_type = if block.category == BlockCategory::Building {
+            let building_type = block.category_id;
+            if !buildings.contains_key(&building_type) {
+                return Err(BaseInvalidError::InvalidBlockType(building_type));
+            }
+            building_type
+        } else {
+            ROAD_ID
+        };
 
         let building: &BuildingType = buildings.get(&building_type).unwrap();
         let (x, y, width, height) = (
@@ -137,7 +141,11 @@ pub fn is_valid_save_layout(
 
         let block = blocks.get(&block_type_id).unwrap();
 
-        let building_type = block.building_type;
+        let building_type = if block.category == BlockCategory::Building {
+            block.category_id
+        } else {
+            ROAD_ID
+        };
 
         if artifacts > buildings[&building_type].capacity {
             return Err(BaseInvalidError::InvalidArtifactCount);
@@ -228,22 +236,18 @@ pub fn is_valid_save_layout(
                 match category {
                     BlockCategory::Building => {
                         return Err(BaseInvalidError::BlocksUnused(
-                            buildings[&block.building_type].name.clone(),
+                            buildings[&block.category_id].name.clone(),
                         ));
                     }
                     BlockCategory::Defender => {
-                        if let Some(defender_type) = block.defender_type {
-                            return Err(BaseInvalidError::BlocksUnused(
-                                defenders[&defender_type].name.clone(),
-                            ));
-                        }
+                        return Err(BaseInvalidError::BlocksUnused(
+                            defenders[&block.category_id].name.clone(),
+                        ));
                     }
                     BlockCategory::Mine => {
-                        if let Some(mine_type) = block.mine_type {
-                            return Err(BaseInvalidError::BlocksUnused(
-                                mines[&mine_type].name.clone(),
-                            ));
-                        }
+                        return Err(BaseInvalidError::BlocksUnused(
+                            mines[&block.category_id].name.clone(),
+                        ));
                     }
                 }
             }

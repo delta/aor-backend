@@ -9,6 +9,7 @@ use crate::api::util::{HistoryboardEntry, HistoryboardResponse};
 use crate::api::{self};
 use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, ROAD_ID};
 use crate::models::*;
+use crate::schema::prop;
 use crate::util::function;
 use crate::{api::util::GameHistoryResponse, error::DieselError};
 use anyhow::{Ok, Result};
@@ -61,9 +62,9 @@ pub struct DefenderTypeResponse {
     pub speed: i32,
     pub damage: i32,
     pub block_id: i32,
-    pub name: String,
     pub level: i32,
     pub cost: i32,
+    pub name: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -77,6 +78,8 @@ pub struct BuildingTypeResponse {
     pub capacity: i32,
     pub block_id: i32,
     pub hp: i32,
+    pub range: i32,
+    pub frequency: i32,
 }
 
 #[derive(Serialize)]
@@ -233,7 +236,7 @@ pub fn get_block_id_of_bank(conn: &mut PgConnection, player: &i32) -> Result<i32
         .filter(available_blocks::user_id.eq(player))
         .inner_join(block_type::table)
         .filter(block_type::category.eq(BlockCategory::Building))
-        .inner_join(building_type::table.on(building_type::id.eq(block_type::building_type)))
+        .inner_join(building_type::table.on(building_type::id.eq(block_type::category_id)))
         .filter(building_type::name.like(BANK_BUILDING_NAME))
         .select(block_type::id)
         .first::<i32>(conn)
@@ -288,7 +291,8 @@ pub fn check_valid_map_space_building(
     let builiding_type_id = map_spaces::table
         .filter(map_spaces::id.eq(given_map_space_id))
         .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
-        .inner_join(building_type::table.on(block_type::building_type.eq(building_type::id)))
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
         .select(building_type::id)
         .first::<i32>(conn)
         .map_err(|err| DieselError {
@@ -324,7 +328,8 @@ pub fn get_building_capacity(conn: &mut PgConnection, given_map_space_id: &i32) 
     let building_capacity = map_spaces::table
         .filter(map_spaces::id.eq(given_map_space_id))
         .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
-        .inner_join(building_type::table.on(block_type::building_type.eq(building_type::id)))
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
         .select(building_type::capacity)
         .first::<i32>(conn)
         .map_err(|err| DieselError {
@@ -459,10 +464,8 @@ pub fn get_map_details_for_attack(
         })?
         .into_iter()
         .map(|(mut map_space, block_type)| {
-            if block_type.building_type == ROAD_ID {
-                if block_type.category == BlockCategory::Mine {
-                    map_space.block_type_id = ROAD_ID;
-                }
+            if block_type.category == BlockCategory::Mine {
+                map_space.block_type_id = ROAD_ID;
                 map_space
             } else {
                 map_space
@@ -789,21 +792,24 @@ pub fn fetch_mine_types(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<Mi
     use crate::schema::mine_type;
 
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(mine_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Mine))
+        .inner_join(mine_type::table.on(mine_type::id.eq(block_type::category_id)))
+        .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)))
         .filter(available_blocks::user_id.eq(user_id));
 
     let mines: Result<Vec<MineTypeResponse>> = joined_table
-        .load::<(AvailableBlocks, (BlockType, MineType))>(conn)
+        .load::<(AvailableBlocks, BlockType, MineType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "mine_type",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(_, (block_type, mine_type))| {
+        .map(|(_, block_type, mine_type, prop)| {
             Ok(MineTypeResponse {
                 id: mine_type.id,
-                radius: mine_type.radius,
+                radius: prop.range,
                 damage: mine_type.damage,
                 block_id: block_type.id,
                 cost: mine_type.cost,
@@ -822,26 +828,29 @@ pub fn fetch_defender_types(
     use crate::schema::{available_blocks, block_type, defender_type};
 
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(defender_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+        .inner_join(prop::table.on(prop::id.eq(defender_type::prop_id)))
         .filter(available_blocks::user_id.eq(user_id));
     let defenders: Result<Vec<DefenderTypeResponse>> = joined_table
-        .load::<(AvailableBlocks, (BlockType, DefenderType))>(conn)
+        .load::<(AvailableBlocks, BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "defender_type",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(_, (block_type, defender_type))| {
+        .map(|(_, block_type, defender_type, prop)| {
             Ok(DefenderTypeResponse {
                 id: defender_type.id,
-                radius: defender_type.radius,
+                radius: prop.range,
                 speed: defender_type.speed,
                 damage: defender_type.damage,
                 block_id: block_type.id,
-                name: defender_type.name,
                 level: defender_type.level,
                 cost: defender_type.cost,
+                name: defender_type.name,
             })
         })
         .collect();
@@ -855,29 +864,35 @@ pub fn fetch_building_blocks(
     use crate::schema::{available_blocks, block_type, building_type};
 
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(building_type::table))
-        .filter(available_blocks::user_id.eq(user_id))
-        .filter(block_type::category.eq(BlockCategory::Building));
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
+        .inner_join(prop::table.on(building_type::prop_id.eq(prop::id)))
+        .filter(available_blocks::user_id.eq(user_id));
 
     let buildings: Vec<BuildingTypeResponse> = joined_table
-        .load::<(AvailableBlocks, (BlockType, BuildingType))>(conn)
+        .load::<(AvailableBlocks, BlockType, BuildingType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "block_type",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(_, (block_type, building_type))| BuildingTypeResponse {
-            id: building_type.id,
-            name: building_type.name,
-            width: building_type.width,
-            height: building_type.height,
-            level: building_type.level,
-            cost: building_type.cost,
-            capacity: building_type.capacity,
-            block_id: block_type.id,
-            hp: building_type.hp,
-        })
+        .map(
+            |(_, block_type, building_type, prop)| BuildingTypeResponse {
+                id: building_type.id,
+                name: building_type.name,
+                width: building_type.width,
+                height: building_type.height,
+                level: building_type.level,
+                cost: building_type.cost,
+                capacity: building_type.capacity,
+                block_id: block_type.id,
+                hp: building_type.hp,
+                range: prop.range,
+                frequency: prop.frequency,
+            },
+        )
         .collect();
     Ok(buildings)
 }
@@ -903,10 +918,8 @@ pub fn fetch_blocks(conn: &mut PgConnection, user_id: &i32) -> Result<HashMap<i3
                 block_type.id,
                 BlockType {
                     id: block_type.id,
-                    defender_type: block_type.defender_type,
-                    mine_type: block_type.mine_type,
                     category: block_type.category,
-                    building_type: block_type.building_type,
+                    category_id: block_type.category_id,
                 },
             )
         })

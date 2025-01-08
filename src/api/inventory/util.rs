@@ -2,11 +2,11 @@ use crate::constants::BANK_BUILDING_NAME;
 use crate::error::DieselError;
 use crate::models::{
     AttackerType, BlockCategory, BlockType, BuildingType, DefenderType, EmpType, ItemCategory,
-    MineType,
+    MineType, Prop,
 };
 use crate::schema::{
     artifact, attacker_type, available_blocks, block_type, building_type, defender_type, emp_type,
-    mine_type,
+    mine_type, prop,
 };
 use crate::schema::{map_layout, map_spaces, user};
 use crate::util::function;
@@ -165,7 +165,9 @@ fn get_building_types(
     conn: &mut PgConnection,
 ) -> Result<Vec<BuildingTypeResponse>> {
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(building_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
         .filter(available_blocks::user_id.eq(player_id))
         .filter(available_blocks::category.eq(ItemCategory::Block))
         .filter(block_type::category.eq(BlockCategory::Building))
@@ -206,9 +208,12 @@ fn get_building_types(
                 }
             } else {
                 let next_level = building_type.level + 1;
-
                 let next_level_stats: (BuildingType, BlockType) = building_type::table
-                    .inner_join(block_type::table)
+                    .inner_join(
+                        block_type::table.on(building_type::id
+                            .eq(block_type::category_id)
+                            .and(block_type::category.eq(BlockCategory::Building))),
+                    )
                     .filter(building_type::name.eq(&building_type.name))
                     .filter(building_type::level.eq(next_level))
                     .first::<(BuildingType, BlockType)>(conn)
@@ -227,13 +232,12 @@ fn get_building_types(
                             level: 0,
                             cost: 0,
                             hp: 0,
+                            prop_id: 0,
                         },
                         BlockType {
                             id: 0,
-                            defender_type: None,
-                            mine_type: None,
                             category: BlockCategory::Building,
-                            building_type: 0,
+                            category_id: 0,
                         },
                     ));
 
@@ -326,6 +330,7 @@ fn get_attacker_types(
                         level: 0,
                         cost: 0,
                         name: "".to_string(),
+                        prop_id: 0,
                     });
                 AttackerTypeResponse {
                     id: attacker_type.id,
@@ -357,21 +362,32 @@ fn get_defender_types(
     conn: &mut PgConnection,
 ) -> Result<Vec<DefenderTypeResponse>> {
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(defender_type::table))
+        .inner_join(
+            block_type::table.inner_join(
+                defender_type::table.on(block_type::category_id
+                    .eq(defender_type::id)
+                    .and(block_type::category.eq(BlockCategory::Defender))),
+            ),
+        )
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
         .filter(available_blocks::user_id.eq(player_id))
         .filter(available_blocks::category.eq(ItemCategory::Block))
         .filter(block_type::category.eq(BlockCategory::Defender))
-        .select((defender_type::all_columns, block_type::id));
+        .select((
+            defender_type::all_columns,
+            block_type::id,
+            prop::all_columns,
+        ));
 
     let defenders = joined_table
-        .load::<(DefenderType, i32)>(conn)
+        .load::<(DefenderType, i32, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "defender_type",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(defender_type, block_id)| {
+        .map(|(defender_type, block_id, prop)| {
             let max_level: i64 = defender_type::table
                 .filter(defender_type::name.eq(&defender_type.name))
                 .count()
@@ -389,7 +405,7 @@ fn get_defender_types(
                     block_id,
                     speed: defender_type.speed,
                     damage: defender_type.damage,
-                    radius: defender_type.radius,
+                    radius: prop.range,
                     level: defender_type.level,
                     cost: defender_type.cost,
                     name: defender_type.name,
@@ -398,11 +414,16 @@ fn get_defender_types(
             } else {
                 let next_level = defender_type.level + 1;
 
-                let next_level_stats: (DefenderType, BlockType) = defender_type::table
-                    .inner_join(block_type::table)
+                let next_level_stats: (DefenderType, BlockType, Prop) = defender_type::table
+                    .inner_join(
+                        block_type::table.on(defender_type::id
+                            .eq(block_type::category_id)
+                            .and(block_type::category.eq(BlockCategory::Defender))),
+                    )
+                    .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
                     .filter(defender_type::name.eq(&defender_type.name))
                     .filter(defender_type::level.eq(next_level))
-                    .first::<(DefenderType, BlockType)>(conn)
+                    .first::<(DefenderType, BlockType, Prop)>(conn)
                     .map_err(|err| DieselError {
                         table: "building_type",
                         function: function!(),
@@ -413,17 +434,20 @@ fn get_defender_types(
                             id: 0,
                             speed: 0,
                             damage: 0,
-                            radius: 0,
                             level: 0,
                             cost: 0,
                             name: "".to_string(),
+                            prop_id: 0,
                         },
                         BlockType {
                             id: 0,
-                            defender_type: Some(0),
-                            mine_type: None,
                             category: BlockCategory::Defender,
-                            building_type: 0,
+                            category_id: 0,
+                        },
+                        Prop {
+                            id: 0,
+                            range: 0,
+                            frequency: 0,
                         },
                     ));
 
@@ -432,7 +456,7 @@ fn get_defender_types(
                     block_id,
                     speed: defender_type.speed,
                     damage: defender_type.damage,
-                    radius: defender_type.radius,
+                    radius: prop.range,
                     level: defender_type.level,
                     cost: defender_type.cost,
                     name: defender_type.name,
@@ -441,7 +465,7 @@ fn get_defender_types(
                         block_id: next_level_stats.1.id,
                         speed: next_level_stats.0.speed,
                         damage: next_level_stats.0.damage,
-                        radius: next_level_stats.0.radius,
+                        radius: next_level_stats.2.range,
                         level: next_level_stats.0.level,
                         cost: next_level_stats.0.cost,
                         name: next_level_stats.0.name,
@@ -456,21 +480,23 @@ fn get_defender_types(
 
 fn get_mine_types(player_id: i32, conn: &mut PgConnection) -> Result<Vec<MineTypeResponse>> {
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(mine_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Mine))
+        .inner_join(mine_type::table.on(block_type::category_id.eq(mine_type::id)))
+        .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)))
         .filter(available_blocks::user_id.eq(player_id))
         .filter(available_blocks::category.eq(ItemCategory::Block))
-        .filter(block_type::category.eq(BlockCategory::Mine))
-        .select((mine_type::all_columns, block_type::id));
+        .select((mine_type::all_columns, block_type::id, prop::all_columns));
 
     let mines = joined_table
-        .load::<(MineType, i32)>(conn)
+        .load::<(MineType, i32, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "mine_type",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(mine_type, block_id)| {
+        .map(|(mine_type, block_id, prop)| {
             let max_level: i64 = mine_type::table
                 .filter(mine_type::name.eq(&mine_type.name))
                 .count()
@@ -487,7 +513,7 @@ fn get_mine_types(player_id: i32, conn: &mut PgConnection) -> Result<Vec<MineTyp
                 MineTypeResponse {
                     id: mine_type.id,
                     block_id,
-                    radius: mine_type.radius,
+                    radius: prop.range,
                     damage: mine_type.damage,
                     level: mine_type.level,
                     cost: mine_type.cost,
@@ -497,11 +523,16 @@ fn get_mine_types(player_id: i32, conn: &mut PgConnection) -> Result<Vec<MineTyp
             } else {
                 let next_level = mine_type.level + 1;
 
-                let next_level_stats: (MineType, BlockType) = mine_type::table
-                    .inner_join(block_type::table)
+                let next_level_stats: (MineType, BlockType, Prop) = mine_type::table
+                    .inner_join(
+                        block_type::table.on(mine_type::id
+                            .eq(block_type::category_id)
+                            .and(block_type::category.eq(BlockCategory::Mine))),
+                    )
+                    .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)))
                     .filter(mine_type::name.eq(&mine_type.name))
                     .filter(mine_type::level.eq(next_level))
-                    .first::<(MineType, BlockType)>(conn)
+                    .first::<(MineType, BlockType, Prop)>(conn)
                     .map_err(|err| DieselError {
                         table: "building_type",
                         function: function!(),
@@ -510,25 +541,28 @@ fn get_mine_types(player_id: i32, conn: &mut PgConnection) -> Result<Vec<MineTyp
                     .unwrap_or((
                         MineType {
                             id: 0,
-                            radius: 0,
                             damage: 0,
                             level: 0,
                             cost: 0,
                             name: "".to_string(),
+                            prop_id: 0,
                         },
                         BlockType {
                             id: 0,
-                            defender_type: None,
-                            mine_type: Some(0),
                             category: BlockCategory::Mine,
-                            building_type: 0,
+                            category_id: 0,
+                        },
+                        Prop {
+                            id: 0,
+                            range: 0,
+                            frequency: 0,
                         },
                     ));
 
                 MineTypeResponse {
                     id: mine_type.id,
                     block_id,
-                    radius: mine_type.radius,
+                    radius: prop.range,
                     damage: mine_type.damage,
                     level: mine_type.level,
                     cost: mine_type.cost,
@@ -536,7 +570,7 @@ fn get_mine_types(player_id: i32, conn: &mut PgConnection) -> Result<Vec<MineTyp
                     next_level_stats: Some(NextLevelMineTypeResponse {
                         id: next_level_stats.0.id,
                         block_id: next_level_stats.1.id,
-                        radius: next_level_stats.0.radius,
+                        radius: next_level_stats.2.range,
                         damage: next_level_stats.0.damage,
                         level: next_level_stats.0.level,
                         cost: next_level_stats.0.cost,
@@ -659,10 +693,11 @@ pub(crate) fn upgrade_building(
     }
 
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(building_type::table))
+        .inner_join(block_type::table)
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
+        .filter(block_type::category.eq(BlockCategory::Building))
         .filter(available_blocks::user_id.eq(player_id))
-        .filter(available_blocks::category.eq(ItemCategory::Block))
-        .filter(block_type::category.eq(BlockCategory::Building));
+        .filter(available_blocks::category.eq(ItemCategory::Block));
 
     let (cost, level, name): (i32, i32, String) = joined_table
         .clone()
@@ -697,8 +732,8 @@ pub(crate) fn upgrade_building(
     };
 
     let joined_table = block_type::table
-        .inner_join(building_type::table)
-        .filter(block_type::category.eq(BlockCategory::Building));
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)));
 
     let next_level_block_id: i32 = joined_table
         .filter(building_type::name.eq(name))
@@ -757,10 +792,11 @@ pub(crate) fn upgrade_defender(
     }
 
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(defender_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
         .filter(available_blocks::user_id.eq(player_id))
-        .filter(available_blocks::category.eq(ItemCategory::Block))
-        .filter(block_type::category.eq(BlockCategory::Defender));
+        .filter(available_blocks::category.eq(ItemCategory::Block));
 
     let (cost, level, name): (i32, i32, String) = joined_table
         .clone()
@@ -795,8 +831,8 @@ pub(crate) fn upgrade_defender(
     };
 
     let joined_table = block_type::table
-        .inner_join(defender_type::table)
-        .filter(block_type::category.eq(BlockCategory::Defender));
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)));
 
     let next_level_block_id: i32 = joined_table
         .filter(defender_type::name.eq(name))
@@ -849,10 +885,11 @@ pub(crate) fn upgrade_mine(player_id: i32, conn: &mut PgConnection, block_id: i3
     }
 
     let joined_table = available_blocks::table
-        .inner_join(block_type::table.inner_join(mine_type::table))
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Mine))
+        .inner_join(mine_type::table.on(block_type::category_id.eq(mine_type::id)))
         .filter(available_blocks::user_id.eq(player_id))
-        .filter(available_blocks::category.eq(ItemCategory::Block))
-        .filter(block_type::category.eq(BlockCategory::Mine));
+        .filter(available_blocks::category.eq(ItemCategory::Block));
 
     let (cost, level, name): (i32, i32, String) = joined_table
         .clone()
@@ -883,8 +920,8 @@ pub(crate) fn upgrade_mine(player_id: i32, conn: &mut PgConnection, block_id: i3
     };
 
     let joined_table = block_type::table
-        .inner_join(mine_type::table)
-        .filter(block_type::category.eq(BlockCategory::Mine));
+        .filter(block_type::category.eq(BlockCategory::Mine))
+        .inner_join(mine_type::table.on(block_type::category_id.eq(mine_type::id)));
 
     let next_level_block_id: i32 = joined_table
         .filter(mine_type::name.eq(name))
@@ -1194,7 +1231,7 @@ pub fn get_block_id_of_bank(conn: &mut PgConnection, player: &i32) -> Result<i32
         .filter(available_blocks::user_id.eq(player))
         .inner_join(block_type::table)
         .filter(block_type::category.eq(BlockCategory::Building))
-        .inner_join(building_type::table.on(building_type::id.eq(block_type::building_type)))
+        .inner_join(building_type::table.on(building_type::id.eq(block_type::category_id)))
         .filter(building_type::name.like(BANK_BUILDING_NAME))
         .select(block_type::id)
         .first::<i32>(conn)

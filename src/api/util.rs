@@ -58,7 +58,7 @@ pub fn get_current_levels_fixture(conn: &mut PgConnection) -> Result<LevelsFixtu
     let current_date = Local::now().naive_local();
     let level: LevelsFixture = levels_fixture::table
         .filter(levels_fixture::start_date.le(current_date))
-        .filter(levels_fixture::end_date.gt(current_date))
+        // .filter(levels_fixture::end_date.gt(current_date))
         .first(conn)
         .map_err(|err| DieselError {
             table: "levels_fixture",

@@ -74,6 +74,7 @@ pub struct BuildingType {
     pub level: i32,
     pub cost: i32,
     pub hp: i32,
+    pub prop_id: i32,
 }
 
 #[derive(Insertable)]
@@ -293,11 +294,11 @@ pub struct UpdateUser {
 #[derive(Queryable, Clone, Debug, Serialize)]
 pub struct MineType {
     pub id: i32,
-    pub radius: i32,
     pub damage: i32,
     pub level: i32,
     pub cost: i32,
     pub name: String,
+    pub prop_id: i32,
 }
 
 #[derive(Queryable, Clone, Debug, Serialize)]
@@ -305,28 +306,24 @@ pub struct DefenderType {
     pub id: i32,
     pub speed: i32,
     pub damage: i32,
-    pub radius: i32,
     pub level: i32,
     pub cost: i32,
     pub name: String,
+    pub prop_id: i32,
 }
 
 #[derive(Queryable, Clone, Debug, Serialize)]
 pub struct BlockType {
     pub id: i32,
-    pub defender_type: Option<i32>,
-    pub mine_type: Option<i32>,
     pub category: BlockCategory,
-    pub building_type: i32,
+    pub category_id: i32,
 }
 
 #[derive(Queryable, Clone, Debug, Serialize)]
 #[diesel(table_name = block_type)]
 pub struct NewBlockType<'a> {
-    pub defender_type: &'a Option<i32>,
-    pub mine_type: &'a Option<i32>,
     pub category: &'a BlockCategory,
-    pub building_type: &'a Option<i32>,
+    pub category_id: &'a i32,
 }
 
 #[derive(Queryable, Clone, Debug, Serialize)]
@@ -338,4 +335,12 @@ pub struct AttackerType {
     pub level: i32,
     pub cost: i32,
     pub name: String,
+    pub prop_id: i32,
+}
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct Prop {
+    pub id: i32,
+    pub range: i32,
+    pub frequency: i32,
 }

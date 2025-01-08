@@ -14,8 +14,9 @@ fn main() {
 
     // list of all bank's (level 1, 2, 3) space ids
     let map_space_ids: Vec<i32> = map_spaces::table
-        .inner_join(block_type::table.inner_join(building_type::table))
+        .inner_join(block_type::table)
         .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
         .filter(building_type::name.like(BANK_BUILDING_NAME))
         .select(map_spaces::id)
         .load::<i32>(&mut conn)
