@@ -11,7 +11,7 @@ use crate::api::util::HistoryboardQuery;
 use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
-use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
+use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails,};
 use crate::validator::util::{Coords, SourceDestXY};
 use actix_rt;
 use actix_web::error::ErrorBadRequest;
@@ -589,6 +589,7 @@ async fn socket_handler(
                     is_sync: false,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
+                    bullet_hits: Some(Vec::new()),
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {

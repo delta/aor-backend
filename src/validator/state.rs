@@ -5,7 +5,7 @@ use std::{
 
 use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
 use crate::{
-    api::attack::socket::{BuildingResponse, DefenderResponse},
+    api::attack::socket::{BuildingResponse, DefenderResponse,BulletHit},
     validator::util::{
         Attacker, BuildingDetails, Coords, DefenderDetails, DefenderReturnType, InValidation,
         MineDetails, SourceDestXY,
@@ -255,12 +255,14 @@ impl State {
     ) -> DefenderReturnType {
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+        let mut bullet_hits: Vec<BulletHit> = Vec::new();
 
         // if attacker is dead, no need to move the defenders
         if attacker.attacker_health == 0 {
             return DefenderReturnType {
                 attacker_health: attacker.attacker_health,
                 defender_response: defenders_damaged,
+                bullet_hits,
                 state: self.clone(),
             };
         }
@@ -387,6 +389,7 @@ impl State {
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
             defender_response: defenders_damaged,
+            bullet_hits,
             state: self.clone(),
         }
     }
@@ -478,5 +481,67 @@ impl State {
         self.bombs.total_count -= 1;
 
         buildings_damaged
+    }
+
+    pub fn defender_ranged_attack(&mut self) -> DefenderReturnType {
+        let attacker = self.attacker.as_mut().unwrap();
+        let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+        let mut bullet_hits: Vec<BulletHit> = Vec::new(); 
+        if attacker.attacker_health == 0 {
+            return DefenderReturnType {
+                attacker_health: attacker.attacker_health,
+                defender_response: defenders_damaged,
+                bullet_hits, 
+                state: self.clone(),
+            };
+        }
+
+        for defender in self.defenders.iter_mut() {
+            if !defender.is_alive {
+                continue;
+            }
+            if defender.initial_frequency == 0 {
+                defender.initial_frequency = defender.frequency;
+            }
+
+            // Check if attacker is within defender's range
+            let distance = (((defender.defender_pos.x - attacker.attacker_pos.x).pow(2)
+                + (defender.defender_pos.y - attacker.attacker_pos.y).pow(2)) as f32).sqrt();
+
+            if distance <= defender.range as f32 {
+                if defender.frequency <= 0 {
+                    attacker.attacker_health = attacker.attacker_health.saturating_sub(defender.damage);
+                    defender.frequency = defender.initial_frequency; 
+                    defenders_damaged.push(DefenderResponse {
+                        id: defender.id,
+                        position: defender.defender_pos,
+                        damage: defender.damage,
+                    });
+                    bullet_hits.push(BulletHit { 
+                        defender_id: defender.id,
+                        target_id: attacker.id,
+                        damage: defender.damage,
+                        position: defender.defender_pos,
+                    });
+                } else {
+                    defender.frequency -= 1;
+                }
+            } else {
+                if defender.frequency > 0{
+                    defender.frequency -= 1;
+                }
+            }
+        }
+
+        if attacker.attacker_health == 0 {
+            self.attacker_death_count += 1;
+        }
+
+        DefenderReturnType {
+            attacker_health: attacker.attacker_health,
+            defender_response: defenders_damaged,
+            bullet_hits,
+            state: self.clone(),
+        }
     }
 }

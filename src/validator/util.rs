@@ -1,5 +1,5 @@
 use crate::api::attack::socket::DefenderResponse;
-use crate::api::attack::socket::{ResultType, SocketResponse};
+use crate::api::attack::socket::{ResultType, SocketResponse,BulletHit,};
 use crate::validator::state::State;
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,7 @@ pub struct SourceDestXY {
     pub dest_y: i32,
 }
 
-#[derive(Serialize, Clone, Copy, Deserialize)]
+#[derive(Serialize, Clone, Copy, Deserialize,Debug)]
 pub struct Bomb {
     pub id: i32,
     pub blast_radius: i32,
@@ -20,7 +20,7 @@ pub struct Bomb {
     pub is_dropped: bool,
 }
 
-#[derive(Serialize, Clone, Deserialize)]
+#[derive(Serialize, Clone, Deserialize,Debug)]
 pub struct Attacker {
     pub id: i32,
     pub attacker_pos: Coords,
@@ -37,7 +37,7 @@ pub struct IsTriggered {
     pub is_triggered: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,Debug)]
 pub struct DefenderDetails {
     pub id: i32,
     pub radius: i32,
@@ -48,10 +48,13 @@ pub struct DefenderDetails {
     pub damage_dealt: bool,
     pub target_id: Option<f32>,
     pub path_in_current_frame: Vec<Coords>,
+    pub range: i32,
+    pub frequency: i32,
+    pub initial_frequency: i32,
 }
 
 // Structs for sending response
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,Debug)]
 pub struct MineDetails {
     pub id: i32,
     pub position: Coords,
@@ -59,7 +62,7 @@ pub struct MineDetails {
     pub damage: i32,
 }
 
-#[derive(Serialize, Clone, Deserialize)]
+#[derive(Serialize, Clone, Deserialize,Debug)]
 pub struct BombType {
     pub id: i32,
     pub radius: i32,
@@ -67,7 +70,7 @@ pub struct BombType {
     pub total_count: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,Debug)]
 pub struct BuildingDetails {
     pub id: i32,
     pub current_hp: i32,
@@ -94,12 +97,15 @@ pub struct SourceDest {
     pub source: Coords,
     pub dest: Coords,
 }
+
 #[derive(Serialize, Clone)]
 
 pub struct DefenderReturnType {
     pub attacker_health: i32,
     pub defender_response: Vec<DefenderResponse>,
+    pub bullet_hits: Vec<BulletHit>,
     pub state: State,
+
 }
 
 #[derive(Serialize)]
@@ -126,5 +132,5 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         is_sync: false,
         is_game_over: true,
         message: Some(message),
-    }
+        bullet_hits: None,}
 }

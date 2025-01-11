@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::attack::{
-        socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse},
-        util::{Direction, EventResponse, GameLog},
+        socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse,BulletHit},
+        util::{Direction, EventResponse, GameLog,},
     },
     models::AttackerType,
     validator::util::{Coords, SourceDestXY},
@@ -12,7 +12,7 @@ use anyhow::{Ok, Result};
 
 use self::{
     state::State,
-    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
+    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails,},
 };
 
 pub mod error;
@@ -33,8 +33,32 @@ pub fn game_handler(
     let buildings_damaged_result: Vec<BuildingResponse>;
 
     match socket_request.action_type {
+        ActionType::CheckBullets => {
+            log::info!("CheckBullets received frame: {}", socket_request.frame_number);
+            let ranged_attack_result = _game_state.defender_ranged_attack();
+            
+            // Add more detailed logging
+            log::info!("Creating bullet response for frame: {}", socket_request.frame_number);
+            let response = SocketResponse {
+                frame_number: socket_request.frame_number,
+                result_type: ResultType::BulletHit,
+                is_alive: Some(true),
+                attacker_health: Some(ranged_attack_result.attacker_health),
+                exploded_mines: None,
+                defender_damaged: None,
+                damaged_buildings: None,
+                total_damage_percentage: Some(_game_state.damage_percentage),
+                is_sync: false,
+                is_game_over: false,
+                message: Some(String::from("Bullet Hit")),
+                bullet_hits: Some(ranged_attack_result.bullet_hits)
+            };
+            log::info!("Sending bullet response: {:?}", response);
+            return Some(Ok(response));
+        }
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
+            
 
             let mut event_response = EventResponse {
                 attacker_id: None,
@@ -98,13 +122,14 @@ pub fn game_handler(
                 message: Some(String::from(
                     "Place Attacker, set attacker and bomb response",
                 )),
+                bullet_hits: Some(Vec::new()),
             }));
         }
         ActionType::MoveAttacker => {
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 let attacker_delta: Vec<Coords> = socket_request.attacker_path;
-
+                
                 let attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
@@ -121,10 +146,28 @@ pub fn game_handler(
                 );
 
                 let attacker_result_clone = attacker_result.clone();
+                let mut bullet_hits: Vec<BulletHit> = Vec::new(); 
 
                 defender_damaged_result =
                     _game_state.defender_movement(attacker_delta.clone(), _shortest_path);
-
+                let ranged_attack_result = _game_state.defender_ranged_attack();
+ 
+                if !ranged_attack_result.bullet_hits.is_empty() {
+                    return Some(Ok(SocketResponse {
+                        frame_number: socket_request.frame_number,
+                        result_type: ResultType::BulletHit,
+                        is_alive: Some(true),
+                        attacker_health: Some(ranged_attack_result.attacker_health),
+                        exploded_mines: None,
+                        defender_damaged: None,
+                        damaged_buildings: None,
+                        total_damage_percentage: Some(_game_state.damage_percentage),
+                        is_sync: false,
+                        is_game_over: false,
+                        message: Some(String::from("Bullet Hit")),
+                        bullet_hits: Some(ranged_attack_result.bullet_hits)
+                    }));
+                }
                 for coord in attacker_delta {
                     let mut direction = Direction::Up;
 
@@ -174,7 +217,6 @@ pub fn game_handler(
                         _game_state.in_validation.message.clone(),
                     )));
                 }
-
                 return Some(Ok(SocketResponse {
                     frame_number: socket_request.frame_number,
                     result_type,
@@ -188,6 +230,7 @@ pub fn game_handler(
                     is_sync: false,
                     is_game_over: false,
                     message: Some(String::from("Movement Response")),
+                    bullet_hits: Some(bullet_hits),
                 }));
             }
         }
@@ -235,6 +278,7 @@ pub fn game_handler(
                 is_sync: false,
                 is_game_over: false,
                 message: Some(String::from("Is Mine Response")),
+                bullet_hits: None,
             }));
         }
         ActionType::PlaceBombs => {
@@ -311,6 +355,7 @@ pub fn game_handler(
                 is_sync: false,
                 is_game_over: false,
                 message: Some(String::from("Place Bomb Response")),
+                bullet_hits: None,
             }));
         }
         ActionType::Idle => {
@@ -328,6 +373,7 @@ pub fn game_handler(
                 is_sync: false,
                 is_game_over: false,
                 message: Some(String::from("Idle Response")),
+                bullet_hits: None,
             }));
         }
         ActionType::Terminate => {
@@ -344,6 +390,7 @@ pub fn game_handler(
                 is_sync: false,
                 is_game_over: true,
                 message: Some(String::from("Game over")),
+                bullet_hits: None,
             };
 
             return Some(Ok(socket_response));
@@ -363,6 +410,7 @@ pub fn game_handler(
                 is_sync: false,
                 is_game_over: false,
                 message: Some(String::from("Self Destructed")),
+                bullet_hits: None,
             };
 
             return Some(Ok(socket_response));

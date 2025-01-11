@@ -615,6 +615,9 @@ pub fn get_defenders(
         defenders.push(DefenderDetails {
             id: defender_type.id,
             radius: prop.range,
+            range: (prop.range as f32 * 0.9) as i32,
+            frequency: prop.frequency,
+            initial_frequency: prop.frequency,
             speed: defender_type.speed,
             damage: defender_type.damage,
             defender_pos: Coords { x: hut_x, y: hut_y },
