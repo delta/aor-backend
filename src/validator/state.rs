@@ -31,6 +31,10 @@ pub struct State {
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
     pub in_validation: InValidation,
+    pub uav_revealed: bool,
+    pub uav_checkpoints: Vec<f32>,
+    pub revealed_mines: Vec<MineDetails>,
+    pub last_processed_frame: i32,
 }
 
 impl State {
@@ -63,7 +67,37 @@ impl State {
                 message: "".to_string(),
                 is_invalidated: false,
             },
+            uav_revealed: false,
+            uav_checkpoints: vec![20.0, 50.0, 70.0],
+            revealed_mines: Vec::new(),
+            last_processed_frame: -1,
         }
+    }
+    
+    pub fn check_uav_reveal(&mut self) -> Option<Vec<MineDetails>> {
+        if self.uav_revealed {
+            log::info!("UAV already revealed");
+            return None;
+        }
+    
+        log::info!("Current damage percentage: {}", self.damage_percentage);
+        
+        for checkpoint in &self.uav_checkpoints {
+            log::info!("Checking checkpoint: {}", checkpoint);
+            if self.damage_percentage >= *checkpoint {
+                log::info!("UAV reveal triggered at {}% damage", checkpoint);
+                self.uav_revealed = true;
+                let revealed: Vec<MineDetails> = self.mines.iter().map(|mine| MineDetails {
+                    id: mine.id,
+                    position: mine.position.clone(),
+                    radius: mine.radius,
+                    damage: mine.damage,
+                }).collect();
+                self.revealed_mines = revealed.clone();
+                return Some(revealed);
+            }
+        }
+        None
     }
 
     pub fn self_destruct(&mut self) {
@@ -483,7 +517,17 @@ impl State {
         buildings_damaged
     }
 
-    pub fn defender_ranged_attack(&mut self) -> DefenderReturnType {
+    pub fn defender_ranged_attack(&mut self, frame_number: i32) -> DefenderReturnType {
+        if frame_number <= self.last_processed_frame {
+            log::info!("Frame {} already processed, skipping", frame_number);
+            return DefenderReturnType {
+                attacker_health: self.attacker.as_ref().unwrap().attacker_health,
+                defender_response: Vec::new(),
+                bullet_hits: Vec::new(),
+                state: self.clone()
+            };
+        }
+    
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
         let mut bullet_hits: Vec<BulletHit> = Vec::new(); 
@@ -495,20 +539,24 @@ impl State {
                 state: self.clone(),
             };
         }
-
+    
         for defender in self.defenders.iter_mut() {
             if !defender.is_alive {
                 continue;
             }
             if defender.initial_frequency == 0 {
                 defender.initial_frequency = defender.frequency;
+                log::info!("Defender {} initial frequency set to: {}", defender.id, defender.initial_frequency);
             }
-
+    
             // Check if attacker is within defender's range
             let distance = (((defender.defender_pos.x - attacker.attacker_pos.x).pow(2)
                 + (defender.defender_pos.y - attacker.attacker_pos.y).pow(2)) as f32).sqrt();
-
+    
+            log::info!("Defender {} distance to attacker: {}", defender.id, distance);
+    
             if distance <= defender.range as f32 {
+                log::info!("Defender {} is within range of attacker", defender.id);
                 if defender.frequency <= 0 {
                     attacker.attacker_health = attacker.attacker_health.saturating_sub(defender.damage);
                     defender.frequency = defender.initial_frequency; 
@@ -523,20 +571,18 @@ impl State {
                         damage: defender.damage,
                         position: defender.defender_pos,
                     });
+                    log::info!("Defender {} hit attacker for {} damage", defender.id, defender.damage);
+                    log::info!("Defender {} frequency reset to initial frequency: {}, frequcny is {}", defender.id, defender.initial_frequency, defender.frequency);
                 } else {
+                    log::info!("Defender {} is on cooldown, frequency: {}, initial frequency: {}", defender.id, defender.frequency, defender.initial_frequency);
                     defender.frequency -= 1;
+                    log::info!("Defender {} frequency decremented to: {}", defender.id, defender.frequency);
                 }
             } else {
-                if defender.frequency > 0{
-                    defender.frequency -= 1;
-                }
+                log::info!("Defender {} is out of range of attacker", defender.id);
             }
         }
-
-        if attacker.attacker_health == 0 {
-            self.attacker_death_count += 1;
-        }
-
+    
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
             defender_response: defenders_damaged,

@@ -132,5 +132,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         is_sync: false,
         is_game_over: true,
         message: Some(message),
-        bullet_hits: None,}
+        bullet_hits: None,
+        revealed_mines: None,
+    }
 }

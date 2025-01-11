@@ -34,7 +34,7 @@ pub struct SocketResponse {
     pub is_game_over: bool,
     pub message: Option<String>,
     pub bullet_hits: Option<Vec<BulletHit>>,
-
+    pub revealed_mines: Option<Vec<MineDetails>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

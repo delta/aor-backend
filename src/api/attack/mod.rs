@@ -468,10 +468,17 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
+
                                     } else if response.result_type == ResultType::DefendersDamaged {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
+                                        
+                                    } else if response.result_type == ResultType::BulletHit{
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                        
                                     } else if response.result_type == ResultType::DefendersTriggered
                                     {
                                         if session_clone1.text(response_json).await.is_err() {
@@ -590,6 +597,7 @@ async fn socket_handler(
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
                     bullet_hits: Some(Vec::new()),
+                    revealed_mines: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {
