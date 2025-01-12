@@ -507,6 +507,8 @@ impl State {
             if prev_state != new_state && new_state == true {
                 log::info!("sentry activated");
                 self.sentry_start_time = SystemTime::now();
+            } else if prev_state != new_state && new_state == false {
+                log::info!("sentry deactivated");
             }
         } else {
             log::info!("sentry deactivated");
