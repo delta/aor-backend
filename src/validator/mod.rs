@@ -2,18 +2,19 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::attack::{
-        socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse,BulletHit},
-        util::{Direction, EventResponse, GameLog,},
+        socket::{
+            ActionType, BuildingResponse, BulletHit, ResultType, SocketRequest, SocketResponse,
+        },
+        util::{Direction, EventResponse, GameLog},
     },
     models::AttackerType,
     validator::util::{Coords, SourceDestXY},
 };
 use anyhow::{Ok, Result};
-use awc::body::None;
 
 use self::{
     state::State,
-    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails,},
+    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
 };
 
 pub mod error;
@@ -32,22 +33,15 @@ pub fn game_handler(
     let defender_damaged_result: DefenderReturnType;
     let exploded_mines_result: Vec<MineDetails>;
     let buildings_damaged_result: Vec<BuildingResponse>;
-    let revealed_mines = _game_state.check_uav_reveal();
 
     match socket_request.action_type {
         ActionType::CheckBullets => {
-            // Log the incoming frame number and the last processed frame
-            log::info!("Received frame: {}, Last processed frame: {}", socket_request.frame_number, _game_state.last_processed_frame);
-        
-            // Initialize frame tracking
             if _game_state.last_processed_frame == 0 {
                 _game_state.last_processed_frame = socket_request.frame_number - 1;
-                log::info!("Initialized last_processed_frame to: {}", _game_state.last_processed_frame);
             }
-        
+
             // Strict sequence validation
             if socket_request.frame_number <= _game_state.last_processed_frame {
-                log::info!("Frame {} already processed or invalid, skipping", socket_request.frame_number);
                 return Some(Ok(SocketResponse {
                     frame_number: socket_request.frame_number,
                     result_type: ResultType::Nothing,
@@ -61,16 +55,14 @@ pub fn game_handler(
                     is_game_over: false,
                     message: Some(String::from("Skipped repeated or invalid frame")),
                     bullet_hits: Some(vec![]),
-                    revealed_mines: revealed_mines,
+                    revealed_mines: None,
                 }));
             }
-        
+
             // Process only new frames
-            log::info!("Processing frame: {}", socket_request.frame_number);
-            let ranged_attack_result = _game_state.defender_ranged_attack(socket_request.frame_number);
+            let ranged_attack_result =
+                _game_state.defender_ranged_attack(socket_request.frame_number);
             _game_state.last_processed_frame = socket_request.frame_number;
-            log::info!("Updated last_processed_frame to: {}", _game_state.last_processed_frame);
-        
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::BulletHit,
@@ -84,13 +76,12 @@ pub fn game_handler(
                 is_game_over: false,
                 message: Some(String::from("Bullet Hit")),
                 bullet_hits: Some(ranged_attack_result.bullet_hits),
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             }));
         }
-    
+
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
-            
 
             let mut event_response = EventResponse {
                 attacker_id: None,
@@ -155,14 +146,14 @@ pub fn game_handler(
                     "Place Attacker, set attacker and bomb response",
                 )),
                 bullet_hits: Some(Vec::new()),
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             }));
         }
         ActionType::MoveAttacker => {
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 let attacker_delta: Vec<Coords> = socket_request.attacker_path;
-                
+
                 let attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
@@ -179,12 +170,13 @@ pub fn game_handler(
                 );
 
                 let attacker_result_clone = attacker_result.clone();
-                let mut bullet_hits: Vec<BulletHit> = Vec::new(); 
+                let bullet_hits: Vec<BulletHit> = Vec::new();
 
                 defender_damaged_result =
                     _game_state.defender_movement(attacker_delta.clone(), _shortest_path);
-                    let ranged_attack_result = _game_state.defender_ranged_attack(socket_request.frame_number);
- 
+                let ranged_attack_result =
+                    _game_state.defender_ranged_attack(socket_request.frame_number);
+
                 if !ranged_attack_result.bullet_hits.is_empty() {
                     return Some(Ok(SocketResponse {
                         frame_number: socket_request.frame_number,
@@ -199,7 +191,7 @@ pub fn game_handler(
                         is_game_over: false,
                         message: Some(String::from("Bullet Hit")),
                         bullet_hits: Some(ranged_attack_result.bullet_hits),
-                        revealed_mines: revealed_mines,
+                        revealed_mines: None,
                     }));
                 }
                 for coord in attacker_delta {
@@ -265,7 +257,7 @@ pub fn game_handler(
                     is_game_over: false,
                     message: Some(String::from("Movement Response")),
                     bullet_hits: Some(bullet_hits),
-                    revealed_mines: revealed_mines,
+                    revealed_mines: None,
                 }));
             }
         }
@@ -314,7 +306,7 @@ pub fn game_handler(
                 is_game_over: false,
                 message: Some(String::from("Is Mine Response")),
                 bullet_hits: None,
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             }));
         }
         ActionType::PlaceBombs => {
@@ -392,7 +384,7 @@ pub fn game_handler(
                 is_game_over: false,
                 message: Some(String::from("Place Bomb Response")),
                 bullet_hits: None,
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             }));
         }
         ActionType::Idle => {
@@ -411,9 +403,46 @@ pub fn game_handler(
                 is_game_over: false,
                 message: Some(String::from("Idle Response")),
                 bullet_hits: None,
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             }));
         }
+        ActionType::UavStatus => {
+            let revealed_mine = _game_state.check_uav_reveal();
+            if let Some(ref revealed_mines) = revealed_mine {
+                return Some(Ok(SocketResponse {
+                    frame_number: socket_request.frame_number,
+                    result_type: ResultType::UAV,
+                    is_alive: Some(true),
+                    attacker_health: None,
+                    exploded_mines: None,
+                    defender_damaged: None,
+                    damaged_buildings: None,
+                    total_damage_percentage: Some(_game_state.damage_percentage),
+                    is_sync: false,
+                    is_game_over: false,
+                    message: Some(String::from("UAV Reveal")),
+                    bullet_hits: None,
+                    revealed_mines: Some(revealed_mines.clone()),
+                }));
+            } else {
+                return Some(Ok(SocketResponse {
+                    frame_number: socket_request.frame_number,
+                    result_type: ResultType::UAV,
+                    is_alive: Some(true),
+                    attacker_health: None,
+                    exploded_mines: None,
+                    defender_damaged: None,
+                    damaged_buildings: None,
+                    total_damage_percentage: Some(_game_state.damage_percentage),
+                    is_sync: false,
+                    is_game_over: false,
+                    message: Some(String::from("No UAV Reveal")),
+                    bullet_hits: None,
+                    revealed_mines: None,
+                }));
+            }
+        }
+
         ActionType::Terminate => {
             let socket_response = SocketResponse {
                 frame_number: socket_request.frame_number,
@@ -429,7 +458,7 @@ pub fn game_handler(
                 is_game_over: true,
                 message: Some(String::from("Game over")),
                 bullet_hits: None,
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             };
 
             return Some(Ok(socket_response));
@@ -450,7 +479,7 @@ pub fn game_handler(
                 is_game_over: false,
                 message: Some(String::from("Self Destructed")),
                 bullet_hits: None,
-                revealed_mines: revealed_mines,
+                revealed_mines: None,
             };
 
             return Some(Ok(socket_response));

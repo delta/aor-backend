@@ -11,7 +11,7 @@ use crate::api::util::HistoryboardQuery;
 use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
-use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails,};
+use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
 use crate::validator::util::{Coords, SourceDestXY};
 use actix_rt;
 use actix_web::error::ErrorBadRequest;
@@ -468,17 +468,18 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-
                                     } else if response.result_type == ResultType::DefendersDamaged {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                        
-                                    } else if response.result_type == ResultType::BulletHit{
+                                    } else if response.result_type == ResultType::BulletHit {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                        
+                                    } else if response.result_type == ResultType::UAV {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
                                     } else if response.result_type == ResultType::DefendersTriggered
                                     {
                                         if session_clone1.text(response_json).await.is_err() {

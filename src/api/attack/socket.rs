@@ -47,6 +47,7 @@ pub enum ActionType {
     Terminate,
     SelfDestruct,
     CheckBullets,
+    UavStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -59,9 +60,10 @@ pub enum ResultType {
     PlacedAttacker,
     BulletHit,
     Nothing,
+    UAV,
 }
 
-#[derive(Serialize, Deserialize,Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MineResponse {
     pub id: i32,
     pub position: Coords,
@@ -69,7 +71,7 @@ pub struct MineResponse {
     pub radius: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy,Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct DefenderResponse {
     pub id: i32,
     pub position: Coords,
@@ -89,7 +91,7 @@ pub struct ArtifactsResponse {
     pub building_id: i32,
     pub amount: i32,
 }
-#[derive(Serialize, Deserialize, Clone, Debug,)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BulletHit {
     pub defender_id: i32,
     pub target_id: i32,
@@ -97,7 +99,7 @@ pub struct BulletHit {
     pub position: Coords,
 }
 
-#[derive(Serialize, Deserialize,Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GameStateResponse {
     pub frame_no: i32,
     pub attacker_user_id: i32,
