@@ -289,7 +289,7 @@ async fn set_base_details(
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
 
-    validate::is_valid_update_layout(&map_spaces, &blocks, &buildings, &defenders)?;
+    validate::is_valid_update_layout(&map_spaces, &blocks, &buildings)?;
 
     web::block(move || {
         let mut conn = pool.get()?;

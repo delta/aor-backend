@@ -12,17 +12,12 @@ pub fn is_valid_update_layout(
     map_spaces: &[MapSpacesEntry],
     blocks: &HashMap<i32, BlockType>,
     buildings: &[BuildingType],
-    defenders: &[DefenderTypeResponse],
 ) -> Result<(), BaseInvalidError> {
     let mut occupied_positions: HashSet<(i32, i32)> = HashSet::new();
     let mut _road_positions: HashSet<(i32, i32)> = HashSet::new();
     let buildings: HashMap<i32, BuildingType> = buildings
         .iter()
         .map(|building| (building.id, building.clone()))
-        .collect();
-    let defenders: HashMap<i32, DefenderTypeResponse> = defenders
-        .iter()
-        .map(|defender| (defender.id, defender.clone()))
         .collect();
     for map_space in map_spaces {
         let block_type = map_space.block_type_id;
@@ -39,13 +34,6 @@ pub fn is_valid_update_layout(
             building_type
         } else {
             ROAD_ID
-        };
-
-        let defender_name = if block.category == BlockCategory::Defender {
-            let defender_name = defenders.get(&block.category_id).unwrap().name.clone();
-            defender_name
-        } else {
-            String::from("Not a defender")
         };
 
         let building: &BuildingType = buildings.get(&building_type).unwrap();
@@ -67,9 +55,7 @@ pub fn is_valid_update_layout(
                 if (0..MAP_SIZE as i32).contains(&(x + i))
                     && (0..MAP_SIZE as i32).contains(&(y + j))
                 {
-                    if occupied_positions.contains(&(x + i, y + j))
-                        && defender_name != "Hut_Defender"
-                    {
+                    if occupied_positions.contains(&(x + i, y + j)) {
                         return Err(BaseInvalidError::OverlappingBlocks);
                     }
                     occupied_positions.insert((x + i, y + j));
@@ -120,7 +106,7 @@ pub fn is_valid_save_layout(
     mines: &[MineTypeResponse],
     user_artifacts: &i32,
 ) -> Result<(), BaseInvalidError> {
-    is_valid_update_layout(map_spaces, blocks, buildings, defenders)?;
+    is_valid_update_layout(map_spaces, blocks, buildings)?;
 
     // let mut graph: Graph<(), (), Directed> = Graph::new();
     let mut road_graph: Graph<(), (), Directed> = Graph::new();
@@ -161,13 +147,6 @@ pub fn is_valid_save_layout(
             ROAD_ID
         };
 
-        let defender_name = if block.category == BlockCategory::Defender {
-            let defender_name = defenders.get(&block.category_id).unwrap().name.clone();
-            defender_name
-        } else {
-            String::from("Not a defender")
-        };
-
         if artifacts > buildings[&building_type].capacity {
             return Err(BaseInvalidError::InvalidArtifactCount);
         }
@@ -186,21 +165,11 @@ pub fn is_valid_save_layout(
         // add roads and entrances to graph
         // let new_node = graph.add_node(());
         if building_type == ROAD_ID {
-            if defender_name == "Hut_Defender" {
-                road_grid
-                    .entry((x_coordinate, y_coordinate))
-                    .or_insert_with(|| {
-                        let road_node = road_graph.add_node(());
-                        road_node_to_coords.insert(road_node, (x_coordinate, y_coordinate));
-                        road_node
-                    });
-            } else {
-                let road_node = road_graph.add_node(());
-                // map_grid.insert((x_coordinate, y_coordinate), new_node);
-                road_grid.insert((x_coordinate, y_coordinate), road_node);
-                // node_to_coords.insert(new_node, (x_coordinate, y_coordinate));
-                road_node_to_coords.insert(road_node, (x_coordinate, y_coordinate));
-            }
+            let road_node = road_graph.add_node(());
+            // map_grid.insert((x_coordinate, y_coordinate), new_node);
+            road_grid.insert((x_coordinate, y_coordinate), road_node);
+            // node_to_coords.insert(new_node, (x_coordinate, y_coordinate));
+            road_node_to_coords.insert(road_node, (x_coordinate, y_coordinate));
         } else {
             // let entrance = (map_space.x_coordinate, map_space.y_coordinate);
             // node_to_coords.insert(new_node, entrance);
@@ -213,7 +182,7 @@ pub fn is_valid_save_layout(
     if total_artifacts != *user_artifacts {
         return Err(BaseInvalidError::InvalidArtifactCount);
     }
-    // print building id,
+    //print building id,
 
     for (x_coordinate, y_coordinate, width) in map_buildings {
         let building_top_left_x = x_coordinate;
