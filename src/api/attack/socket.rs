@@ -12,6 +12,7 @@ pub struct SocketRequest {
     pub action_type: ActionType,
     pub attacker_id: Option<i32>,
     pub bomb_id: Option<i32>,
+    pub bullet_id: Option<i32>,
     pub start_position: Option<Coords>,
     pub attacker_path: Vec<Coords>,
     pub bomb_position: Coords,
@@ -30,6 +31,7 @@ pub struct SocketResponse {
     pub damaged_buildings: Option<Vec<BuildingResponse>>,
     pub total_damage_percentage: Option<f32>,
     pub is_sync: bool,
+    pub is_sentry_activated: bool,
     // pub state: Option<GameStateResponse>,
     pub is_game_over: bool,
     pub message: Option<String>,
@@ -44,6 +46,7 @@ pub enum ActionType {
     Idle,
     Terminate,
     SelfDestruct,
+    BulletCollision,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -55,6 +58,7 @@ pub enum ResultType {
     GameOver,
     PlacedAttacker,
     Nothing,
+    SentryDamage,
 }
 
 #[derive(Serialize, Deserialize)]

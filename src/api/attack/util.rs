@@ -636,18 +636,19 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
         .inner_join(block_type::table)
         .filter(block_type::category.eq(BlockCategory::Building))
         .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
+        .inner_join(prop::table.on(building_type::prop_id.eq(prop::id)))
         .filter(map_spaces::map_id.eq(map_id))
         .filter(building_type::id.ne(ROAD_ID));
 
     let buildings: Vec<BuildingDetails> = joined_table
-        .load::<(MapSpaces, BlockType, BuildingType)>(conn)
+        .load::<(MapSpaces, BlockType, BuildingType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
             function: function!(),
             error: err,
         })?
         .into_iter()
-        .map(|(map_space, _, building_type)| BuildingDetails {
+        .map(|(map_space, _, building_type, prop)| BuildingDetails {
             id: map_space.id,
             current_hp: building_type.hp,
             total_hp: building_type.hp,
@@ -656,7 +657,11 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
                 x: map_space.x_coordinate,
                 y: map_space.y_coordinate,
             },
+            level: building_type.level,
             width: building_type.width,
+            name: building_type.name,
+            range: prop.range,
+            frequency: prop.frequency,
         })
         .collect();
     update_buidling_artifacts(conn, map_id, buildings)

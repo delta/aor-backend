@@ -1,9 +1,12 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
+    time::{Duration, SystemTime},
 };
 
-use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
+use crate::constants::{
+    BOMB_DAMAGE_MULTIPLIER, DAMAGE_PER_BULLET_LEVEL_1, DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE,
+};
 use crate::{
     api::attack::socket::{BuildingResponse, DefenderResponse},
     validator::util::{
@@ -31,6 +34,10 @@ pub struct State {
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
     pub in_validation: InValidation,
+    pub is_sentry_activated: bool,
+    pub current_bullet_id: i32,
+    pub sentry_activated_time: Duration,
+    pub sentry_start_time: SystemTime,
 }
 
 impl State {
@@ -63,6 +70,10 @@ impl State {
                 message: "".to_string(),
                 is_invalidated: false,
             },
+            is_sentry_activated: false,
+            current_bullet_id: 0,
+            sentry_activated_time: Duration::from_secs(0),
+            sentry_start_time: SystemTime::now(),
         }
     }
 
@@ -91,7 +102,9 @@ impl State {
         };
     }
     pub fn place_attacker(&mut self, attacker: Attacker) {
+        let attacker_position = attacker.attacker_pos;
         self.attacker = Some(attacker);
+        self.activate_sentry(attacker_position);
         // println!("defnders: {:?}",self.defenders);
     }
 
@@ -198,6 +211,7 @@ impl State {
                 }
             }
 
+            self.activate_sentry(new_pos);
             coord_temp = coord;
         }
 
@@ -478,5 +492,56 @@ impl State {
         self.bombs.total_count -= 1;
 
         buildings_damaged
+    }
+    pub fn activate_sentry(&mut self, new_pos: Coords) {
+        if let Some(building) = self
+            .buildings
+            .iter_mut()
+            .find(|building| building.current_hp > 0 && building.name == "Sentry")
+        {
+            let prev_state = self.is_sentry_activated;
+            self.is_sentry_activated = (building.tile.x - new_pos.x).abs()
+                + (building.tile.y - new_pos.y).abs()
+                <= building.range;
+            let new_state = self.is_sentry_activated;
+            if prev_state != new_state && new_state == true {
+                log::info!("sentry activated");
+                self.sentry_start_time = SystemTime::now();
+            }
+        } else {
+            log::info!("sentry deactivated");
+            self.is_sentry_activated = false;
+        }
+    }
+
+    pub fn bullet_damage(&mut self, bullet_id: i32) {
+        let damage: i32;
+        let sentry = self.buildings.iter().find(|building| {
+            building.name == "Sentry" && building.current_hp > 0
+        });
+        let sentry_frequency = sentry.unwrap().frequency;
+        self.sentry_activated_time = SystemTime::now().duration_since(self.sentry_start_time).unwrap();
+        let max_possible_bullets_in_current_activation = ((self.sentry_activated_time.as_millis() / 1000) as i32) * sentry_frequency + 1;
+        let max_possible_bullets = self.current_bullet_id + max_possible_bullets_in_current_activation;
+        if sentry.unwrap().level == 3 {
+            damage = DAMAGE_PER_BULLET_LEVEL_3;
+        } else if sentry.unwrap().level == 2 {
+            damage = DAMAGE_PER_BULLET_LEVEL_2;
+        } else {
+            damage = DAMAGE_PER_BULLET_LEVEL_1;
+        }
+        log::info!("collision bullet id : {}", bullet_id);
+        if bullet_id == self.current_bullet_id + 1 && bullet_id <= max_possible_bullets {
+            self.current_bullet_id = bullet_id;
+            self.attacker.as_mut().unwrap().attacker_health = max(
+                0,
+                self.attacker.as_ref().unwrap().attacker_health - damage,
+            );
+        } else {
+            self.in_validation = InValidation {
+                message: "Invalid bullet id".to_string(),
+                is_invalidated: true,
+            };
+        }
     }
 }

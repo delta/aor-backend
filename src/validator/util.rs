@@ -75,6 +75,10 @@ pub struct BuildingDetails {
     pub artifacts_obtained: i32,
     pub tile: Coords,
     pub width: i32,
+    pub name: String,
+    pub range: i32,
+    pub frequency: i32,
+    pub level: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -123,6 +127,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         defender_damaged: None,
         damaged_buildings: None,
         total_damage_percentage: None,
+        is_sentry_activated: false,
         is_sync: false,
         is_game_over: true,
         message: Some(message),

@@ -15,3 +15,7 @@ pub const PERCENTANGE_ARTIFACTS_OBTAINABLE: f32 = 0.3;
 pub const BOMB_DAMAGE_MULTIPLIER: f32 = 5.0;
 
 pub const LIVES: i32 = 3;
+pub const DAMAGE_PER_BULLET_LEVEL_1: i32 = 5;
+pub const DAMAGE_PER_BULLET_LEVEL_2: i32 = 7;
+pub const DAMAGE_PER_BULLET_LEVEL_3: i32 = 10;
+

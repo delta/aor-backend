@@ -495,6 +495,10 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
+                                    } else if response.result_type == ResultType::SentryDamage {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
                                     } else if response.result_type == ResultType::Nothing
                                         && session_clone1.text(response_json).await.is_err()
                                     {
@@ -586,6 +590,7 @@ async fn socket_handler(
                     defender_damaged: None,
                     damaged_buildings: None,
                     total_damage_percentage: None,
+                    is_sentry_activated: false,
                     is_sync: false,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
