@@ -51,6 +51,7 @@ pub struct DefenderDetails {
     pub damage_dealt: bool,
     pub target_id: Option<f32>,
     pub path_in_current_frame: Vec<Coords>,
+    pub max_health: i32,
     pub block_id: i32,
     pub level: i32,
 }

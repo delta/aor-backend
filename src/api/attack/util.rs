@@ -628,6 +628,7 @@ pub fn get_defenders(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender.level,
+            max_health: defender_type.max_health,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
