@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from langserve import add_routes
 import uvicorn
 from langchain_core.prompts import ChatPromptTemplate
-# from langchain_core.output_parsers import StrOutputParser
 from langchain_ollama import OllamaLLM
 from prompt import base_prompt
 
@@ -22,14 +21,3 @@ add_routes(
 
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8000)
-
-
-""" prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", "You are a helpful assistant."),
-        ("user", "Question:{question}"),
-    ]
-) """
-""" output_parser = StrOutputParser()
-chain = prompt | llm | output_parser """
-# print(chain.invoke({"question": "What is the capital of France?"}))

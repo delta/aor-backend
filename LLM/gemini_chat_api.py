@@ -1,7 +1,10 @@
 import google.generativeai as genai
 from prompt import base_prompt
+import os
 
-genai.configure(api_key="AIzaSyCteSFTfOeL0EZPM-MCLzh0j9nHgHK8Ke0")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=gemini_api_key)
 
 event = "Game event: Attacker placed mine on base. Base damage - 15%. Attacker has collected 100 / 1200 artifacts. \n"
 model = genai.GenerativeModel("gemini-1.5-flash")

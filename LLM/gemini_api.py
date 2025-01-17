@@ -1,7 +1,16 @@
 import google.generativeai as genai
+from prompt import base_prompt
+import os
 
-genai.configure(api_key="AIzaSyCteSFTfOeL0EZPM-MCLzh0j9nHgHK8Ke0")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=gemini_api_key)
 
 model = genai.GenerativeModel("gemini-1.5-flash")
-response = model.generate_content("How does AI work?")
-print(response.text)
+
+ip = "Game starts"
+
+while ip != "break":
+    response = model.generate_content(base_prompt + ip)
+    print(response.text, "\n")
+    ip = input("")
