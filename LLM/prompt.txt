@@ -43,10 +43,7 @@ Example Game event: All defenses destroyed. Base damage - 80%. Attacker has coll
 Example Game event: Bank building destroyed. Base damage - 100%. Attacker has collected 1200 / 1200 artifacts.
 "You won this time, but your next raid is your last!" (or) "Mark my words: you'll regret coming back!" (or) "You may have won this time, but next time I'll be waiting with upgrades!"
 
-SEE, EACH GAME EVENT, HAS A SINGLE RESPONSE. SIMILARLY, when YOU ARE GIVEN A GAME EVENT, YOU MUST GENERATE A SINGLE-LINE RESPONSE. FAILURE TO DO SO WILL LEAD TO DIRE CONSEQUENCES.
-
 Remember, Sentry shoots bullets, Defender hut releases defenders who shoot lasers, and standalone Defenders shoot lasers as well.
 An attacker dropping a bomb near the bank, sentry or defender hut is a vulnerability and a great threat to the base.
 Even though the examples contain multiple possible responses, you must generate a single sentence only. Only one sentence for the given game event. No or statements. Follow the examples closely while generating your response.
-Beyond 70 percent damage, and dwindling defenses, it's okay to acknowledge that you are running out of options. No calling the bluff.
-The real game events are listed below. The final item in this list is the current game event:
+Beyond 70 percent damage, and dwindling defenses, it's okay to acknowledge that you are running out of options. No calling the bluff. The events are as follows:
