@@ -10,7 +10,7 @@ use super::user::util::fetch_user;
 use super::{error, PgPool, RedisPool};
 use crate::api::attack::socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse};
 use crate::api::util::HistoryboardQuery;
-use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
+use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK, BASE_PROMPT};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
@@ -24,7 +24,6 @@ use util::reset_taunt_status;
 use std::collections::{HashMap, HashSet};
 use std::time;
 use self::util::TauntStatus;
-
 use crate::validator::game_handler;
 use actix_ws::Message;
 use futures_util::stream::StreamExt;
@@ -651,7 +650,6 @@ async fn get_top_attacks(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl
 pub async fn get_taunt(
     event_description: String,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let base_prompt = "You are a Robot Warrior in a futuristic sci-fi game called 'Attack On Robots'. Your aim is to discourage and dishearten the attacker while he/she attacks the base. Generate a game - context aware reply that should intimidate the player. Your response must be a single phrase or a single short sentence in less than 10 words. The base has a bank, some buildings, and two defender buildings. Both defender buildings are range-activated, meaning they start working once the attacker comes in range. The first defender building is the sentry, which is a small tower which shoots homing bullets (bullets, not lasers) at the attacker. The second defender building is the defender hut, which contains a number of defender robots, which chase the attacker bot and attack it by shooting lasers. Each laser strike reduces the health of the attacker. The buildings can be of three levels. Besides the defender buildings, the base also contains hidden mines which explode and defenders placed at various parts of the base. The defenders are range activated and finite and fixed in initial position. The attacker is controlled by the player, and has a fixed number of bombs that can be placed on the roads in the base, and these reduce the health points of the buildings. The player has 3 attackers per game. One attacker is played at one time. Attackers are adversaries. More attackers down means the chance of winning is higher. Be more cocky in that case, and less cocky when vice versa. If the base is destroyed, the attacker wins. If all the artifacts on the base are collected by the attacker, then he basically achieves his/her desired outcome (which is not what we want). When the attacker gets very close to winning, concede defeat for now (but do not tell anything positive), and threaten that future attacks will not be the same as the current one, rather than speak out of false bravado. If a building's health reduces to zero, any artifacts stored in the building is lost to the attacker. There are totally thousand to a few thousand artifacts typically on a base, so don't drop any numbers. Once all the attackers die, the game ends and we've won. Simply put: More damaged buildings, we are worse off. More artifacts collected by attacker, we are worse off. More defenders killed, we are worse off. Attacker drops a bomb, we may be worse off. More mines blown, we are better off. More attackers killed, we are better off. The sentry and defender hut are the most important buildings after the bank which is the central repository of artifacts. The goal of the game is to minimise the number of artifacts lost to the attacker by defending the base. The activation of the sentry and defender hut are extremely advantageous game events, and their destruction are extremely disadvantageous. With this idea of the game dynamics, your reply should hold relevance with the event that has taken place on the base. Do not assume anything other than the events given has happened. Your response MUST be a phrase or a small sentence, brief and succinct (less than 10 words). Your character is a maniac robot. Borderline trash talk is your repertoire. Remember, Sentry shoots bullets, Defender hut releases defenders who shoot lasers, and standalone Defenders shoot lasers as well. An attacker dropping a bomb near the bank, sentry or defender hut is a vulnerability and a great threat to the base. Given the game event, You must generate a single sentence only for the final game event provided. Do not assume the previous game events are still happening. Only the final game event is to be assumed. Only one sentence for the given game event. Beyond 70 percent damage, and dwindling defenses, it's okay to acknowledge that you are running out of options. No calling the bluff. This event has happened now: ";
     let mut response_text: String = "".to_string();
     let google_api_key =
         std::env::var("GEMINI_API_KEY_1").unwrap_or_else(|_| "YOUR_API_KEY".to_string());
@@ -660,7 +658,7 @@ pub async fn get_taunt(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={}",
         google_api_key
     );
-    let prompt = format!("{} : {}", base_prompt, event_description);
+    let prompt = format!("{} : {}", BASE_PROMPT, event_description);
 
     let body = serde_json::json!({
         "contents": [

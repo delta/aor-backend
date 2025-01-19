@@ -1,7 +1,0 @@
-fastapi
-langserve
-langchain_core
-langchain_ollama
-google.generativeai
-uvicorn
-sse_starlette
