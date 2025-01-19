@@ -15,3 +15,4 @@ pub const PERCENTANGE_ARTIFACTS_OBTAINABLE: f32 = 0.3;
 pub const BOMB_DAMAGE_MULTIPLIER: f32 = 5.0;
 
 pub const LIVES: i32 = 3;
+pub const MAX_TAUNT_REQUESTS: i32 = 4;
