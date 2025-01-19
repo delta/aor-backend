@@ -4,6 +4,7 @@ use crate::{
     api::attack::{
         socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse},
         util::{Direction, EventResponse, GameLog},
+        get_taunt
     },
     models::AttackerType,
     validator::util::{Coords, SourceDestXY},
@@ -205,6 +206,10 @@ pub fn game_handler(
             } else {
                 ResultType::Nothing
             };
+
+            if result_type == ResultType::MinesExploded {
+                get_taunt();
+            }
 
             let mut is_attacker_alive = true;
 
