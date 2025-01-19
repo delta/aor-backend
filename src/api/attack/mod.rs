@@ -1,4 +1,6 @@
-use self::util::{get_valid_road_paths, AttackResponse, GameLog, ResultResponse};
+use self::util::{
+    get_valid_road_paths, AttackResponse, GameLog, GeminiApiResponse, ResultResponse,
+};
 use super::auth::session::AuthUser;
 use super::defense::shortest_path::run_shortest_paths;
 use super::defense::util::{
@@ -8,7 +10,7 @@ use super::user::util::fetch_user;
 use super::{error, PgPool, RedisPool};
 use crate::api::attack::socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse};
 use crate::api::util::HistoryboardQuery;
-use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
+use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK, BASE_PROMPT};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
@@ -18,9 +20,10 @@ use actix_web::error::ErrorBadRequest;
 use actix_web::web::{Data, Json};
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
 use log;
+use util::reset_taunt_status;
 use std::collections::{HashMap, HashSet};
 use std::time;
-
+use self::util::TauntStatus;
 use crate::validator::game_handler;
 use actix_ws::Message;
 use futures_util::stream::StreamExt;
@@ -42,6 +45,8 @@ async fn init_attack(
     user: AuthUser,
 ) -> Result<impl Responder> {
     let attacker_id = user.0;
+
+    reset_taunt_status();
 
     log::info!("Attacker:{} is trying to initiate an attack", attacker_id);
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
@@ -585,6 +590,7 @@ async fn socket_handler(
                     exploded_mines: None,
                     defender_damaged: None,
                     damaged_buildings: None,
+                    new_taunt: None,
                     total_damage_percentage: None,
                     is_sync: false,
                     is_game_over: true,
@@ -639,4 +645,62 @@ async fn get_top_attacks(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
+}
+
+pub async fn get_taunt(
+    event_description: String,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let mut response_text: String = "".to_string();
+    let google_api_key =
+        std::env::var("GEMINI_API_KEY_1").unwrap_or_else(|_| "YOUR_API_KEY".to_string());
+
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={}",
+        google_api_key
+    );
+    let prompt = format!("{} : {}", BASE_PROMPT, event_description);
+
+    let body = serde_json::json!({
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ]
+    });
+    let client = reqwest::Client::new();
+    unsafe {
+        util::TAUNTS.taunt_count += 1;
+    }
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        response_text = response.text().await?;
+        // log::info!("Response: {}", response_text);
+        let api_response: GeminiApiResponse = serde_json::from_str(&response_text)?;
+        if let Some(candidate) = api_response.candidates.first() {
+            if let Some(part) = candidate.content.parts.first() {
+                log::info!("Extracted text: {}", part.text.trim());
+                unsafe {
+                    util::TAUNTS.taunt_list.push(part.text.trim().to_string());
+                    util::TAUNTS.prev_taunt_time = time::SystemTime::now();
+                    util::TAUNTS.taunt_status = TauntStatus::NewTauntAvailable;
+                };
+                return Ok(part.text.trim().to_string());
+            }
+        }
+    } else {
+        log::info!(
+            "Gemini API request failed, and Failed with status: {}",
+            response.status()
+        );
+    }
+
+    Ok(response_text)
 }

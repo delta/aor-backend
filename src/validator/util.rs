@@ -2,6 +2,7 @@ use crate::api::attack::socket::DefenderResponse;
 use crate::api::attack::socket::{ResultType, SocketResponse};
 use crate::validator::state::State;
 use serde::{Deserialize, Serialize};
+use crate::api::attack::util::reset_taunt_status;
 
 #[derive(Debug, Eq, Hash, PartialEq, Serialize, Clone)]
 pub struct SourceDestXY {
@@ -114,6 +115,7 @@ pub struct ValidatorResponse {
 }
 
 pub fn send_terminate_game_message(frame_number: i32, message: String) -> SocketResponse {
+    reset_taunt_status();
     SocketResponse {
         frame_number,
         result_type: ResultType::GameOver,
@@ -125,6 +127,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         total_damage_percentage: None,
         is_sync: false,
         is_game_over: true,
+        new_taunt: None,
         message: Some(message),
     }
 }
