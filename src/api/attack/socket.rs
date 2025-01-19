@@ -18,7 +18,7 @@ pub struct SocketRequest {
     pub is_game_over: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SocketResponse {
     pub frame_number: i32,
     pub result_type: ResultType,
@@ -33,6 +33,8 @@ pub struct SocketResponse {
     // pub state: Option<GameStateResponse>,
     pub is_game_over: bool,
     pub message: Option<String>,
+    pub bullet_hits: Option<Vec<BulletHit>>,
+    pub revealed_mines: Option<Vec<MineDetails>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -44,6 +46,8 @@ pub enum ActionType {
     Idle,
     Terminate,
     SelfDestruct,
+    CheckBullets,
+    UavStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -54,10 +58,12 @@ pub enum ResultType {
     BuildingsDamaged,
     GameOver,
     PlacedAttacker,
+    BulletHit,
     Nothing,
+    UAV,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MineResponse {
     pub id: i32,
     pub position: Coords,
@@ -65,7 +71,7 @@ pub struct MineResponse {
     pub radius: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct DefenderResponse {
     pub id: i32,
     pub position: Coords,
@@ -85,8 +91,15 @@ pub struct ArtifactsResponse {
     pub building_id: i32,
     pub amount: i32,
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BulletHit {
+    pub defender_id: i32,
+    pub target_id: i32,
+    pub damage: i32,
+    pub position: Coords,
+}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GameStateResponse {
     pub frame_no: i32,
     pub attacker_user_id: i32,

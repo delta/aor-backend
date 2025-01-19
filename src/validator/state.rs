@@ -1,11 +1,12 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
 use crate::{
-    api::attack::socket::{BuildingResponse, DefenderResponse},
+    api::attack::socket::{BuildingResponse, BulletHit, DefenderResponse},
     validator::util::{
         Attacker, BuildingDetails, Coords, DefenderDetails, DefenderReturnType, InValidation,
         MineDetails, SourceDestXY,
@@ -31,6 +32,11 @@ pub struct State {
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
     pub in_validation: InValidation,
+    pub uav_revealed: bool,
+    pub uav_checkpoints: Vec<f32>,
+    pub revealed_mines: Vec<MineDetails>,
+    pub last_processed_frame: i32,
+    pub revealed_checkpoints: Vec<f32>,
 }
 
 impl State {
@@ -63,7 +69,41 @@ impl State {
                 message: "".to_string(),
                 is_invalidated: false,
             },
+            uav_revealed: false,
+            uav_checkpoints: vec![20.0, 50.0, 70.0],
+            revealed_checkpoints: Vec::new(),
+            revealed_mines: Vec::new(),
+            last_processed_frame: -1,
         }
+    }
+
+    pub fn check_uav_reveal(&mut self) -> Option<Vec<MineDetails>> {
+        let mut revealed: Vec<MineDetails> = Vec::new();
+        for checkpoint in &self.uav_checkpoints {
+            if self.damage_percentage >= *checkpoint
+                && !self.revealed_checkpoints.contains(checkpoint)
+            {
+                self.revealed_checkpoints.push(*checkpoint);
+                let mines: Vec<MineDetails> = self
+                    .mines
+                    .iter()
+                    .map(|mine| MineDetails {
+                        id: mine.id,
+                        position: mine.position.clone(),
+                        radius: mine.radius,
+                        damage: mine.damage,
+                    })
+                    .collect();
+                revealed.extend(mines);
+            }
+        }
+
+        if !revealed.is_empty() {
+            self.revealed_mines = revealed.clone();
+            return Some(revealed);
+        }
+
+        None
     }
 
     pub fn self_destruct(&mut self) {
@@ -255,12 +295,14 @@ impl State {
     ) -> DefenderReturnType {
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+        let bullet_hits: Vec<BulletHit> = Vec::new();
 
         // if attacker is dead, no need to move the defenders
         if attacker.attacker_health == 0 {
             return DefenderReturnType {
                 attacker_health: attacker.attacker_health,
                 defender_response: defenders_damaged,
+                bullet_hits,
                 state: self.clone(),
             };
         }
@@ -387,6 +429,7 @@ impl State {
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
             defender_response: defenders_damaged,
+            bullet_hits,
             state: self.clone(),
         }
     }
@@ -478,5 +521,145 @@ impl State {
         self.bombs.total_count -= 1;
 
         buildings_damaged
+    }
+
+    pub fn defender_ranged_attack(&mut self, frame_number: i32) -> DefenderReturnType {
+        log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
+    
+        if frame_number <= self.last_processed_frame {
+            log::info!("Frame number {} is less than or equal to last processed frame {}", frame_number, self.last_processed_frame);
+            return DefenderReturnType {
+                attacker_health: self.attacker.as_ref().unwrap().attacker_health,
+                defender_response: Vec::new(),
+                bullet_hits: Vec::new(),
+                state: self.clone(),
+            };
+        }
+    
+        let attacker = self.attacker.as_mut().unwrap();
+        let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+        let mut bullet_hits: Vec<BulletHit> = Vec::new();
+        // if attacker.attacker_health == 0 {
+        //     log::info!("Attacker health is 0, returning early");
+        //     return DefenderReturnType {
+        //         attacker_health: attacker.attacker_health,
+        //         defender_response: defenders_damaged,
+        //         bullet_hits,
+        //         state: self.clone(),
+        //     };
+        // }
+    
+        for defender in self.defenders.iter_mut() {
+            if !defender.is_alive {
+                log::info!("Defender {} is not alive, skipping", defender.id);
+                continue;
+            }
+    
+            let start = SystemTime::now();
+            let now = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
+            let time_interval = defender.frequency as u128;
+    
+            // Initialize defender.last_attack if it hasn't been set
+            if defender.last_attack == 0 {
+                defender.last_attack = now.as_millis() as i32;
+                log::info!("Initializing defender {} last_attack to {}", defender.id, defender.last_attack);
+            }
+    
+            let time_elapsed = now.as_millis() >= defender.last_attack as u128 + time_interval;
+    
+            if time_elapsed {
+                log::info!("Time elapsed for defender {}. Updating last attack time.", defender.id);
+                log::info!("last_attack: {}", defender.last_attack);
+                defender.last_attack = now.as_millis() as i32;
+                log::info!("last_attack update: {}", defender.last_attack);
+                log::info!("nowmillis: {}", now.as_millis());
+                log::info!("timeinterval: {}", time_interval);
+    
+                // Check if attacker is within defender's range
+                let distance = (((defender.defender_pos.x - attacker.attacker_pos.x).pow(2)
+                    + (defender.defender_pos.y - attacker.attacker_pos.y).pow(2))
+                    as f32)
+                    .sqrt();
+                log::info!("Distance between defender {} and attacker: {}", defender.id, distance);
+    
+                if distance <= defender.range as f32 {
+                    log::info!("Defender {} is within range of attacker", defender.id);
+                    if defender.defender_pos.x == attacker.attacker_pos.x
+                        || defender.defender_pos.y == attacker.attacker_pos.y
+                    {
+                        // Check if there are any buildings between the defender and the attacker
+                        let mut blocked = false;
+                        if defender.defender_pos.x == attacker.attacker_pos.x {
+                            let min_y = defender.defender_pos.y.min(attacker.attacker_pos.y);
+                            let max_y = defender.defender_pos.y.max(attacker.attacker_pos.y);
+                            for building in &self.buildings {
+                                if building.tile.x == defender.defender_pos.x
+                                    && building.tile.y > min_y
+                                    && building.tile.y < max_y
+                                {
+                                    blocked = true;
+                                    log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
+                                    break;
+                                }
+                            }
+                        } else if defender.defender_pos.y == attacker.attacker_pos.y {
+                            let min_x = defender.defender_pos.x.min(attacker.attacker_pos.x);
+                            let max_x = defender.defender_pos.x.max(attacker.attacker_pos.x);
+                            for building in &self.buildings {
+                                if building.tile.y == defender.defender_pos.y
+                                    && building.tile.x > min_x
+                                    && building.tile.x < max_x
+                                {
+                                    blocked = true;
+                                    log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
+                                    break;
+                                }
+                            }
+                        }
+    
+                        if !blocked {
+                            log::info!("Defender {} successfully attacks attacker", defender.id);
+                            attacker.attacker_health =
+                                attacker.attacker_health.saturating_sub(defender.damage);
+                            defenders_damaged.push(DefenderResponse {
+                                id: defender.id,
+                                position: defender.defender_pos,
+                                damage: defender.damage,
+                            });
+                            bullet_hits.push(BulletHit {
+                                defender_id: defender.id,
+                                target_id: attacker.id,
+                                damage: defender.damage,
+                                position: defender.defender_pos,
+                            });
+                        } else {
+                            log::info!("Defender {} attack is blocked", defender.id);
+                        }
+                    } else {
+                        log::info!(
+                            "Defender {} is not aligned with attacker. Defender position: ({}, {}), Attacker position: ({}, {})",
+                            defender.id,
+                            defender.defender_pos.x,
+                            defender.defender_pos.y,
+                            attacker.attacker_pos.x,
+                            attacker.attacker_pos.y
+                        );
+                    }
+                } else {
+                    log::info!("Defender {} is out of range of attacker", defender.id);
+                }
+            } else {
+                log::info!("Time not elapsed for defender {}. Skipping attack.", defender.id);
+            }
+        }
+    
+        log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
+    
+        DefenderReturnType {
+            attacker_health: attacker.attacker_health,
+            defender_response: defenders_damaged,
+            bullet_hits,
+            state: self.clone(),
+        }
     }
 }
