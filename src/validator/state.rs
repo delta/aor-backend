@@ -1,6 +1,7 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
@@ -523,7 +524,10 @@ impl State {
     }
 
     pub fn defender_ranged_attack(&mut self, frame_number: i32) -> DefenderReturnType {
+        log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
+    
         if frame_number <= self.last_processed_frame {
+            log::info!("Frame number {} is less than or equal to last processed frame {}", frame_number, self.last_processed_frame);
             return DefenderReturnType {
                 attacker_health: self.attacker.as_ref().unwrap().attacker_health,
                 defender_response: Vec::new(),
@@ -531,35 +535,55 @@ impl State {
                 state: self.clone(),
             };
         }
-
+    
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
         let mut bullet_hits: Vec<BulletHit> = Vec::new();
-        if attacker.attacker_health == 0 {
-            return DefenderReturnType {
-                attacker_health: attacker.attacker_health,
-                defender_response: defenders_damaged,
-                bullet_hits,
-                state: self.clone(),
-            };
-        }
-
+        // if attacker.attacker_health == 0 {
+        //     log::info!("Attacker health is 0, returning early");
+        //     return DefenderReturnType {
+        //         attacker_health: attacker.attacker_health,
+        //         defender_response: defenders_damaged,
+        //         bullet_hits,
+        //         state: self.clone(),
+        //     };
+        // }
+    
         for defender in self.defenders.iter_mut() {
             if !defender.is_alive {
+                log::info!("Defender {} is not alive, skipping", defender.id);
                 continue;
             }
-            if defender.initial_frequency == 0 {
-                defender.initial_frequency = defender.frequency;
+    
+            let start = SystemTime::now();
+            let now = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
+            let time_interval = defender.frequency as u128;
+    
+            // Initialize defender.last_attack if it hasn't been set
+            if defender.last_attack == 0 {
+                defender.last_attack = now.as_millis() as i32;
+                log::info!("Initializing defender {} last_attack to {}", defender.id, defender.last_attack);
             }
-
-            // Check if attacker is within defender's range
-            let distance = (((defender.defender_pos.x - attacker.attacker_pos.x).pow(2)
-                + (defender.defender_pos.y - attacker.attacker_pos.y).pow(2))
-                as f32)
-                .sqrt();
-
-            if distance <= defender.range as f32 {
-                if defender.frequency <= 0 {
+    
+            let time_elapsed = now.as_millis() >= defender.last_attack as u128 + time_interval;
+    
+            if time_elapsed {
+                log::info!("Time elapsed for defender {}. Updating last attack time.", defender.id);
+                log::info!("last_attack: {}", defender.last_attack);
+                defender.last_attack = now.as_millis() as i32;
+                log::info!("last_attack update: {}", defender.last_attack);
+                log::info!("nowmillis: {}", now.as_millis());
+                log::info!("timeinterval: {}", time_interval);
+    
+                // Check if attacker is within defender's range
+                let distance = (((defender.defender_pos.x - attacker.attacker_pos.x).pow(2)
+                    + (defender.defender_pos.y - attacker.attacker_pos.y).pow(2))
+                    as f32)
+                    .sqrt();
+                log::info!("Distance between defender {} and attacker: {}", defender.id, distance);
+    
+                if distance <= defender.range as f32 {
+                    log::info!("Defender {} is within range of attacker", defender.id);
                     if defender.defender_pos.x == attacker.attacker_pos.x
                         || defender.defender_pos.y == attacker.attacker_pos.y
                     {
@@ -574,6 +598,7 @@ impl State {
                                     && building.tile.y < max_y
                                 {
                                     blocked = true;
+                                    log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
                                     break;
                                 }
                             }
@@ -586,15 +611,16 @@ impl State {
                                     && building.tile.x < max_x
                                 {
                                     blocked = true;
+                                    log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
                                     break;
                                 }
                             }
                         }
-
+    
                         if !blocked {
+                            log::info!("Defender {} successfully attacks attacker", defender.id);
                             attacker.attacker_health =
                                 attacker.attacker_health.saturating_sub(defender.damage);
-                            defender.frequency = defender.initial_frequency;
                             defenders_damaged.push(DefenderResponse {
                                 id: defender.id,
                                 position: defender.defender_pos,
@@ -607,14 +633,28 @@ impl State {
                                 position: defender.defender_pos,
                             });
                         } else {
+                            log::info!("Defender {} attack is blocked", defender.id);
                         }
+                    } else {
+                        log::info!(
+                            "Defender {} is not aligned with attacker. Defender position: ({}, {}), Attacker position: ({}, {})",
+                            defender.id,
+                            defender.defender_pos.x,
+                            defender.defender_pos.y,
+                            attacker.attacker_pos.x,
+                            attacker.attacker_pos.y
+                        );
                     }
                 } else {
-                    defender.frequency -= 1;
+                    log::info!("Defender {} is out of range of attacker", defender.id);
                 }
+            } else {
+                log::info!("Time not elapsed for defender {}. Skipping attack.", defender.id);
             }
         }
-
+    
+        log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
+    
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
             defender_response: defenders_damaged,

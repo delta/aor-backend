@@ -50,7 +50,7 @@ pub struct DefenderDetails {
     pub path_in_current_frame: Vec<Coords>,
     pub range: i32,
     pub frequency: i32,
-    pub initial_frequency: i32,
+    pub last_attack: i32,
 }
 
 // Structs for sending response
