@@ -1,5 +1,5 @@
 FROM rust:1.84.0-slim AS base
-WORKDIR /usr/src/aot-backend
+WORKDIR /app
 RUN apt-get update -y && apt-get install -y \
     libpq-dev \
     netcat-traditional \
@@ -11,8 +11,12 @@ FROM base AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM base
-COPY --from=planner /usr/src/aot-backend/recipe.json recipe.json
+FROM base AS builder 
+COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release
+RUN cargo build --release --bin aot-backend
+
+FROM debian:bullseye-slim AS runtime
+COPY --from=builder /app/target/release/aot-backend /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/aot-backend"]
