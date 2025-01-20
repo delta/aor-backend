@@ -735,11 +735,11 @@ pub(crate) fn upgrade_building(
         .filter(block_type::category.eq(BlockCategory::Building))
         .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)));
 
-    let next_level_block_id: i32 = joined_table
+    let next_level_block: (i32, String) = joined_table
         .filter(building_type::name.eq(name))
         .filter(building_type::level.eq(level + 1))
-        .select(block_type::id)
-        .first::<i32>(conn)
+        .select((block_type::id, building_type::name))
+        .first::<(i32, String)>(conn)
         .map_err(|err| DieselError {
             table: "available_blocks",
             function: function!(),
@@ -756,13 +756,15 @@ pub(crate) fn upgrade_building(
     let _ = run_transaction(
         conn,
         block_id,
-        next_level_block_id,
+        next_level_block.0,
         player_id,
         cost,
         user_artifacts,
         bank_map_space_id,
+        true,
     );
-    let building_map_space_id = get_building_map_space_id(conn, &id_of_map, &next_level_block_id)?;
+
+    let building_map_space_id = get_building_map_space_id(conn, &id_of_map, &next_level_block.0)?;
     Ok(building_map_space_id)
 }
 
@@ -770,6 +772,7 @@ pub(crate) fn upgrade_defender(
     player_id: i32,
     conn: &mut PgConnection,
     block_id: i32,
+    update_map_spaces: bool,
 ) -> Result<()> {
     let user_artifacts = get_user_artifacts(player_id, conn)?;
 
@@ -860,6 +863,7 @@ pub(crate) fn upgrade_defender(
         cost,
         user_artifacts,
         bank_map_space_id,
+        update_map_spaces,
     )
 }
 
@@ -949,6 +953,7 @@ pub(crate) fn upgrade_mine(player_id: i32, conn: &mut PgConnection, block_id: i3
         cost,
         user_artifacts,
         bank_map_space_id,
+        true,
     )
 }
 
@@ -1145,6 +1150,7 @@ fn run_transaction(
     cost: i32,
     user_artifacts: i32,
     bank_map_space_id: i32,
+    update_map_spaces: bool,
 ) -> Result<(), anyhow::Error> {
     conn.transaction(|conn| {
         let id_of_map = get_user_map_id(player_id, conn)?;
@@ -1172,13 +1178,15 @@ fn run_transaction(
             })?;
 
         //update map spaces
-        diesel::update(
-            map_spaces::table
-                .filter(map_spaces::block_type_id.eq(block_id))
-                .filter(map_spaces::map_id.eq(id_of_map)),
-        )
-        .set(map_spaces::block_type_id.eq(next_level_block_id))
-        .execute(conn)?;
+        if update_map_spaces {
+            diesel::update(
+                map_spaces::table
+                    .filter(map_spaces::block_type_id.eq(block_id))
+                    .filter(map_spaces::map_id.eq(id_of_map)),
+            )
+            .set(map_spaces::block_type_id.eq(next_level_block_id))
+            .execute(conn)?;
+        }
 
         Ok(())
     })

@@ -14,4 +14,24 @@ pub const MATCH_MAKING_ATTEMPTS: i32 = 10;
 pub const PERCENTANGE_ARTIFACTS_OBTAINABLE: f32 = 0.3;
 pub const BOMB_DAMAGE_MULTIPLIER: f32 = 5.0;
 
+pub struct HutLevelAttribute {
+    pub defenders_limit: i32,
+}
+
+pub struct LevelAttributes {
+    pub hut: HutLevelAttribute,
+}
+
+pub const LEVEL: [LevelAttributes; 3] = [
+    LevelAttributes {
+        hut: HutLevelAttribute { defenders_limit: 3 },
+    },
+    LevelAttributes {
+        hut: HutLevelAttribute { defenders_limit: 4 },
+    },
+    LevelAttributes {
+        hut: HutLevelAttribute { defenders_limit: 5 },
+    },
+];
+
 pub const LIVES: i32 = 3;

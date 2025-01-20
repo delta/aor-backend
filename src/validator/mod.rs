@@ -142,6 +142,8 @@ pub fn game_handler(
                 damaged_buildings: None,
                 hut_triggered: false,
                 hut_defenders: None,
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,

@@ -470,6 +470,14 @@ pub fn get_map_details_for_attack(
             } else {
                 map_space
             }
+            // if block_type.building_type == ROAD_ID {
+            //     if block_type.category == BlockCategory::Mine {
+            //         map_space.block_type_id = ROAD_ID;
+            //     }
+            //     map_space
+            // } else {
+            //     map_space
+            // }
         })
         .collect();
     let blocks = fetch_building_blocks(conn, &map.player)?;

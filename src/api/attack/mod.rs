@@ -286,6 +286,14 @@ async fn socket_handler(
     .map_err(|err| error::handle_error(err.into()))?;
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let hut_defenders: HashMap<i32, DefenderDetails> = web::block(move || {
+        Ok(util::get_hut_defender(&mut conn, defender_id)?)
+            as anyhow::Result<HashMap<i32, DefenderDetails>>
+    })
+    .await?
+    .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let mines = web::block(move || {
         Ok(util::get_mines(&mut conn, map_id)?) as anyhow::Result<Vec<MineDetails>>
     })
@@ -397,7 +405,14 @@ async fn socket_handler(
     let mut session_clone2 = session.clone();
 
     actix_rt::spawn(async move {
-        let mut game_state = State::new(attacker_id, defender_id, defenders, mines, buildings);
+        let mut game_state = State::new(
+            attacker_id,
+            defender_id,
+            defenders,
+            hut_defenders,
+            mines,
+            buildings,
+        );
         game_state.set_total_hp_buildings();
 
         let game_logs = &mut game_log.clone();
@@ -482,6 +497,11 @@ async fn socket_handler(
                                         }
                                     } else if response.result_type == ResultType::DefendersTriggered
                                     {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    } else if response.result_type == ResultType::SpawnHutDefender {
+                                        // game_state.hut.hut_defenders_count -= 1;
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
@@ -592,6 +612,8 @@ async fn socket_handler(
                     attacker_health: None,
                     exploded_mines: None,
                     defender_damaged: None,
+                    hut_triggered: false,
+                    hut_defenders: None,
                     damaged_buildings: None,
                     total_damage_percentage: None,
                     is_sync: false,

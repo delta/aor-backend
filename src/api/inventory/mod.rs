@@ -61,7 +61,7 @@ async fn upgrade(
             map_space_id_if_valid = upgrade_building(user_id, &mut conn, item_id)
                 .map_err(|err| ErrorBadRequest(err.to_string()))?;
         }
-        "defender" => upgrade_defender(user_id, &mut conn, item_id)
+        "defender" => upgrade_defender(user_id, &mut conn, item_id, true)
             .map_err(|err| ErrorBadRequest(err.to_string()))?,
         "emp" => upgrade_emp(user_id, &mut conn, item_id)
             .map_err(|err| ErrorBadRequest(err.to_string()))?,

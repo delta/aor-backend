@@ -11,6 +11,24 @@ use crate::api::util::HistoryboardQuery;
 use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
+use crate::api::error::AuthError;
+use crate::api::game::util::UserDetail;
+use crate::api::inventory::util::{get_bank_map_space_id, get_block_id_of_bank, get_user_map_id};
+use crate::api::user::util::fetch_user;
+use crate::api::util::{
+    GameHistoryEntry, GameHistoryResponse, HistoryboardEntry, HistoryboardResponse,
+};
+use crate::api::{self, RedisConn};
+use crate::constants::*;
+use crate::error::DieselError;
+use crate::models::{
+    Artifact, AttackerType, AvailableBlocks, BlockCategory, BlockType, BuildingType, DefenderType,
+    EmpType, Game, LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop,
+    User,
+};
+use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
+use crate::util::function;
+use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
 use crate::validator::util::{Coords, SourceDestXY};
 use actix_rt;
@@ -340,6 +358,40 @@ async fn socket_handler(
         web::block(move || Ok(fetch_user(&mut conn, defender_id)?) as anyhow::Result<Option<User>>)
             .await?
             .map_err(|err| error::handle_error(err.into()))?;
+    let mut defenders: Vec<DefenderDetails> = Vec::new();
+
+    for (_, block_type, defender_type, prop, map_space) in result.iter() {
+        let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
+        // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
+        defenders.push(DefenderDetails {
+            id: defender_type.id,
+            radius: prop.range,
+            speed: defender_type.speed,
+            damage: defender_type.damage,
+            defender_pos: Coords { x: hut_x, y: hut_y },
+            is_alive: true,
+            damage_dealt: false,
+            target_id: None,
+            path_in_current_frame: Vec::new(),
+            block_id: block_type.id,
+            level: defender_type.level,
+        })
+    }
+    // Sorted to handle multiple defenders attack same attacker at same frame
+    // defenders.sort_by(|defender_1, defender_2| (defender_2.damage).cmp(&defender_1.damage));
+    Ok(defenders)
+}
+
+pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<BuildingDetails>> {
+    use crate::schema::{block_type, building_type, map_spaces};
+
+    let joined_table = map_spaces::table
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
+        .inner_join(prop::table.on(building_type::prop_id.eq(prop::id)))
+        .filter(map_spaces::map_id.eq(map_id))
+        .filter(building_type::id.ne(ROAD_ID));
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
 
@@ -366,6 +418,122 @@ async fn socket_handler(
     }
 
     let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
+    let buildings: Vec<BuildingDetails> = joined_table
+        .load::<(MapSpaces, BlockType, BuildingType, Prop)>(conn)
+        .map_err(|err| DieselError {
+            table: "map_spaces",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+        .map(
+            |(map_space, block_type, building_type, prop)| BuildingDetails {
+                id: map_space.id,
+                current_hp: building_type.hp,
+                total_hp: building_type.hp,
+                artifacts_obtained: 0,
+                tile: Coords {
+                    x: map_space.x_coordinate,
+                    y: map_space.y_coordinate,
+                },
+                width: building_type.width,
+                name: building_type.name,
+                range: prop.range,
+                frequency: prop.frequency,
+                block_id: block_type.id,
+            },
+        )
+        .collect();
+    update_buidling_artifacts(conn, map_id, buildings)
+}
+
+pub fn get_hut_defender(
+    conn: &mut PgConnection,
+    map_id: i32,
+) -> Result<HashMap<i32, DefenderDetails>> {
+    let joined_table = block_type::table
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+        .filter(defender_type::name.eq("Hut_Defender"));
+    let hut_defenders: Vec<DefenderDetails> = joined_table
+        .load::<(BlockType, DefenderType, Prop)>(conn)
+        .map_err(|err| DieselError {
+            table: "defender_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+        .map(|(block_type, defender_type, prop)| DefenderDetails {
+            id: defender_type.id,
+            radius: prop.range,
+            speed: defender_type.speed,
+            damage: defender_type.damage,
+            defender_pos: Coords { x: 0, y: 0 },
+            is_alive: true,
+            damage_dealt: false,
+            target_id: None,
+            path_in_current_frame: Vec::new(),
+            block_id: block_type.id,
+            level: defender_type.level,
+        })
+        .collect();
+
+    let joined_table = map_spaces::table
+        .inner_join(block_type::table)
+        .filter(block_type::category.eq(BlockCategory::Building))
+        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
+        .filter(building_type::name.eq("Defender_Hut"))
+        .filter(map_spaces::map_id.eq(map_id))
+        .filter(building_type::id.ne(ROAD_ID));
+
+    let huts: Vec<(i32, i32)> = joined_table
+        .load::<(MapSpaces, BlockType, BuildingType)>(conn)
+        .map_err(|err| DieselError {
+            table: "building_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+        .map(|(map_spaces, _, building_type)| (map_spaces.id, building_type.level))
+        .collect();
+
+    let mut hut_defenders_res: HashMap<i32, DefenderDetails> = HashMap::new();
+    for hut in huts {
+        if let Some(hut_defender) = hut_defenders.iter().find(|hd| hd.level == hut.1) {
+            hut_defenders_res.insert(hut.0, hut_defender.clone());
+        }
+    }
+    log::info!("{:?}", hut_defenders_res);
+    Ok(hut_defenders_res)
+}
+
+pub fn get_bomb_types(conn: &mut PgConnection) -> Result<Vec<BombType>> {
+    use crate::schema::emp_type::dsl::*;
+    let bomb_types = emp_type
+        .load::<EmpType>(conn)
+        .map_err(|err| DieselError {
+            table: "emp_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+        .map(|emp| BombType {
+            id: emp.id,
+            radius: emp.attack_radius,
+            damage: emp.attack_damage,
+            total_count: 0,
+        })
+        .collect();
+    Ok(bomb_types)
+}
+
+pub fn update_buidling_artifacts(
+    conn: &mut PgConnection,
+    map_id: i32,
+    mut buildings: Vec<BuildingDetails>,
+) -> Result<Vec<BuildingDetails>> {
+    use crate::schema::{artifact, map_spaces};
 
     let game_log = GameLog {
         g: game_id,
@@ -593,82 +761,136 @@ async fn socket_handler(
             attacker_id,
             defender_id
         );
+        return Err(anyhow::anyhow!("Can't remove game from redis"));
+    }
 
-        loop {
-            actix_rt::time::sleep(time::Duration::from_secs(1)).await;
-
-            if time::Instant::now() - last_activity > timeout_duration {
-                log::info!(
-                    "Game:{} is timed out for Attacker:{} and Defender:{}",
-                    game_id,
-                    attacker_id,
-                    defender_id
-                );
-
-                let response_json = serde_json::to_string(&SocketResponse {
-                    frame_number: 0,
-                    result_type: ResultType::GameOver,
-                    is_alive: None,
-                    attacker_health: None,
-                    exploded_mines: None,
-                    defender_damaged: None,
-                    hut_triggered: false,
-                    hut_defenders: None,
-                    damaged_buildings: None,
-                    total_damage_percentage: None,
-                    is_sync: false,
-                    is_game_over: true,
-                    message: Some("Connection timed out".to_string()),
-                    bullet_hits: None,
-                    revealed_mines: None,
-                })
-                .unwrap();
-                if session_clone2.text(response_json).await.is_err() {
-                    return;
-                }
-
-                break;
-            }
-        }
-    });
+    // for event in game_log.events.iter() {
+    //     println!("Event: {:?}\n", event);
+    // }
 
     log::info!(
-        "End of Game:{}, Attacker:{} and Defender:{}",
+        "Game terminated successfully for game:{} and attacker:{} and opponent:{}",
         game_id,
         attacker_id,
-        defender_id,
+        defender_id
     );
 
-    Ok(response)
+    Ok(())
 }
 
-async fn attack_history(
-    pool: web::Data<PgPool>,
-    user: AuthUser,
-    query: web::Query<HistoryboardQuery>,
-) -> Result<impl Responder> {
-    let user_id = user.0;
-    let page = query.page.unwrap_or(1);
-    let limit = query.limit.unwrap_or(20);
-    if page <= 0 || limit <= 0 {
-        return Err(ErrorBadRequest("Invalid query params"));
+pub fn check_and_remove_incomplete_game(
+    attacker_id: &i32,
+    defender_id: &i32,
+    game_id: &i32,
+    conn: &mut PgConnection,
+) -> Result<()> {
+    use crate::schema::game::dsl::*;
+
+    let pending_games = game
+        .filter(
+            attack_id
+                .eq(attacker_id)
+                .and(defend_id.eq(defender_id))
+                .and(id.ne(game_id))
+                .and(is_game_over.eq(false)),
+        )
+        .load::<Game>(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
+
+    let _len = pending_games.len();
+
+    for pending_game in pending_games {
+        diesel::delete(game.filter(id.eq(pending_game.id)))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
     }
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_attack_history(user_id, page, limit, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-    Ok(web::Json(response))
+
+    Ok(())
 }
 
-async fn get_top_attacks(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl Responder> {
-    let user_id = user.0;
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_top_attacks(user_id, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-    Ok(web::Json(response))
+pub fn can_attack_happen(conn: &mut PgConnection, user_id: i32, is_attacker: bool) -> Result<bool> {
+    use crate::schema::game::dsl::*;
+
+    let current_date = chrono::Local::now().date_naive();
+
+    if is_attacker {
+        let count: i64 = game
+            .filter(attack_id.eq(user_id))
+            .filter(is_game_over.eq(true))
+            .filter(date.eq(current_date))
+            .count()
+            .get_result::<i64>(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+        Ok(count < TOTAL_ATTACKS_PER_DAY)
+    } else {
+        let count: i64 = game
+            .filter(defend_id.eq(user_id))
+            .filter(is_game_over.eq(true))
+            .filter(date.eq(current_date))
+            .count()
+            .get_result::<i64>(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+        Ok(count < TOTAL_ATTACKS_PER_DAY)
+    }
+}
+
+pub fn deduct_artifacts_from_building(
+    damaged_buildings: Vec<BuildingResponse>,
+    conn: &mut PgConnection,
+) -> Result<()> {
+    use crate::schema::artifact;
+    for building in damaged_buildings.iter() {
+        if (building.artifacts_if_damaged) > 0 {
+            diesel::update(artifact::table.find(building.id))
+                .set(artifact::count.eq(artifact::count - building.artifacts_if_damaged))
+                .execute(conn)
+                .map_err(|err| DieselError {
+                    table: "artifact",
+                    function: function!(),
+                    error: err,
+                })?;
+        }
+    }
+    Ok(())
+}
+
+pub fn artifacts_obtainable_from_base(map_id: i32, conn: &mut PgConnection) -> Result<i32> {
+    use crate::schema::{artifact, map_spaces};
+
+    let mut artifacts = 0;
+
+    for (_, count) in map_spaces::table
+        .left_join(artifact::table)
+        .filter(map_spaces::map_id.eq(map_id))
+        .select((map_spaces::all_columns, artifact::count.nullable()))
+        .load::<(MapSpaces, Option<i32>)>(conn)
+        .map_err(|err| DieselError {
+            table: "map_spaces",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+    {
+        if let Some(count) = count {
+            artifacts += (count as f32 * PERCENTANGE_ARTIFACTS_OBTAINABLE).floor() as i32;
+        }
+    }
+
+    Ok(artifacts)
 }
