@@ -139,9 +139,9 @@ pub fn is_valid_save_layout(
 
         let building_type = block.building_type;
 
-        if artifacts > buildings[&building_type].capacity {
-            return Err(BaseInvalidError::InvalidArtifactCount);
-        }
+        // if artifacts > buildings[&building_type].capacity {
+        //     return Err(BaseInvalidError::InvalidArtifactCount);
+        // }
 
         total_artifacts += artifacts;
 
@@ -171,10 +171,10 @@ pub fn is_valid_save_layout(
         }
     }
 
-    if total_artifacts != *user_artifacts {
-        return Err(BaseInvalidError::InvalidArtifactCount);
-    }
-    //print building id,
+    // if total_artifacts != *user_artifacts {
+    //     return Err(BaseInvalidError::InvalidArtifactCount);
+    // }
+    // print building id,
 
     for (x_coordinate, y_coordinate, width) in map_buildings {
         let building_top_left_x = x_coordinate;
