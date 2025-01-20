@@ -1,9 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    api::attack::{
-        socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse},
-        util::{Direction, EventResponse, GameLog},
+    api::{
+        attack::{
+            socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse},
+            util::{Direction, EventResponse, GameLog},
+        },
+        game,
     },
     models::AttackerType,
     validator::util::{Coords, SourceDestXY},
@@ -85,7 +88,6 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::PlacedAttacker,
                 is_alive: Some(true),
-
                 attacker_health: None,
                 exploded_mines: None,
                 // triggered_defenders: None,
@@ -96,12 +98,19 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullet: false,
                 message: Some(String::from(
                     "Place Attacker, set attacker and bomb response",
                 )),
             }));
         }
         ActionType::MoveAttacker => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 let attacker_delta: Vec<Coords> = socket_request.attacker_path;
@@ -217,12 +226,19 @@ pub fn game_handler(
                     total_damage_percentage: Some(_game_state.damage_percentage),
                     is_sync: false,
                     is_game_over: false,
+                    shoot_bullet,
                     message: Some(String::from("Movement Response")),
                 };
                 return Some(Ok(response));
             }
         }
         ActionType::IsMine => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
             // is_mine
             let start_pos: Option<Coords> = socket_request.start_position;
             exploded_mines_result = _game_state.mine_blast(start_pos);
@@ -256,7 +272,6 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type,
                 is_alive: Some(is_attacker_alive),
-
                 attacker_health: None,
                 exploded_mines: Some(exploded_mines_result),
                 // triggered_defenders: None,
@@ -267,10 +282,17 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullet,
                 message: Some(String::from("Is Mine Response")),
             }));
         }
         ActionType::PlaceBombs => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
             let attacker_delta: Vec<Coords> = socket_request.attacker_path.clone();
             let current_pos = socket_request.start_position.unwrap();
             let bomb_coords = socket_request.bomb_position;
@@ -323,6 +345,7 @@ pub fn game_handler(
                 ResultType::Nothing
             };
 
+
             if _game_state.in_validation.is_invalidated {
                 return Some(Ok(send_terminate_game_message(
                     socket_request.frame_number,
@@ -334,7 +357,6 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type,
                 is_alive: Some(true),
-
                 attacker_health: None,
                 exploded_mines: None,
                 // triggered_defenders: None,
@@ -345,15 +367,21 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullet,
                 message: Some(String::from("Place Bomb Response")),
             }));
         }
         ActionType::Idle => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::Nothing,
                 is_alive: Some(true),
-
                 attacker_health: None,
                 exploded_mines: None,
                 // triggered_defenders: None,
@@ -364,10 +392,17 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullet,
                 message: Some(String::from("Idle Response")),
             }));
         }
         ActionType::Terminate => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
             let socket_response = SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::GameOver,
@@ -382,12 +417,19 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: true,
+                shoot_bullet,
                 message: Some(String::from("Game over")),
             };
 
             return Some(Ok(socket_response));
         }
         ActionType::SelfDestruct => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
             _game_state.self_destruct();
             let socket_response = SocketResponse {
                 frame_number: socket_request.frame_number,
@@ -403,9 +445,49 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullet,
                 message: Some(String::from("Self Destructed")),
             };
 
+            return Some(Ok(socket_response));
+        }
+        ActionType::BulletCollision => {
+            let mut shoot_bullet = false;
+            if _game_state.is_sentry_activated {
+                if _game_state.shoot_bullets() != None {
+                    shoot_bullet = true;
+                }
+            }
+            let mut is_attacker_alive = true;
+            if let Some(attacker) = &_game_state.attacker {
+                if attacker.attacker_health == 0 {
+                    is_attacker_alive = false;
+                }
+            }
+
+            _game_state.bullet_damage(socket_request.bullet_id.unwrap());
+            if _game_state.in_validation.is_invalidated {
+                return Some(Ok(send_terminate_game_message(
+                    socket_request.frame_number,
+                    _game_state.in_validation.message.clone(),
+                )));
+            }
+            let socket_response = SocketResponse {
+                frame_number: socket_request.frame_number,
+                result_type: ResultType::SentryDamage,
+                is_alive: Some(is_attacker_alive),
+                attacker_health: Some(_game_state.attacker.as_ref().unwrap().attacker_health),
+                exploded_mines: None,
+                defender_damaged: None,
+                damaged_buildings: None,
+                total_damage_percentage: Some(_game_state.damage_percentage),
+                is_sync: false,
+                is_game_over: false,
+                hut_defenders: None,
+                hut_triggered: false,
+                shoot_bullet,
+                message: Some(String::from("Reduce Health Response")),
+            };
             return Some(Ok(socket_response));
         }
     }

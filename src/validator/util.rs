@@ -93,6 +93,7 @@ pub struct BuildingDetails {
     pub range: i32,
     pub frequency: i32,
     pub block_id: i32,
+    pub level: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -145,6 +146,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         total_damage_percentage: None,
         is_sync: false,
         is_game_over: true,
+        shoot_bullet: false,
         message: Some(message),
     }
 }
