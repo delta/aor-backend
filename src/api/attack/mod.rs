@@ -414,6 +414,7 @@ async fn socket_handler(
             buildings,
         );
         game_state.set_total_hp_buildings();
+        game_state.get_sentries();
 
         let game_logs = &mut game_log.clone();
 
@@ -613,7 +614,7 @@ async fn socket_handler(
                     damaged_buildings: None,
                     total_damage_percentage: None,
                     is_sync: false,
-                    shoot_bullet: false,
+                    shoot_bullets: None,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
                 })
