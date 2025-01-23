@@ -672,6 +672,7 @@ pub async fn get_taunt(
     let client = reqwest::Client::new();
     unsafe {
         util::TAUNTS.taunt_count += 1;
+        util::TAUNTS.prev_taunt_time = time::SystemTime::now();
     }
     let response = client
         .post(&url)
@@ -689,7 +690,6 @@ pub async fn get_taunt(
                 log::info!("Extracted text: {}", part.text.trim());
                 unsafe {
                     util::TAUNTS.taunt_list.push(part.text.trim().to_string());
-                    util::TAUNTS.prev_taunt_time = time::SystemTime::now();
                     util::TAUNTS.taunt_status = TauntStatus::NewTauntAvailable;
                 };
                 return Ok(part.text.trim().to_string());

@@ -2,7 +2,7 @@ use self::{
     state::State,
     util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
 };
-use crate::{api::attack::util::reset_taunt_status, constants::MAX_TAUNT_REQUESTS};
+use crate::{api::attack::util::reset_taunt_status, constants::{MAX_TAUNT_REQUESTS, TAUNT_DELAY_TIME}};
 use crate::{
     api::attack::{
         get_taunt,
@@ -172,7 +172,7 @@ pub fn game_handler(
                             .duration_since(TAUNTS.prev_taunt_time)
                             .unwrap()
                             .as_millis()
-                            > 15000
+                            > TAUNT_DELAY_TIME
                             || TAUNTS.prev_taunt_time == UNIX_EPOCH)
                     {
                         log::info!("taunt_generator is being called");
@@ -244,7 +244,7 @@ pub fn game_handler(
                         .duration_since(TAUNTS.prev_taunt_time)
                         .unwrap()
                         .as_millis()
-                        > 15000
+                        > TAUNT_DELAY_TIME
                         || TAUNTS.prev_taunt_time == UNIX_EPOCH)
                 {
                     log::info!("taunt_generator is being called");
@@ -353,7 +353,7 @@ pub fn game_handler(
                         .duration_since(TAUNTS.prev_taunt_time)
                         .unwrap()
                         .as_millis()
-                        > 15000
+                        > TAUNT_DELAY_TIME
                         || TAUNTS.prev_taunt_time == UNIX_EPOCH)
                 {
                     log::info!("taunt_generator is being called");
@@ -367,7 +367,7 @@ pub fn game_handler(
                         .duration_since(TAUNTS.prev_taunt_time)
                         .unwrap()
                         .as_millis()
-                        > 15000
+                        > TAUNT_DELAY_TIME
                         || TAUNTS.prev_taunt_time == UNIX_EPOCH)
                 {
                     log::info!("taunt_generator is being called");
