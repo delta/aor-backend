@@ -217,7 +217,10 @@ async fn post_batch_transfer_artifacts(
     }
 
     let transfers = batch_transfer.into_inner().transfers;
-    let total_artifact_differ: i32 = transfers.iter().map(|transfer| transfer.artifacts_differ).sum();    
+    let total_artifact_differ: i32 = transfers
+        .iter()
+        .map(|transfer| transfer.artifacts_differ)
+        .sum();
     let mut responses = Vec::new();
     let mut accum_val: i32 = 0;
 
@@ -275,8 +278,8 @@ async fn post_batch_transfer_artifacts(
         })
         .await?
         .map_err(|err| error::handle_error(err.into()))?;
-        
-        if total_artifact_differ > bank_artifact_count+accum_val {
+
+        if total_artifact_differ > bank_artifact_count + accum_val {
             return Err(ErrorBadRequest("Not enough artifacts in the bank"));
         }
 

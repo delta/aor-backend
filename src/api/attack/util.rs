@@ -15,11 +15,10 @@ use crate::api::{self, RedisConn};
 use crate::constants::*;
 use crate::error::DieselError;
 use crate::models::{
-    Artifact, AttackerType, AvailableBlocks, BlockCategory, BlockType, BuildingType, DefenderType,
-    EmpType, Game, LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop,
-    User,
+    Artifact, AttackerType, BlockCategory, BlockType, BuildingType, DefenderType, EmpType, Game,
+    LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop, User,
 };
-use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
+use crate::schema::{block_type, building_type, defender_type, map_layout, map_spaces, prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
@@ -560,12 +559,16 @@ pub fn get_mines(conn: &mut PgConnection, map_id: i32) -> Result<Vec<MineDetails
     Ok(mines)
 }
 
+/*
+* to get defenders of a map, just map_id is enough
+* TODO: Remove this redundnat user_id variable
+ */
 pub fn get_defenders(
     conn: &mut PgConnection,
     map_id: i32,
     user_id: i32,
 ) -> Result<Vec<DefenderDetails>> {
-    use crate::schema::{available_blocks, block_type, defender_type, map_spaces};
+    use crate::schema::{block_type, defender_type, map_spaces};
     // let result: Vec<(
     //     MapSpaces,
     //     (BlockType, AvailableBlocks, BuildingType, DefenderType),
@@ -588,23 +591,36 @@ pub fn get_defenders(
     //         error: err,
     //     })?;
 
-    let result: Vec<(
-        MapSpaces,
-        (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
-    )> = map_spaces::table
-        .inner_join(
-            block_type::table
-                .inner_join(available_blocks::table)
-                .inner_join(building_type::table)
-                .inner_join(defender_type::table)
-                .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id))),
-        )
+    // let result = available_blocks::table
+    // .inner_join(block_type::table)
+    // .filter(block_type::category.eq(BlockCategory::Defender))
+    // .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+    // .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+    // .inner_join(map_spaces::table.on(block_type::id.eq(map_spaces::block_type_id)))
+    // .filter(map_spaces::map_id.eq(map_id))
+    // .filter(available_blocks::user_id.eq(user_id))
+    // .load::<(AvailableBlocks, BlockType, DefenderType, Prop, MapSpaces)>(conn)
+    // .map_err(|err| DieselError {
+    //     table: "map_spaces",
+    //     function: function!(),
+    //     error: err,
+    // })?;
+
+    let result = map_spaces::table
+        .inner_join(map_layout::table)
+        .filter(map_layout::player.eq(user_id))
+        .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
+        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
         .filter(map_spaces::map_id.eq(map_id))
-        .filter(available_blocks::user_id.eq(user_id))
-        .load::<(
-            MapSpaces,
-            (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
-        )>(conn)
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .select((
+            map_spaces::all_columns,
+            block_type::all_columns,
+            defender_type::all_columns,
+            prop::all_columns,
+        ))
+        .load::<(MapSpaces, BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
             function: function!(),
@@ -613,7 +629,7 @@ pub fn get_defenders(
 
     let mut defenders: Vec<DefenderDetails> = Vec::new();
 
-    for (map_space, (block_type, _, _, defender, prop)) in result.iter() {
+    for (map_space, block_type, defender_type, prop) in result.iter() {
         let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {
