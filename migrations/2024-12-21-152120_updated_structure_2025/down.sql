@@ -37,12 +37,5 @@ ALTER TABLE attacker_type
     ADD COLUMN "name" TEXT NOT NULL,
     ADD COLUMN radius INTEGER NOT NULL;
 
--- Restore defender_type, mine_type, and building_type columns in block_type
-ALTER TABLE block_type
-    DROP COLUMN IF EXISTS category_id,
-    ADD COLUMN defender_type TEXT,
-    ADD COLUMN mine_type TEXT,
-    ADD COLUMN building_type TEXT;
-
 -- Drop the prop table
 DROP TABLE IF EXISTS prop;

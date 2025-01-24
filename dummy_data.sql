@@ -165,73 +165,73 @@ COPY public.attacker_type FROM stdin;
 \.
 
 COPY public.block_type FROM stdin;
-0	building	0
-1	building	1
-2	building	2
-3	building	3
-4	building	4
-5	building	5
-6	building	6
-7	building	7
-8	building	8
-9	building	9
-10	building	10
-11	building	11
-12	building	12
-13	building	13
-14	building	14
-15	building	15
-16	building	16
-17	building	17
-18	building	18
-19	building	19
-20	building	20
-21	building	21
-22	building	22
-23	building	23
-24	building	24
-25	building	25
-26	building	26
-27	building	27
-28	building	28
-29	building	29
-30	building	30
-31	building	31
-32	building	32
-33	building	33
-34	building	34
-35	building	35
-36	building	36
-37	building	37
-38	building	38
-39	building	39
-40	building	40
-41	building	41
-42	building	42
-43	building	43
-44	building	44
-45	building	45
-46	defender	1
-47	defender	2
-48	defender	3
-49	defender	4
-50	defender	5
-51	defender	6
-52	defender	7
-53	defender	8
-54	defender	9
-55	mine	1
-56	mine	2
-57	mine	3
-58	building	46
-59	building	47
-60	building	48
-61	building	49
-62	building	50
-63	building	51
-64	defender	10
-65	defender	11
-66	defender	12
+0	\N	\N	building	0
+1	\N	\N	building	1
+2	\N	\N	building	2
+3	\N	\N	building	3
+4	\N	\N	building	4
+5	\N	\N	building	5
+6	\N	\N	building	6
+7	\N	\N	building	7
+8	\N	\N	building	8
+9	\N	\N	building	9
+10	\N	\N	building	10
+11	\N	\N	building	11
+12	\N	\N	building	12
+13	\N	\N	building	13
+14	\N	\N	building	14
+15	\N	\N	building	15
+16	\N	\N	building	16
+17	\N	\N	building	17
+18	\N	\N	building	18
+19	\N	\N	building	19
+20	\N	\N	building	20
+21	\N	\N	building	21
+22	\N	\N	building	22
+23	\N	\N	building	23
+24	\N	\N	building	24
+25	\N	\N	building	25
+26	\N	\N	building	26
+27	\N	\N	building	27
+28	\N	\N	building	28
+29	\N	\N	building	29
+30	\N	\N	building	30
+31	\N	\N	building	31
+32	\N	\N	building	32
+33	\N	\N	building	33
+34	\N	\N	building	34
+35	\N	\N	building	35
+36	\N	\N	building	36
+37	\N	\N	building	37
+38	\N	\N	building	38
+39	\N	\N	building	39
+40	\N	\N	building	40
+41	\N	\N	building	41
+42	\N	\N	building	42
+43	\N	\N	building	43
+44	\N	\N	building	44
+45	\N	\N	building	45
+46	1	\N	defender	0
+47	2	\N	defender	0
+48	3	\N	defender	0
+49	4	\N	defender	0
+50	5	\N	defender	0
+51	6	\N	defender	0
+52	7	\N	defender	0
+53	8	\N	defender	0
+54	9	\N	defender	0
+55	\N	1	mine	0
+56	\N	2	mine	0
+57	\N	3	mine	0
+58	\N	\N	building	46
+59	\N	\N	building	47
+60	\N	\N	building	48
+61	\N	\N	building	49
+62	\N	\N	building	50
+63	\N	\N	building	51
+64	10	\N	defender	0
+65	11	\N	defender	0
+67	12	\N	defender	0
 \.
 
 COPY public.available_blocks FROM stdin;

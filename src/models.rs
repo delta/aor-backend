@@ -315,8 +315,10 @@ pub struct DefenderType {
 #[derive(Queryable, Clone, Debug, Serialize)]
 pub struct BlockType {
     pub id: i32,
+    pub defender_type: Option<i32>,
+    pub mine_type: Option<i32>,
     pub category: BlockCategory,
-    pub category_id: i32,
+    pub building_type: i32,
 }
 
 #[derive(Queryable, Clone, Debug, Serialize)]

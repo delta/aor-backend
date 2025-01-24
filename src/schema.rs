@@ -59,8 +59,10 @@ diesel::table! {
 
     block_type (id) {
         id -> Int4,
+        defender_type -> Nullable<Int4>,
+        mine_type -> Nullable<Int4>,
         category -> BlockCategory,
-        category_id -> Int4,
+        building_type -> Int4,
     }
 }
 
@@ -215,6 +217,9 @@ diesel::joinable!(available_blocks -> attacker_type (attacker_type_id));
 diesel::joinable!(available_blocks -> block_type (block_type_id));
 diesel::joinable!(available_blocks -> emp_type (emp_type_id));
 diesel::joinable!(available_blocks -> user (user_id));
+diesel::joinable!(block_type -> building_type (building_type));
+diesel::joinable!(block_type -> defender_type (defender_type));
+diesel::joinable!(block_type -> mine_type (mine_type));
 diesel::joinable!(building_type -> prop (prop_id));
 diesel::joinable!(defender_type -> prop (prop_id));
 diesel::joinable!(game -> map_layout (map_layout_id));

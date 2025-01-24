@@ -5,13 +5,6 @@ CREATE TABLE prop (
     frequency INTEGER NOT NULL DEFAULT 0
 );
 
--- Drop defender_type, mine_type, building_type columns and add category_id to block_type
-ALTER TABLE block_type
-    DROP COLUMN defender_type,
-    DROP COLUMN mine_type,
-    DROP COLUMN building_type,
-    ADD COLUMN category_id INTEGER NOT NULL;
-
 -- Deleting range and freqency columns from defender_type, mine_type, and attacker_type
 ALTER TABLE defender_type
     DROP COLUMN radius;
