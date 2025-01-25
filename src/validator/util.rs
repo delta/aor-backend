@@ -51,6 +51,7 @@ pub struct DefenderDetails {
     pub damage_dealt: bool,
     pub target_id: Option<f32>,
     pub path_in_current_frame: Vec<Coords>,
+    pub max_health: i32,
     pub block_id: i32,
     pub level: i32,
 }
@@ -92,6 +93,7 @@ pub struct BuildingDetails {
     pub range: i32,
     pub frequency: i32,
     pub block_id: i32,
+    pub level: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -130,6 +132,12 @@ pub struct ValidatorResponse {
     pub is_sync: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BulletSpawnResponse {
+    pub sentry_id: i32,
+    pub bullet_id: i32,
+}
+
 pub fn send_terminate_game_message(frame_number: i32, message: String) -> SocketResponse {
     SocketResponse {
         frame_number,
@@ -144,6 +152,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         total_damage_percentage: None,
         is_sync: false,
         is_game_over: true,
+        shoot_bullets: None,
         message: Some(message),
     }
 }

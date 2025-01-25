@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 // use crate::validator::util::Coords;
-use crate::{
-    validator::util::Coords,
-    validator::util::{Attacker, BombType, BuildingDetails, DefenderDetails, MineDetails},
-};
+use crate::validator::util::{Attacker, BombType, BuildingDetails, BulletSpawnResponse, Coords, DefenderDetails, MineDetails};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SocketRequest {
@@ -12,6 +9,7 @@ pub struct SocketRequest {
     pub action_type: ActionType,
     pub attacker_id: Option<i32>,
     pub bomb_id: Option<i32>,
+    pub bullet_data: Option<Vec<BulletSpawnResponse>>,
     pub start_position: Option<Coords>,
     pub attacker_path: Vec<Coords>,
     pub bomb_position: Coords,
@@ -35,6 +33,7 @@ pub struct SocketResponse {
     // pub state: Option<GameStateResponse>,
     pub is_game_over: bool,
     pub message: Option<String>,
+    pub shoot_bullets: Option<Vec<BulletSpawnResponse>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -46,6 +45,7 @@ pub enum ActionType {
     Idle,
     Terminate,
     SelfDestruct,
+    BulletCollision,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -58,6 +58,7 @@ pub enum ResultType {
     GameOver,
     PlacedAttacker,
     Nothing,
+    SentryDamage,
 }
 
 #[derive(Serialize, Deserialize)]

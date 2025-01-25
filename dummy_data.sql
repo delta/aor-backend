@@ -120,18 +120,18 @@ COPY public.building_type FROM stdin;
 \.
 
 COPY public.defender_type FROM stdin;
-1	4	50	1	10	Defender_1	1
-2	4	40	1	10	Defender_2	2
-3	4	30	1	10	Defender_3	3
-4	4	60	2	150	Defender_1	4
-5	4	50	2	250	Defender_2	5
-6	4	40	2	350	Defender_3	6
-7	4	70	3	-1	Defender_1	7
-8	4	60	3	-1	Defender_2	8
-9	4	50	3	-1	Defender_3	9
-10	4	20	1	-1	Hut_Defender	19
-11	4	30	2	-1	Hut_Defender	20
-12	4	50	3	-1	Hut_Defender	21
+1	4	50	1	10	Defender_1	1	100
+2	4	40	1	10	Defender_2	2	100
+3	4	30	1	10	Defender_3	3	100
+4	4	60	2	150	Defender_1	4	100
+5	4	50	2	250	Defender_2	5	100
+6	4	40	2	350	Defender_3	6	100
+7	4	70	3	-1	Defender_1	7	100
+8	4	60	3	-1	Defender_2	8	100
+9	4	50	3	-1	Defender_3	9	100
+10	4	20	1	-1	Hut_Defender	19	100
+11	4	30	2	-1	Hut_Defender	20	100
+12	4	50	3	-1	Hut_Defender	21	100
 \.
 
 COPY public.emp_type FROM stdin;
@@ -231,7 +231,7 @@ COPY public.block_type FROM stdin;
 63	\N	\N	building	51
 64	10	\N	defender	0
 65	11	\N	defender	0
-67	12	\N	defender	0
+66	12	\N	defender	0
 \.
 
 COPY public.available_blocks FROM stdin;
@@ -440,7 +440,8 @@ COPY public.map_spaces FROM stdin;
 171	1	1	34	15
 172	1	36	20	58
 173	1	20	36	61
-174	1	36	10	58
+174	1	10	36	61
+175	1	36	10	58
 \.
 
 COPY public.artifact FROM stdin;

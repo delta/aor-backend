@@ -65,6 +65,7 @@ pub struct DefenderTypeResponse {
     pub level: i32,
     pub cost: i32,
     pub name: String,
+    pub max_health: i32,
 }
 
 #[derive(Serialize, Clone)]
@@ -859,6 +860,7 @@ pub fn fetch_defender_types(
                 level: defender_type.level,
                 cost: defender_type.cost,
                 name: defender_type.name,
+                max_health: defender_type.max_health,
             })
         })
         .collect();
