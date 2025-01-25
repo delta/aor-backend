@@ -129,9 +129,9 @@ COPY public.defender_type FROM stdin;
 7	4	70	3	-1	Defender_1	7	100
 8	4	60	3	-1	Defender_2	8	100
 9	4	50	3	-1	Defender_3	9	100
-10	4	20	1	-1	Hut_Defender	19
-11	4	30	2	-1	Hut_Defender	20
-12	4	50	3	-1	Hut_Defender	21
+10	4	20	1	-1	Hut_Defender	19	100
+11	4	30	2	-1	Hut_Defender	20	100
+12	4	50	3	-1	Hut_Defender	21	100
 \.
 
 COPY public.emp_type FROM stdin;
@@ -165,7 +165,6 @@ COPY public.attacker_type FROM stdin;
 \.
 
 COPY public.block_type FROM stdin;
-<<<<<<< HEAD
 0	\N	\N	building	0
 1	\N	\N	building	1
 2	\N	\N	building	2
@@ -232,76 +231,7 @@ COPY public.block_type FROM stdin;
 63	\N	\N	building	51
 64	10	\N	defender	0
 65	11	\N	defender	0
-67	12	\N	defender	0
-=======
-0	building	0
-1	building	1
-2	building	2
-3	building	3
-4	building	4
-5	building	5
-6	building	6
-7	building	7
-8	building	8
-9	building	9
-10	building	10
-11	building	11
-12	building	12
-13	building	13
-14	building	14
-15	building	15
-16	building	16
-17	building	17
-18	building	18
-19	building	19
-20	building	20
-21	building	21
-22	building	22
-23	building	23
-24	building	24
-25	building	25
-26	building	26
-27	building	27
-28	building	28
-29	building	29
-30	building	30
-31	building	31
-32	building	32
-33	building	33
-34	building	34
-35	building	35
-36	building	36
-37	building	37
-38	building	38
-39	building	39
-40	building	40
-41	building	41
-42	building	42
-43	building	43
-44	building	44
-45	building	45
-46	defender	1
-47	defender	2
-48	defender	3
-49	defender	4
-50	defender	5
-51	defender	6
-52	defender	7
-53	defender	8
-54	defender	9
-55	mine	1
-56	mine	2
-57	mine	3
-58	building	46
-59	building	47
-60	building	48
-61	building	49
-62	building	50
-63	building	51
-64	defender	10
-65	defender	11
-66	defender	12
->>>>>>> 1f1dd01 (feat: Hut building validation (#91))
+66	12	\N	defender	0
 \.
 
 COPY public.available_blocks FROM stdin;
@@ -510,7 +440,8 @@ COPY public.map_spaces FROM stdin;
 171	1	1	34	15
 172	1	36	20	58
 173	1	20	36	61
-174	1	36	10	58
+174	1	10	36	61
+175	1	36	10	58
 \.
 
 COPY public.artifact FROM stdin;

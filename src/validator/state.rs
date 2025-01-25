@@ -696,9 +696,10 @@ impl State {
         let mut shoot_bullet_res_array: Vec<BulletSpawnResponse> = Vec::new();
         for sentry in self.sentries.iter_mut() {
             let sentry_frequency = sentry.building_data.frequency;
-            if sentry.is_sentry_activated && SystemTime::now().duration_since(sentry.current_bullet_shot_time).unwrap().as_secs() >= 1 / (sentry_frequency as u64) {
+            if sentry.is_sentry_activated && SystemTime::now().duration_since(sentry.current_bullet_shot_time).unwrap().as_millis() >= 1000 / (sentry_frequency as u128) {
                 sentry.current_bullet_shot_id += 1;
                 sentry.current_bullet_shot_time = SystemTime::now();
+                log::info!("sentry id: {}, bullet id: {}", sentry.id, sentry.current_bullet_shot_id);
                 let bullet_response = BulletSpawnResponse {
                     bullet_id: sentry.current_bullet_shot_id,
                     sentry_id: sentry.id,
@@ -725,8 +726,8 @@ impl State {
                     } else {
                         damage = DAMAGE_PER_BULLET_LEVEL_1;
                     }
-                    log::info!("collision bullet id : {}", bullet.bullet_id);
-                    if bullet.bullet_id >= sentry.current_collided_bullet_id + 1 && bullet.bullet_id <= max_possible_bullets {
+                    log::info!("sentry id: {}, collision bullet id : {}", sentry.id,bullet.bullet_id);
+                    if bullet.bullet_id <= max_possible_bullets {
                         sentry.current_collided_bullet_id = bullet.bullet_id;
                         self.attacker.as_mut().unwrap().attacker_health = max(
                             0,

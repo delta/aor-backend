@@ -20,7 +20,6 @@ use crate::models::{
     User,
 };
 use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
-use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
@@ -630,8 +629,6 @@ pub fn get_defenders(
             block_id: block_type.id,
             level: defender.level,
             max_health: defender.max_health,
-            block_id: block_type.id,
-            level: defender.level,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -709,6 +706,7 @@ pub fn get_hut_defender(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender_type.level,
+            max_health: defender_type.max_health,
         })
         .collect();
 
