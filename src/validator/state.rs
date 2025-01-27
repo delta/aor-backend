@@ -4,9 +4,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
+use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
 use crate::{
-    api::attack::socket::{BuildingResponse, BulletHit, DefenderResponse},
+    api::attack::socket::{BuildingResponse,BulletHit, DefenderResponse},
     validator::util::{
         Attacker, BuildingDetails, Coords, DefenderDetails, DefenderReturnType, InValidation,
         MineDetails, SourceDestXY,
@@ -15,7 +15,7 @@ use crate::{
 
 use serde::{Deserialize, Serialize};
 
-use super::util::BombType;
+use super::util::{select_side_hut_defender, BombType, HutDefenderDetails};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct State {
@@ -28,6 +28,7 @@ pub struct State {
     pub damage_percentage: f32,
     pub artifacts: i32,
     pub defenders: Vec<DefenderDetails>,
+    pub hut: HashMap<i32, HutDefenderDetails>,
     pub mines: Vec<MineDetails>,
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
@@ -44,9 +45,26 @@ impl State {
         attacker_user_id: i32,
         defender_user_id: i32,
         defenders: Vec<DefenderDetails>,
+        hut_defenders: HashMap<i32, DefenderDetails>,
         mines: Vec<MineDetails>,
         buildings: Vec<BuildingDetails>,
     ) -> State {
+        let mut hut = HashMap::new();
+        for building in buildings.clone() {
+            if building.name == "Defender_Hut" {
+                //get defender_level for the hut
+                let defender_level = hut_defenders.get(&building.id).unwrap().level;
+
+                let defenders_count = LEVEL[(defender_level - 1) as usize].hut.defenders_limit;
+                let hut_defender_details = HutDefenderDetails {
+                    hut_defender: hut_defenders.get(&building.id).unwrap().clone(),
+                    hut_triggered: false,
+                    hut_defenders_count: defenders_count,
+                    hut_defender_latest_time: None,
+                };
+                hut.insert(building.id, hut_defender_details);
+            }
+        }
         State {
             frame_no: 0,
             attacker_user_id,
@@ -62,6 +80,7 @@ impl State {
             damage_percentage: 0.0,
             artifacts: 0,
             defenders,
+            hut,
             mines,
             buildings,
             total_hp_buildings: 0,
@@ -222,6 +241,29 @@ impl State {
 
             let new_pos = coord;
 
+            let hut_buildings: Vec<BuildingDetails> = self
+                .buildings
+                .iter()
+                .filter(|&r| r.name == "Defender_Hut")
+                .cloned()
+                .collect();
+
+            for hut_building in hut_buildings {
+                let distance = (hut_building.tile.x - new_pos.x).abs()
+                    + (hut_building.tile.y - new_pos.y).abs();
+
+                if distance <= hut_building.range {
+                    if let Some(hut) = self.hut.get_mut(&hut_building.id) {
+                        if !hut.hut_triggered {
+                            // Hut triggered
+                            log::info!("In range!");
+                            //trigger hut
+                            hut.hut_triggered = true;
+                        }
+                    }
+                }
+            }
+
             for defender in self.defenders.iter_mut() {
                 if defender.target_id.is_none()
                     && defender.is_alive
@@ -254,6 +296,94 @@ impl State {
             bomb_count: attacker.bomb_count,
         };
         Some(attacker_result)
+    }
+
+    pub fn spawn_hut_defender(
+        &mut self,
+        roads: &HashSet<(i32, i32)>,
+        attacker_current: Attacker,
+    ) -> Option<Vec<DefenderDetails>> {
+        let attacker = attacker_current.clone();
+        let hut_buildings: Vec<&BuildingDetails> = self
+            .buildings
+            .iter()
+            .filter(|&r| r.name == "Defender_Hut")
+            .collect();
+
+        let mut response = Vec::new();
+        for (i, _coord) in attacker_current
+            .path_in_current_frame
+            .into_iter()
+            .enumerate()
+        {
+            for &hut_building in &hut_buildings {
+                //get shadow tile for each hut.
+                let mut shadow_tiles: Vec<(i32, i32)> = Vec::new();
+                for i in 0..hut_building.width {
+                    for j in 0..hut_building.width {
+                        shadow_tiles.push((hut_building.tile.x + i, hut_building.tile.y + j));
+                    }
+                }
+                //see if hut is triggered
+                let hut_triggered = self.hut.get(&hut_building.id).unwrap().hut_triggered;
+
+                //if hut is triggered and hut defenders are > 0, get the hut defender.
+                let time_elapsed = if let Some(time_stamp) = self
+                    .hut
+                    .get(&hut_building.id)
+                    .unwrap()
+                    .hut_defender_latest_time
+                {
+                    let start = SystemTime::now();
+                    let now = start
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards");
+                    let time_interval = hut_building.frequency as u128;
+                    //check if time elapsed is greater than time stamp.
+                    now.as_millis() >= time_stamp + time_interval
+                } else {
+                    true
+                };
+                if hut_triggered
+                    && self.hut.get(&hut_building.id).unwrap().hut_defenders_count > 0
+                    && time_elapsed
+                    && hut_building.current_hp > 0
+                {
+                    if let Some(hut_defender) = select_side_hut_defender(
+                        &shadow_tiles,
+                        roads,
+                        &hut_building,
+                        &attacker,
+                        &self.hut.get(&hut_building.id).unwrap().hut_defender,
+                        i,
+                    ) {
+                        //push it to state.
+                        self.defenders.push(hut_defender.clone());
+                        //push it to frontend response.
+                        response.push(hut_defender);
+
+                        //update time
+                        let start = SystemTime::now();
+                        let now = start
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Time went backwards");
+                        self.hut
+                            .get_mut(&hut_building.id)
+                            .unwrap()
+                            .hut_defender_latest_time = Some(now.as_millis());
+
+                        //update hut_defenders count.
+                        let curr_count =
+                            self.hut.get(&hut_building.id).unwrap().hut_defenders_count;
+                        self.hut
+                            .get_mut(&hut_building.id)
+                            .unwrap()
+                            .hut_defenders_count = curr_count - 1;
+                    }
+                }
+            }
+        }
+        return Some(response);
     }
 
     pub fn place_bombs(
@@ -522,12 +652,10 @@ impl State {
 
         buildings_damaged
     }
-
     pub fn defender_ranged_attack(&mut self, frame_number: i32) -> DefenderReturnType {
-        log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
-    
+        // log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
+
         if frame_number <= self.last_processed_frame {
-            log::info!("Frame number {} is less than or equal to last processed frame {}", frame_number, self.last_processed_frame);
             return DefenderReturnType {
                 attacker_health: self.attacker.as_ref().unwrap().attacker_health,
                 defender_response: Vec::new(),
@@ -535,7 +663,7 @@ impl State {
                 state: self.clone(),
             };
         }
-    
+
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
         let mut bullet_hits: Vec<BulletHit> = Vec::new();
@@ -548,42 +676,36 @@ impl State {
         //         state: self.clone(),
         //     };
         // }
-    
+
         for defender in self.defenders.iter_mut() {
+            // log::info!("List of defender IDs: {}", defender.map_id);
             if !defender.is_alive {
-                log::info!("Defender {} is not alive, skipping", defender.id);
+                // log::info!("Defender {} is not alive, skipping", defender.id);
                 continue;
             }
-    
+
             let start = SystemTime::now();
             let now = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
             let time_interval = defender.frequency as u128;
-    
-            // Initialize defender.last_attack if it hasn't been set
+
             if defender.last_attack == 0 {
-                defender.last_attack = now.as_millis() as i32;
-                log::info!("Initializing defender {} last_attack to {}", defender.id, defender.last_attack);
+                defender.last_attack = now.as_millis();
+                // log::info!("Initializing defender {} last_attack to {}", defender.id, defender.last_attack);
             }
-    
+
             let time_elapsed = now.as_millis() >= defender.last_attack as u128 + time_interval;
-    
+
             if time_elapsed {
-                log::info!("Time elapsed for defender {}. Updating last attack time.", defender.id);
-                log::info!("last_attack: {}", defender.last_attack);
-                defender.last_attack = now.as_millis() as i32;
-                log::info!("last_attack update: {}", defender.last_attack);
-                log::info!("nowmillis: {}", now.as_millis());
-                log::info!("timeinterval: {}", time_interval);
-    
+                defender.last_attack = now.as_millis();
                 // Check if attacker is within defender's range
                 let distance = (((defender.defender_pos.x - attacker.attacker_pos.x).pow(2)
                     + (defender.defender_pos.y - attacker.attacker_pos.y).pow(2))
                     as f32)
                     .sqrt();
-                log::info!("Distance between defender {} and attacker: {}", defender.id, distance);
-    
+                log::info!("Distance between defender {} and attacker: {}", defender.map_id, distance);
+
                 if distance <= defender.range as f32 {
-                    log::info!("Defender {} is within range of attacker", defender.id);
+                    log::info!("Defender {} is within range of attacker", defender.map_id);
                     if defender.defender_pos.x == attacker.attacker_pos.x
                         || defender.defender_pos.y == attacker.attacker_pos.y
                     {
@@ -598,7 +720,7 @@ impl State {
                                     && building.tile.y < max_y
                                 {
                                     blocked = true;
-                                    log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
+                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
                                     break;
                                 }
                             }
@@ -611,14 +733,14 @@ impl State {
                                     && building.tile.x < max_x
                                 {
                                     blocked = true;
-                                    log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
+                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.id, building.tile.x, building.tile.y);
                                     break;
                                 }
                             }
                         }
-    
+
                         if !blocked {
-                            log::info!("Defender {} successfully attacks attacker", defender.id);
+                            log::info!("Defender {} successfully attacks attacker", defender.map_id);
                             attacker.attacker_health =
                                 attacker.attacker_health.saturating_sub(defender.damage);
                             defenders_damaged.push(DefenderResponse {
@@ -627,13 +749,13 @@ impl State {
                                 damage: defender.damage,
                             });
                             bullet_hits.push(BulletHit {
-                                defender_id: defender.id,
+                                defender_id: defender.map_id,
                                 target_id: attacker.id,
                                 damage: defender.damage,
                                 position: defender.defender_pos,
                             });
                         } else {
-                            log::info!("Defender {} attack is blocked", defender.id);
+                            // log::info!("Defender {} attack is blocked", defender.id);
                         }
                     } else {
                         log::info!(
@@ -646,15 +768,23 @@ impl State {
                         );
                     }
                 } else {
-                    log::info!("Defender {} is out of range of attacker", defender.id);
+                    log::info!("Defender {} is out of range of attacker", defender.map_id);
+                    // log::info!(
+                    //     "Defender {} is not within range of attacker. Defender position: ({}, {}), Attacker position: ({}, {})",
+                    //     defender.id,
+                    //     defender.defender_pos.x,
+                    //     defender.defender_pos.y,
+                    //     attacker.attacker_pos.x,
+                    //     attacker.attacker_pos.y
+                    // );
                 }
             } else {
-                log::info!("Time not elapsed for defender {}. Skipping attack.", defender.id);
+                // log::info!("Time not elapsed for defender {}. Skipping attack.", defender.id);
             }
         }
-    
-        log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
-    
+
+        // log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
+
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
             defender_response: defenders_damaged,
