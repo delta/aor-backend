@@ -1,9 +1,12 @@
+use std::collections::HashSet;
+use std::hash::Hash;
+
 use crate::api::attack::socket::DefenderResponse;
-use crate::api::attack::socket::{BulletHit, ResultType, SocketResponse};
+use crate::api::attack::socket::{BulletHit,ResultType, SocketResponse};
 use crate::validator::state::State;
 use serde::{Deserialize, Serialize};
 
-#[derive(Eq, Hash, PartialEq, Serialize, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq, Serialize, Clone)]
 pub struct SourceDestXY {
     pub source_x: i32,
     pub source_y: i32,
@@ -40,6 +43,7 @@ pub struct IsTriggered {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DefenderDetails {
     pub id: i32,
+    pub map_id: i32,
     pub radius: i32,
     pub speed: i32,
     pub damage: i32,
@@ -48,9 +52,19 @@ pub struct DefenderDetails {
     pub damage_dealt: bool,
     pub target_id: Option<f32>,
     pub path_in_current_frame: Vec<Coords>,
+    pub block_id: i32,
+    pub level: i32,
     pub range: i32,
     pub frequency: i32,
-    pub last_attack: i32,
+    pub last_attack: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct HutDefenderDetails {
+    pub hut_defender: DefenderDetails,
+    pub hut_triggered: bool,
+    pub hut_defenders_count: i32,
+    pub hut_defender_latest_time: Option<u128>,
 }
 
 // Structs for sending response
@@ -62,7 +76,7 @@ pub struct MineDetails {
     pub damage: i32,
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug)]
+#[derive(Serialize, Clone, Deserialize)]
 pub struct BombType {
     pub id: i32,
     pub radius: i32,
@@ -78,6 +92,10 @@ pub struct BuildingDetails {
     pub artifacts_obtained: i32,
     pub tile: Coords,
     pub width: i32,
+    pub name: String,
+    pub range: i32,
+    pub frequency: i32,
+    pub block_id: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -97,14 +115,13 @@ pub struct SourceDest {
     pub source: Coords,
     pub dest: Coords,
 }
-
 #[derive(Serialize, Clone)]
 
 pub struct DefenderReturnType {
     pub attacker_health: i32,
     pub defender_response: Vec<DefenderResponse>,
-    pub bullet_hits: Vec<BulletHit>,
     pub state: State,
+    pub bullet_hits: Vec<BulletHit>,
 }
 
 #[derive(Serialize)]
@@ -127,11 +144,61 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         exploded_mines: None,
         defender_damaged: None,
         damaged_buildings: None,
+        hut_triggered: false,
+        hut_defenders: None,
         total_damage_percentage: None,
         is_sync: false,
         is_game_over: true,
         message: Some(message),
         bullet_hits: None,
         revealed_mines: None,
+    }
+}
+
+pub fn select_side_hut_defender(
+    shadow_tiles: &Vec<(i32, i32)>,
+    roads: &HashSet<(i32, i32)>,
+    hut_building: &BuildingDetails,
+    attacker: &Attacker,
+    hut_defender: &DefenderDetails,
+    i: usize,
+) -> Option<DefenderDetails> {
+    let tile2 = (
+        shadow_tiles[shadow_tiles.len() - 2].0 + 1,
+        shadow_tiles[shadow_tiles.len() - 2].1,
+    );
+    let tile4 = (
+        shadow_tiles[(2 * hut_building.width - 1) as usize].0,
+        shadow_tiles[(2 * hut_building.width - 1) as usize].1 + 1,
+    );
+    let tile3 = (
+        shadow_tiles[hut_building.width as usize].0,
+        shadow_tiles[hut_building.width as usize].1 - 1,
+    );
+    let tile1 = (shadow_tiles[1].0 - 1, shadow_tiles[1].1);
+
+    let mut hut_defender_clone = hut_defender.clone();
+    if roads.contains(&tile2) {
+        hut_defender_clone.defender_pos.x = tile2.0;
+        hut_defender_clone.defender_pos.y = tile2.1;
+        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        Some(hut_defender_clone)
+    } else if roads.contains(&tile4) {
+        hut_defender_clone.defender_pos.x = tile4.0;
+        hut_defender_clone.defender_pos.y = tile4.1;
+        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        Some(hut_defender_clone)
+    } else if roads.contains(&tile3) {
+        hut_defender_clone.defender_pos.x = tile3.0;
+        hut_defender_clone.defender_pos.y = tile3.1;
+        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        Some(hut_defender_clone)
+    } else if roads.contains(&tile1) {
+        hut_defender_clone.defender_pos.x = tile1.0;
+        hut_defender_clone.defender_pos.y = tile1.1;
+        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        Some(hut_defender_clone)
+    } else {
+        None
     }
 }
