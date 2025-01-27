@@ -610,7 +610,7 @@ pub fn get_defenders(
         .inner_join(map_layout::table)
         .filter(map_layout::player.eq(user_id))
         .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
-        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+        .inner_join(defender_type::table.on(defender_type::id.eq(block_type::defender_type.assume_not_null())))
         .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
         .filter(map_spaces::map_id.eq(map_id))
         .filter(block_type::category.eq(BlockCategory::Defender))
@@ -629,7 +629,7 @@ pub fn get_defenders(
 
     let mut defenders: Vec<DefenderDetails> = Vec::new();
 
-    for (map_space, block_type, defender_type, prop) in result.iter() {
+    for (map_space, block_type, defender, prop) in result.iter() {
         let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {

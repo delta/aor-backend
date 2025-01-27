@@ -237,7 +237,7 @@ pub fn get_block_id_of_bank(conn: &mut PgConnection, player: &i32) -> Result<i32
         .filter(map_layout::player.eq(player))
         .inner_join(block_type::table.on(block_type::id.eq(map_spaces::block_type_id)))
         .filter(block_type::category.eq(BlockCategory::Building))
-        .inner_join(building_type::table.on(building_type::id.eq(block_type::category_id)))
+        .inner_join(building_type::table.on(building_type::id.eq(block_type::building_type)))
         .filter(building_type::name.eq(BANK_BUILDING_NAME))
         .select(block_type::id)
         .first::<i32>(conn)
@@ -807,7 +807,7 @@ pub fn fetch_mine_types(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<Mi
         .filter(map_layout::player.eq(user_id))
         .inner_join(block_type::table.on(block_type::id.eq(map_spaces::block_type_id)))
         .filter(block_type::category.eq(BlockCategory::Mine))
-        .inner_join(mine_type::table.on(mine_type::id.eq(block_type::category_id)))
+        .inner_join(mine_type::table.on(mine_type::id.eq(block_type::mine_type.assume_not_null())))
         .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)))
         .load::<(MapSpaces, MapLayout, BlockType, MineType, Prop)>(conn)
         .map_err(|err| DieselError {
@@ -842,7 +842,7 @@ pub fn fetch_defender_types(
         .filter(map_layout::player.eq(user_id))
         .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
         .filter(block_type::category.eq(BlockCategory::Defender))
-        .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+        .inner_join(defender_type::table.on(block_type::defender_type.assume_not_null().eq(defender_type::id)))
         .inner_join(prop::table.on(prop::id.eq(defender_type::prop_id)))
         .load::<(MapSpaces, MapLayout, BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
@@ -878,7 +878,7 @@ pub fn fetch_building_blocks(
         .filter(map_layout::player.eq(user_id))
         .inner_join(block_type::table)
         .filter(block_type::category.eq(BlockCategory::Building))
-        .inner_join(building_type::table.on(block_type::category_id.eq(building_type::id)))
+        .inner_join(building_type::table.on(block_type::building_type.eq(building_type::id)))
         .inner_join(prop::table.on(building_type::prop_id.eq(prop::id)))
         .load::<(MapSpaces, MapLayout, BlockType, BuildingType, Prop)>(conn)
         .map_err(|err| DieselError {
