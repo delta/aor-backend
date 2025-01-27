@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::attack::{
-        socket::{
-            ActionType, BuildingResponse, BulletHit, ResultType, SocketRequest, SocketResponse,
-        },
+        socket::{ActionType, BuildingResponse,BulletHit, ResultType, SocketRequest, SocketResponse},
         util::{Direction, EventResponse, GameLog},
     },
     models::AttackerType,
@@ -33,8 +31,8 @@ pub fn game_handler(
     let defender_damaged_result: DefenderReturnType;
     let exploded_mines_result: Vec<MineDetails>;
     let buildings_damaged_result: Vec<BuildingResponse>;
-
     match socket_request.action_type {
+
         ActionType::CheckBullets => {
             if _game_state.last_processed_frame == 0 {
                 _game_state.last_processed_frame = socket_request.frame_number - 1;
@@ -56,6 +54,8 @@ pub fn game_handler(
                     message: Some(String::from("Skipped repeated or invalid frame")),
                     bullet_hits: Some(vec![]),
                     revealed_mines: None,
+                    hut_defenders: None,
+                    hut_triggered: false,
                 }));
             }
 
@@ -77,9 +77,10 @@ pub fn game_handler(
                 message: Some(String::from("Bullet Hit")),
                 bullet_hits: Some(ranged_attack_result.bullet_hits),
                 revealed_mines: None,
+                hut_defenders: None,
+                hut_triggered: false,
             }));
         }
-
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
 
@@ -139,20 +140,65 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: None,
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
                 message: Some(String::from(
                     "Place Attacker, set attacker and bomb response",
                 )),
-                bullet_hits: Some(Vec::new()),
+                bullet_hits: None,
                 revealed_mines: None,
             }));
         }
+        ActionType::UavStatus => {
+            let revealed_mine = _game_state.check_uav_reveal();
+            if let Some(ref revealed_mines) = revealed_mine {
+                return Some(Ok(SocketResponse {
+                    frame_number: socket_request.frame_number,
+                    result_type: ResultType::UAV,
+                    is_alive: Some(true),
+                    attacker_health: None,
+                    exploded_mines: None,
+                    defender_damaged: None,
+                    damaged_buildings: None,
+                    total_damage_percentage: Some(_game_state.damage_percentage),
+                    is_sync: false,
+                    is_game_over: false,
+                    message: Some(String::from("UAV Reveal")),
+                    bullet_hits: None,
+                    revealed_mines: Some(revealed_mines.clone()),
+                    hut_defenders: None,
+                    hut_triggered: false,
+                }));
+            } else {
+                return Some(Ok(SocketResponse {
+                    frame_number: socket_request.frame_number,
+                    result_type: ResultType::UAV,
+                    is_alive: Some(true),
+                    attacker_health: None,
+                    exploded_mines: None,
+                    defender_damaged: None,
+                    damaged_buildings: None,
+                    total_damage_percentage: Some(_game_state.damage_percentage),
+                    is_sync: false,
+                    is_game_over: false,
+                    message: Some(String::from("No UAV Reveal")),
+                    bullet_hits: None,
+                    revealed_mines: None,
+                    hut_defenders: None,
+                    hut_triggered: false,
+                }));
+            }
+        }
+
+
         ActionType::MoveAttacker => {
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 let attacker_delta: Vec<Coords> = socket_request.attacker_path;
+                let attacker_delta_clone = attacker_delta.clone();
 
                 let attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
@@ -169,31 +215,11 @@ pub fn game_handler(
                     },
                 );
 
-                let attacker_result_clone = attacker_result.clone();
-                let bullet_hits: Vec<BulletHit> = Vec::new();
+                let attacker_result_clone = attacker_result.clone().unwrap();
 
                 defender_damaged_result =
                     _game_state.defender_movement(attacker_delta.clone(), _shortest_path);
-                let ranged_attack_result =
-                    _game_state.defender_ranged_attack(socket_request.frame_number);
 
-                if !ranged_attack_result.bullet_hits.is_empty() {
-                    return Some(Ok(SocketResponse {
-                        frame_number: socket_request.frame_number,
-                        result_type: ResultType::BulletHit,
-                        is_alive: Some(true),
-                        attacker_health: Some(ranged_attack_result.attacker_health),
-                        exploded_mines: None,
-                        defender_damaged: None,
-                        damaged_buildings: None,
-                        total_damage_percentage: Some(_game_state.damage_percentage),
-                        is_sync: false,
-                        is_game_over: false,
-                        message: Some(String::from("Bullet Hit")),
-                        bullet_hits: Some(ranged_attack_result.bullet_hits),
-                        revealed_mines: None,
-                    }));
-                }
                 for coord in attacker_delta {
                     let mut direction = Direction::Up;
 
@@ -219,15 +245,15 @@ pub fn game_handler(
                     _game_log.e.push(event_response.clone());
                 }
 
-                let mut bool_temp = false;
-                if attacker_result_clone.unwrap().trigger_defender {
-                    bool_temp = true;
-                }
-                let result_type = if bool_temp {
-                    ResultType::DefendersDamaged
-                } else {
-                    ResultType::Nothing
-                };
+                // let mut bool_temp = false;
+                // if attacker_result_clone.trigger_defender {
+                //     bool_temp = true;
+                // }
+                // let result_type = if attacker_result_clone.trigger_defender {
+                //     ResultType::DefendersDamaged
+                // } else {
+                //     ResultType::Nothing
+                // };
 
                 let mut is_attacker_alive = true;
 
@@ -243,7 +269,34 @@ pub fn game_handler(
                         _game_state.in_validation.message.clone(),
                     )));
                 }
-                return Some(Ok(SocketResponse {
+
+                let spawn_result = _game_state
+                    .spawn_hut_defender(
+                        _roads,
+                        Attacker {
+                            id: attacker.id,
+                            path_in_current_frame: attacker_delta_clone.clone(),
+                            attacker_pos: socket_request.start_position.unwrap(),
+                            attacker_health: attacker.max_health,
+                            attacker_speed: attacker.speed,
+                            bombs: Vec::new(),
+                            trigger_defender: false,
+                            bomb_count: attacker.amt_of_emps,
+                        },
+                    )
+                    .unwrap();
+
+                let hut_triggered = !spawn_result.is_empty();
+
+                let result_type = if hut_triggered {
+                    ResultType::SpawnHutDefender
+                } else if attacker_result_clone.trigger_defender {
+                    ResultType::DefendersDamaged
+                } else {
+                    ResultType::Nothing
+                };
+
+                let response = SocketResponse {
                     frame_number: socket_request.frame_number,
                     result_type,
                     is_alive: Some(is_attacker_alive),
@@ -252,13 +305,16 @@ pub fn game_handler(
                     // triggered_defenders: Some(defender_damaged_result.clone().defender_response),
                     defender_damaged: Some(defender_damaged_result.clone().defender_response),
                     damaged_buildings: None,
+                    hut_triggered,
+                    hut_defenders: Some(spawn_result),
                     total_damage_percentage: Some(_game_state.damage_percentage),
                     is_sync: false,
                     is_game_over: false,
                     message: Some(String::from("Movement Response")),
-                    bullet_hits: Some(bullet_hits),
+                    bullet_hits: None,
                     revealed_mines: None,
-                }));
+                };
+                return Some(Ok(response));
             }
         }
         ActionType::IsMine => {
@@ -301,6 +357,8 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: None,
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
@@ -379,6 +437,8 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: Some(buildings_damaged_result),
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
@@ -398,6 +458,8 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: None,
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
@@ -406,43 +468,6 @@ pub fn game_handler(
                 revealed_mines: None,
             }));
         }
-        ActionType::UavStatus => {
-            let revealed_mine = _game_state.check_uav_reveal();
-            if let Some(ref revealed_mines) = revealed_mine {
-                return Some(Ok(SocketResponse {
-                    frame_number: socket_request.frame_number,
-                    result_type: ResultType::UAV,
-                    is_alive: Some(true),
-                    attacker_health: None,
-                    exploded_mines: None,
-                    defender_damaged: None,
-                    damaged_buildings: None,
-                    total_damage_percentage: Some(_game_state.damage_percentage),
-                    is_sync: false,
-                    is_game_over: false,
-                    message: Some(String::from("UAV Reveal")),
-                    bullet_hits: None,
-                    revealed_mines: Some(revealed_mines.clone()),
-                }));
-            } else {
-                return Some(Ok(SocketResponse {
-                    frame_number: socket_request.frame_number,
-                    result_type: ResultType::UAV,
-                    is_alive: Some(true),
-                    attacker_health: None,
-                    exploded_mines: None,
-                    defender_damaged: None,
-                    damaged_buildings: None,
-                    total_damage_percentage: Some(_game_state.damage_percentage),
-                    is_sync: false,
-                    is_game_over: false,
-                    message: Some(String::from("No UAV Reveal")),
-                    bullet_hits: None,
-                    revealed_mines: None,
-                }));
-            }
-        }
-
         ActionType::Terminate => {
             let socket_response = SocketResponse {
                 frame_number: socket_request.frame_number,
@@ -453,6 +478,8 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: None,
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: true,
@@ -474,6 +501,8 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: None,
+                hut_triggered: false,
+                hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
