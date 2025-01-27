@@ -11,7 +11,8 @@ SET row_security = off;
 
 DELETE FROM public.artifact;
 DELETE FROM public.map_spaces;
-DELETE FROM public.available_blocks;
+DELETE FROM public.available_attackers;
+DELETE FROM public.available_emps;
 DELETE FROM public.level_constraints;
 DELETE FROM public.block_type;
 DELETE FROM public.attacker_type;
@@ -234,38 +235,18 @@ COPY public.block_type FROM stdin;
 67	12	\N	defender	0
 \.
 
-COPY public.available_blocks FROM stdin;
-0	1	\N	\N	block	0
-1	1	\N	\N	block	1
-2	1	\N	\N	block	2
-3	1	\N	\N	block	3
-4	1	\N	\N	block	4
-5	1	\N	\N	block	5
-6	1	\N	\N	block	6
-7	1	\N	\N	block	7
-8	1	\N	\N	block	8
-9	1	\N	\N	block	9
-10	1	\N	\N	block	10
-11	1	\N	\N	block	11
-12	1	\N	\N	block	12
-13	1	\N	\N	block	13
-14	1	\N	\N	block	14
-15	1	\N	\N	block	15
-46	1	\N	\N	block	16
-47	1	\N	\N	block	17
-48	1	\N	\N	block	18
-55	1	\N	\N	block	19
-\N	1	1	\N	attacker	20
-\N	1	2	\N	attacker	21
-\N	1	3	\N	attacker	22
-\N	1	\N	1	emp	23
-\N	1	\N	2	emp	24
-\N	1	\N	3	emp	25
-58	1	\N	\N	block	26
-61	1	\N	\N	block	27
-58	1	\N	\N	block	28
+
+COPY public.available_attackers FROM stdin;
+1	1	1
+2	1	2
+3	1	3
 \.
 
+COPY public.available_emps FROM stdin;
+1	1	1
+2	1	2
+3	1	3
+\.
 COPY public.map_spaces FROM stdin;
 1	1	0	0	0
 2	1	0	1	0
@@ -512,4 +493,5 @@ SELECT pg_catalog.setval('public.map_layout_id_seq', 2, false);
 SELECT pg_catalog.setval('public.game_id_seq', 1, false);
 SELECT pg_catalog.setval('public.block_type_id_seq', 64, false);
 SELECT pg_catalog.setval('public.map_spaces_id_seq', 178, false);
-SELECT pg_catalog.setval('public.available_blocks_id_seq', 28, false);
+SELECT pg_catalog.setval('public.available_attackers_id_seq', 4, false);
+SELECT pg_catalog.setval('public.available_emps_id_seq', 4, false);

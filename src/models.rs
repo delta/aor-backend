@@ -10,13 +10,13 @@ pub enum BlockCategory {
     Mine,
 }
 
-#[derive(diesel_derive_enum::DbEnum, Debug, Serialize, Clone, PartialEq, Copy, Deserialize)]
-#[DieselTypePath = "crate::schema::sql_types::ItemCategory"]
-pub enum ItemCategory {
-    Attacker,
-    Emp,
-    Block,
-}
+// #[derive(diesel_derive_enum::DbEnum, Debug, Serialize, Clone, PartialEq, Copy, Deserialize)]
+// #[DieselTypePath = "crate::schema::sql_types::ItemCategory"]
+// pub enum ItemCategory {
+//     Attacker,
+//     Emp,
+//     Block,
+// }
 
 #[derive(Queryable, Serialize, Clone, Debug)]
 pub struct EmpType {
@@ -101,24 +101,52 @@ pub struct NewArtifact {
     pub count: i32,
 }
 
+// #[derive(Queryable, Debug, Serialize, Deserialize)]
+// pub struct AvailableBlocks {
+//     pub block_type_id: Option<i32>,
+//     pub user_id: i32,
+//     pub attacker_type_id: Option<i32>,
+//     pub emp_type_id: Option<i32>,
+//     pub category: ItemCategory,
+//     pub id: i32,
+// }
+
+// #[derive(Deserialize, Insertable)]
+// #[diesel(table_name = available_blocks)]
+// pub struct NewAvailableBlocks {
+//     pub block_type_id: Option<i32>,
+//     pub user_id: i32,
+//     pub attacker_type_id: Option<i32>,
+//     pub emp_type_id: Option<i32>,
+//     pub category: ItemCategory,
+// }
+
 #[derive(Queryable, Debug, Serialize, Deserialize)]
-pub struct AvailableBlocks {
-    pub block_type_id: Option<i32>,
-    pub user_id: i32,
-    pub attacker_type_id: Option<i32>,
-    pub emp_type_id: Option<i32>,
-    pub category: ItemCategory,
+pub struct AvailableAttackers {
     pub id: i32,
+    pub user_id: i32,
+    pub attacker_type_id: i32,
 }
 
 #[derive(Deserialize, Insertable)]
-#[diesel(table_name = available_blocks)]
-pub struct NewAvailableBlocks {
-    pub block_type_id: Option<i32>,
+#[diesel(table_name = available_attackers)]
+pub struct NewAvailableAttackers {
     pub user_id: i32,
-    pub attacker_type_id: Option<i32>,
-    pub emp_type_id: Option<i32>,
-    pub category: ItemCategory,
+    pub attacker_type_id: i32,
+}
+
+#[derive(Queryable, Debug, Serialize, Deserialize)]
+pub struct AvailableEmps {
+    pub id: i32,
+    pub user_id: i32,
+    pub emp_type_id: i32,
+}
+
+#[derive(Deserialize, Insertable)]
+#[diesel(table_name = available_emps)]
+pub struct NewAvailableEmps {
+    pub user_id: i32,
+    pub emp_type_id: i32,
 }
 
 #[derive(Queryable, Serialize, Deserialize, Debug)]
