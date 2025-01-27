@@ -8,37 +8,37 @@ default-run = "aot-backend"
 
 [dependencies]
 tungstenite = "0.16"
-actix = "0.13.0"
+actix = "0.13.5"
 actix-web-actors = "4"
 actix-web = {version = "4", features = ["rustls"] }
-actix-rt = "2.9.0"
+actix-rt = "2.10.0"
 actix-ws = "0.2.5"
-futures-util = "0.3.30"
-anyhow = "1.0.68"
-derive_more = "0.99.17"
-chrono = { version = "0.4.23", features = ["serde"] }
-diesel = { version = "2.0.2", features = ["chrono", "postgres", "r2d2"] }
+futures-util = "0.3.31"
+anyhow = "1.0.95"
+derive_more = "0.99.18"
+chrono = { version = "0.4.39", features = ["serde"] }
+diesel = { version = "2.2.6", features = ["chrono", "postgres", "r2d2"] }
 reqwest = { version = "0.11", features = ["json"] }
 dotenv = "0.15.0"
 actix-session = { version = "0.7.2", features = ["redis-actor-session"] }
 flexi_logger = "0.24.2"
-log = "0.4.17"
+log = "0.4.25"
 rand = "0.8.5"
-rayon = "1.6.1"
-thiserror = "1.0.38"
-array2d = "0.3.0"
-petgraph = "0.6.2"
-serde = { version = "1.0.151", features = ["derive"] }
+rayon = "1.10.0"
+thiserror = "1.0.69"
+array2d = "0.3.2"
+petgraph = "0.6.5"
+serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0"
 pwhash = "1"
-actix-cors = "0.6.4"
-diesel_migrations = "2.0.0"
-futures = "0.3.25"
+actix-cors = "0.6.5"
+diesel_migrations = "2.2.0"
+futures = "0.3.31"
 base64 = "0.20.0"
-redis = { version = "0.22.1", features = ["r2d2"] }
+redis = { version = "0.22.3", features = ["r2d2"] }
 r2d2 = "0.8.10"
 actix-redis = "0.12.0"
-awc = "3.0.1"
-diesel-derive-enum = { version = "2.0.0-rc.0", features = ["postgres"] }
+awc = "3.5.1"
+diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 oauth2 = "4.4.2"
-jsonwebtoken = "9.2.0"
+jsonwebtoken = "9.3.0"

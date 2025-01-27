@@ -2,16 +2,16 @@ use super::schema::*;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 
-#[derive(diesel_derive_enum::DbEnum, Debug, Serialize, Clone, PartialEq, Copy)]
-#[DieselTypePath = "crate::schema::sql_types::BlockCategory"]
+#[derive(diesel_derive_enum::DbEnum, Debug, Serialize, Clone, PartialEq, Copy, QueryId)]
+#[ExistingTypePath = "crate::schema::sql_types::BlockCategory"]
 pub enum BlockCategory {
     Building,
     Defender,
     Mine,
 }
 
-#[derive(diesel_derive_enum::DbEnum, Debug, Serialize, Clone, PartialEq, Copy, Deserialize)]
-#[DieselTypePath = "crate::schema::sql_types::ItemCategory"]
+#[derive(diesel_derive_enum::DbEnum, Debug, Serialize, Clone, PartialEq, Copy, Deserialize, QueryId)]
+#[ExistingTypePath = "crate::schema::sql_types::ItemCategory"]
 pub enum ItemCategory {
     Attacker,
     Emp,
@@ -211,7 +211,7 @@ pub struct MapSpaces {
     pub block_type_id: i32,
 }
 
-#[derive(Deserialize, Insertable)]
+#[derive(Deserialize, Insertable, Queryable)]
 #[diesel(table_name = map_spaces)]
 pub struct NewMapSpaces {
     pub map_id: i32,

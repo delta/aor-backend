@@ -1,11 +1,11 @@
 // @generated automatically by Diesel CLI.
 
 pub mod sql_types {
-    #[derive(diesel::sql_types::SqlType)]
+    #[derive(diesel::sql_types::SqlType, QueryId)]
     #[diesel(postgres_type(name = "block_category"))]
     pub struct BlockCategory;
 
-    #[derive(diesel::sql_types::SqlType)]
+    #[derive(diesel::sql_types::SqlType, QueryId)]
     #[diesel(postgres_type(name = "item_category"))]
     pub struct ItemCategory;
 }

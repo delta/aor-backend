@@ -1,4 +1,4 @@
-FROM rust:1.78.0-slim AS base
+FROM rust:1.84.0-slim AS base
 WORKDIR /usr/src/aot-backend
 RUN apt-get update -y && apt-get install -y \
     libpq-dev \
