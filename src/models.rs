@@ -355,3 +355,28 @@ pub struct Prop {
     pub range: i32,
     pub frequency: i32,
 }
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct Challenge {
+    pub id: i32,
+    pub name: String,
+    pub start: NaiveDateTime,
+    pub end: NaiveDateTime,
+}
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct ChallengeMap {
+    pub id: i32,
+    pub challenge_id: i32,
+    pub user_id: i32,
+    pub map_id: i32,
+}
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct ChallengeResponse {
+    pub id: i32,
+    pub attacker_id: i32,
+    pub challenge_id: i32,
+    pub map_id: i32,
+    pub score: i32,
+}
