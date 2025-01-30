@@ -17,6 +17,7 @@ use self::{
     util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
 };
 
+pub mod challenges;
 pub mod error;
 pub mod state;
 pub mod util;

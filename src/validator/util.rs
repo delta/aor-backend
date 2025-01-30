@@ -242,11 +242,13 @@ pub enum ChallengeType {
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub struct MazeChallenge {
     pub coins: i32,
+    pub end_tile: Coords,
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub struct Challenge {
     pub challenge_type: Option<ChallengeType>,
+    pub score: i32,
     pub maze: MazeChallenge,
 }
 
