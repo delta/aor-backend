@@ -220,16 +220,16 @@ pub struct NewMapSpaces {
     pub block_type_id: i32,
 }
 
-#[derive(Queryable, Debug)]
-pub struct ShortestPath {
-    pub base_id: i32,
-    pub source_x: i32,
-    pub source_y: i32,
-    pub dest_x: i32,
-    pub dest_y: i32,
-    pub next_hop_x: i32,
-    pub next_hop_y: i32,
-}
+// #[derive(Queryable, Debug)]
+// pub struct ShortestPath {
+//     pub base_id: i32,
+//     pub source_x: i32,
+//     pub source_y: i32,
+//     pub dest_x: i32,
+//     pub dest_y: i32,
+//     pub next_hop_x: i32,
+//     pub next_hop_y: i32,
+// }
 
 #[derive(Insertable, PartialEq)]
 #[diesel(table_name = shortest_path)]

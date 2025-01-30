@@ -53,16 +53,22 @@ impl State {
         for building in buildings.clone() {
             if building.name == "Defender_Hut" {
                 //get defender_level for the hut
-                let defender_level = hut_defenders.get(&building.id).unwrap().level;
+                log::info!("hut map space id: {}", building.map_space_id);
+                let defender_level = hut_defenders.get(&building.map_space_id).unwrap().level;
 
                 let defenders_count = LEVEL[(defender_level - 1) as usize].hut.defenders_limit;
                 let hut_defender_details = HutDefenderDetails {
-                    hut_defender: hut_defenders.get(&building.id).unwrap().clone(),
+                    hut_defender: hut_defenders.get(&building.map_space_id).unwrap().clone(),
                     hut_triggered: false,
                     hut_defenders_count: defenders_count,
                     hut_defender_latest_time: None,
                 };
-                hut.insert(building.id, hut_defender_details);
+                log::info!(
+                    "hutttt: {:?} {:?}",
+                    hut_defender_details,
+                    building.map_space_id
+                );
+                hut.insert(building.map_space_id, hut_defender_details);
             }
         }
         State {
@@ -256,10 +262,10 @@ impl State {
                 + (hut_building.tile.y - attacker_current.attacker_pos.y).abs();
 
             if distance <= hut_building.range {
-                if let Some(hut) = self.hut.get_mut(&hut_building.id) {
+                if let Some(hut) = self.hut.get_mut(&hut_building.map_space_id) {
                     if !hut.hut_triggered {
                         // Hut triggered
-                        log::info!("In range!");
+                        log::info!("Inside hut range!");
                         //trigger hut
                         hut.hut_triggered = true;
                     }
@@ -294,7 +300,7 @@ impl State {
             attacker_pos: attacker.attacker_pos,
             attacker_health: attacker.attacker_health,
             attacker_speed: attacker.attacker_speed,
-            path_in_current_frame: attacker.path_in_current_frame.clone(),
+            // path_in_current_frame: attacker.path_in_current_frame.clone(),
             bombs: attacker.bombs.clone(),
             trigger_defender: attacker.trigger_defender,
             bomb_count: attacker.bomb_count,
@@ -329,12 +335,16 @@ impl State {
                 }
             }
             //see if hut is triggered
-            let hut_triggered = self.hut.get(&hut_building.id).unwrap().hut_triggered;
+            let hut_triggered = self
+                .hut
+                .get(&hut_building.map_space_id)
+                .unwrap()
+                .hut_triggered;
 
             //if hut is triggered and hut defenders are > 0, get the hut defender.
             let time_elapsed = if let Some(time_stamp) = self
                 .hut
-                .get(&hut_building.id)
+                .get(&hut_building.map_space_id)
                 .unwrap()
                 .hut_defender_latest_time
             {
@@ -349,7 +359,12 @@ impl State {
                 true
             };
             if hut_triggered
-                && self.hut.get(&hut_building.id).unwrap().hut_defenders_count > 0
+                && self
+                    .hut
+                    .get(&hut_building.map_space_id)
+                    .unwrap()
+                    .hut_defenders_count
+                    > 0
                 && time_elapsed
                 && hut_building.current_hp > 0
             {
@@ -357,7 +372,11 @@ impl State {
                     &shadow_tiles,
                     roads,
                     &hut_building,
-                    &self.hut.get(&hut_building.id).unwrap().hut_defender,
+                    &self
+                        .hut
+                        .get(&hut_building.map_space_id)
+                        .unwrap()
+                        .hut_defender,
                 ) {
                     //push it to state.
                     println!("Hut defender spawned");
@@ -371,14 +390,18 @@ impl State {
                         .duration_since(UNIX_EPOCH)
                         .expect("Time went backwards");
                     self.hut
-                        .get_mut(&hut_building.id)
+                        .get_mut(&hut_building.map_space_id)
                         .unwrap()
                         .hut_defender_latest_time = Some(now.as_millis());
 
                     //update hut_defenders count.
-                    let curr_count = self.hut.get(&hut_building.id).unwrap().hut_defenders_count;
+                    let curr_count = self
+                        .hut
+                        .get(&hut_building.map_space_id)
+                        .unwrap()
+                        .hut_defenders_count;
                     self.hut
-                        .get_mut(&hut_building.id)
+                        .get_mut(&hut_building.map_space_id)
                         .unwrap()
                         .hut_defenders_count = curr_count - 1;
                 }
@@ -636,7 +659,7 @@ impl State {
                     }
 
                     buildings_damaged.push(BuildingResponse {
-                        id: building.id,
+                        id: building.map_space_id,
                         position: building.tile,
                         hp: building.current_hp,
                         artifacts_if_damaged: artifacts_taken_by_destroying_building,
@@ -652,7 +675,7 @@ impl State {
         buildings_damaged
     }
 
-    pub fn defender_movement_new_tick(
+    pub fn defender_movement_one_tick(
         &mut self,
         attacker_position: Coords,
         shortest_path: &HashMap<SourceDestXY, Coords>,
@@ -681,13 +704,14 @@ impl State {
                 && attacker_position.y == defender.defender_pos.y
             {
                 log::info!(
-                    "Defender pos {} {}",
+                    "Defender pos {} {} and id {}",
                     defender.defender_pos.x,
-                    defender.defender_pos.y
+                    defender.defender_pos.y,
+                    defender.mapSpaceId
                 );
 
                 defenders_damaged.push(DefenderResponse {
-                    id: defender.id,
+                    mapSpaceId: defender.mapSpaceId,
                     position: defender.defender_pos,
                     damage: defender.damage,
                 });
@@ -698,13 +722,13 @@ impl State {
         }
 
         // if attacker is dead, no need to move the defenders
-        if attacker.attacker_health == 0 {
-            return DefenderReturnType {
-                attacker_health: attacker.attacker_health,
-                defender_response: defenders_damaged,
-                state: self.clone(),
-            };
-        }
+        // if attacker.attacker_health == 0 {
+        //     return DefenderReturnType {
+        //         attacker_health: attacker.attacker_health,
+        //         defender_response: defenders_damaged,
+        //         state: self.clone(),
+        //     };
+        // }
 
         DefenderReturnType {
             attacker_health: attacker.attacker_health,

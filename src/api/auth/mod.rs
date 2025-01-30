@@ -39,11 +39,11 @@ pub struct LoginResponse {
 pub struct LoginRequest {
     pub code: String,
 }
-#[derive(Debug, Deserialize)]
-pub struct QueryCode {
-    pub state: String,
-    pub code: String,
-}
+// #[derive(Debug, Deserialize)]
+// pub struct QueryCode {
+//     pub state: String,
+//     pub code: String,
+// }
 
 #[derive(Serialize, Deserialize)]
 pub struct UserInfoFromGoogle {

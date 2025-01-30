@@ -12,8 +12,8 @@ pub struct SocketRequest {
     pub action_type: ActionType,
     pub attacker_id: Option<i32>,
     pub bomb_id: Option<i32>,
-    pub start_position: Option<Coords>,
-    pub attacker_path: Vec<Coords>,
+    pub current_position: Option<Coords>,
+    // pub attacker_path: Vec<Coords>,
     pub bomb_position: Coords,
     pub is_game_over: Option<bool>,
 }
@@ -76,7 +76,7 @@ pub struct MineResponse {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct DefenderResponse {
-    pub id: i32,
+    pub mapSpaceId: i32,
     pub position: Coords,
     pub damage: i32,
 }

@@ -293,6 +293,8 @@ async fn socket_handler(
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
 
+    log::info!("hut defender map: {:?}", hut_defenders);
+
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let mines = web::block(move || {
         Ok(util::get_mines(&mut conn, map_id)?) as anyhow::Result<Vec<MineDetails>>
@@ -500,12 +502,19 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                    } else if response.result_type == ResultType::SpawnHutDefender {
-                                        // game_state.hut.hut_defenders_count -= 1;
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::BuildingsDamaged {
+                                    }
+                                    // else if response.result_type == ResultType::DefendersTriggered
+                                    // {
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // } else if response.result_type == ResultType::SpawnHutDefender {
+                                    //     // game_state.hut.hut_defenders_count -= 1;
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // }
+                                    else if response.result_type == ResultType::BuildingsDamaged {
                                         damaged_buildings
                                             .extend(response.damaged_buildings.unwrap());
                                         // if util::deduct_artifacts_from_building(

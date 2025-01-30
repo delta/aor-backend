@@ -27,6 +27,7 @@ use crate::models::{
     User,
 };
 use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
+use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
@@ -39,70 +40,92 @@ use log;
 use std::collections::{HashMap, HashSet};
 use std::time;
 
-use crate::validator::game_handler;
-use actix_ws::Message;
-use futures_util::stream::StreamExt;
+use super::socket::BuildingResponse;
 
-mod rating;
-pub mod socket;
-pub mod util;
-
-pub fn routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::resource("").route(web::get().to(init_attack)))
-        .service(web::resource("/start").route(web::get().to(socket_handler)))
-        .service(web::resource("/history").route(web::get().to(attack_history)))
-        .service(web::resource("/top").route(web::get().to(get_top_attacks)));
+#[derive(Debug, Serialize)]
+pub struct DefensePosition {
+    pub y_coord: i32,
+    pub x_coord: i32,
+    pub block_category: BlockCategory,
 }
 
-async fn init_attack(
-    pool: web::Data<PgPool>,
-    redis_pool: Data<RedisPool>,
-    user: AuthUser,
-) -> Result<impl Responder> {
-    let attacker_id = user.0;
+#[derive(Debug, Deserialize, Serialize)]
+pub struct NewAttack {
+    pub defender_id: i32,
+    pub no_of_attackers: i32,
+    pub attackers: Vec<NewAttacker>,
+}
 
-    log::info!("Attacker:{} is trying to initiate an attack", attacker_id);
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    if let Ok(check) = util::can_attack_happen(&mut conn, attacker_id, true) {
-        if !check {
-            return Err(ErrorBadRequest("You've reached the max limit of attacks"));
-        }
-    }
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NewAttacker {
+    pub attacker_type: i32,
+    pub attacker_path: Vec<NewAttackerPath>,
+}
 
-    let mut redis_conn = redis_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AttackToken {
+    pub game_id: i32,
+    pub attacker_id: i32,
+    pub defender_id: i32,
+    pub iat: usize,
+    pub exp: usize,
+}
+// #[derive(Serialize, Clone, Debug)]
+// pub enum Direction {
+//     Up,
+//     Down,
+//     Left,
+//     Right,
+// }
 
-    //Check if attacker is already in a game
-    if let Ok(Some(_)) = util::get_game_id_from_redis(attacker_id, &mut redis_conn, true) {
-        log::info!("Attacker:{} has an ongoing game", attacker_id);
-        return Err(ErrorBadRequest("Attacker has an ongoing game"));
-    }
+#[derive(Serialize, Clone, Debug)]
+pub struct EventResponse {
+    // pub attacker_initial_position: Option<Coords>,
+    pub attacker_id: Option<i32>,
+    pub bomb_id: Option<i32>,
+    pub coords: Coords,
+    // pub direction: Direction,
+    pub is_bomb: bool,
+}
 
-    log::info!("Attacker:{} has no ongoing game", attacker_id);
+#[derive(Serialize, Clone, Debug)]
+pub struct ResultResponse {
+    pub d: i32,  //damage_done
+    pub a: i32,  //artifacts_collected
+    pub b: i32,  //bombs_used
+    pub au: i32, //attackers_used
+    pub na: i32, //new_attacker_trophies
+    pub nd: i32, //new_defender_trophies
+    pub oa: i32, //old_attacker_trophies
+    pub od: i32, //old_defender_trophies
+}
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let redis_conn = redis_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
+#[derive(Serialize, Clone)]
+pub struct GameLog {
+    pub g: i32,                    //game_id
+    pub a: User,                   //attacker
+    pub d: User,                   //defender
+    pub b: SimulationBaseResponse, //base
+    pub e: Vec<EventResponse>,     //events
+    pub r: ResultResponse,         //result
+}
 
-    let random_opponent_id = web::block(move || {
-        Ok(util::get_random_opponent_id(
-            attacker_id,
-            &mut conn,
-            redis_conn,
-        )?) as anyhow::Result<Option<i32>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+pub fn get_map_id(defender_id: &i32, conn: &mut PgConnection) -> Result<Option<i32>> {
+    use crate::schema::map_layout;
+    let map_id = map_layout::table
+        .filter(map_layout::player.eq(defender_id))
+        .filter(map_layout::is_valid.eq(true))
+        .select(map_layout::id)
+        .first::<i32>(conn)
+        .optional()
+        .map_err(|err| DieselError {
+            table: "map_layout",
+            function: function!(),
+            error: err,
+        })?;
+    Ok(map_id)
+}
 
-<<<<<<< HEAD
-    let opponent_id = if let Some(id) = random_opponent_id {
-        id
-    } else {
-        log::info!("No opponent found for Attacker:{}", attacker_id);
-        return Err(ErrorBadRequest("No opponent found"));
-=======
 pub fn get_valid_road_paths(map_id: i32, conn: &mut PgConnection) -> Result<HashSet<(i32, i32)>> {
     use crate::schema::{block_type, map_spaces};
     let valid_road_paths: HashSet<(i32, i32)> = map_spaces::table
@@ -318,26 +341,108 @@ async fn socket_handler(
         "Game:{} is valid for Attacker:{} and Defender:{}",
         game_id,
         attacker_id,
-        defender_id
-    );
-
-    //Fetch map_id of the defender
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let map = web::block(move || {
-        let map = util::get_map_id(&defender_id, &mut conn)?;
-        Ok(map) as anyhow::Result<Option<i32>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-<<<<<<< HEAD
-    let map_id = if let Some(map) = map {
-        map
-    } else {
-        return Err(ErrorBadRequest("Invalid base"));
+        defender_id,
+        exp,
+        iat,
     };
-=======
+
+    let token_result = encode(
+        &Header::default(),
+        &token,
+        &EncodingKey::from_secret(jwt_secret.as_ref()),
+    );
+    let token = match token_result {
+        Ok(token) => token,
+        Err(e) => return Err(e.into()),
+    };
+
+    Ok(token)
+}
+
+pub fn decode_user_token(token: &str) -> Result<i32> {
+    let jwt_secret = env::var("COOKIE_KEY").expect("COOKIE_KEY must be set!");
+    let token_data = decode::<TokenClaims>(
+        token,
+        &DecodingKey::from_secret(jwt_secret.as_str().as_ref()),
+        &Validation::new(Algorithm::HS256),
+    )
+    .map_err(|err| anyhow::anyhow!("Failed to decode token: {}", err))?;
+
+    let now = chrono::Local::now();
+    let iat = now.timestamp() as usize;
+    if iat > token_data.claims.exp {
+        return Err(anyhow::anyhow!("Attack token expired"));
+    }
+
+    Ok(token_data.claims.id)
+}
+
+pub fn decode_attack_token(token: &str) -> Result<AttackToken> {
+    let jwt_secret = env::var("COOKIE_KEY").expect("COOKIE_KEY must be set!");
+    let token_data = decode::<AttackToken>(
+        token,
+        &DecodingKey::from_secret(jwt_secret.as_str().as_ref()),
+        &Validation::new(Algorithm::HS256),
+    )
+    .map_err(|err| anyhow::anyhow!("Failed to decode token: {}", err))?;
+
+    Ok(token_data.claims)
+}
+
+pub fn get_mines(conn: &mut PgConnection, map_id: i32) -> Result<Vec<MineDetails>> {
+    use crate::schema::{block_type, map_spaces, mine_type};
+
+    let joined_table = map_spaces::table
+        .filter(map_spaces::map_id.eq(map_id))
+        .inner_join(block_type::table.inner_join(mine_type::table))
+        .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)));
+
+    let mines: Vec<MineDetails> = joined_table
+        .load::<(MapSpaces, (BlockType, MineType), Prop)>(conn)?
+        .into_iter()
+        .enumerate()
+        .map(|(mine_id, (map_space, (_, mine_type), prop))| MineDetails {
+            id: mine_id as i32,
+            damage: mine_type.damage,
+            radius: prop.range,
+            position: Coords {
+                x: map_space.x_coordinate,
+                y: map_space.y_coordinate,
+            },
+        })
+        .collect();
+
+    Ok(mines)
+}
+
+pub fn get_defenders(
+    conn: &mut PgConnection,
+    map_id: i32,
+    user_id: i32,
+) -> Result<Vec<DefenderDetails>> {
+    use crate::schema::{available_blocks, block_type, defender_type, map_spaces};
+    // let result: Vec<(
+    //     MapSpaces,
+    //     (BlockType, AvailableBlocks, BuildingType, DefenderType),
+    // )> = map_spaces::table
+    //     .inner_join(
+    //         block_type::table
+    //             .inner_join(available_blocks::table)
+    //             .inner_join(building_type::table)
+    //             .inner_join(defender_type::table),
+    //     )
+    //     .filter(map_spaces::map_id.eq(map_id))
+    //     .filter(available_blocks::user_id.eq(user_id))
+    //     .load::<(
+    //         MapSpaces,
+    //         (BlockType, AvailableBlocks, BuildingType, DefenderType),
+    //     )>(conn)
+    //     .map_err(|err| DieselError {
+    //         table: "map_spaces",
+    //         function: function!(),
+    //         error: err,
+    //     })?;
+
     let result: Vec<(
         MapSpaces,
         (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
@@ -360,86 +465,14 @@ async fn socket_handler(
             function: function!(),
             error: err,
         })?;
->>>>>>> 3114afe (refactor: block type migration update. (#96))
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let shortest_paths = web::block(move || {
-        Ok(run_shortest_paths(&mut conn, map_id)?) as anyhow::Result<HashMap<SourceDestXY, Coords>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let defenders: Vec<DefenderDetails> = web::block(move || {
-        Ok(util::get_defenders(&mut conn, map_id, defender_id)?)
-            as anyhow::Result<Vec<DefenderDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let hut_defenders: HashMap<i32, DefenderDetails> = web::block(move || {
-        Ok(util::get_hut_defender(&mut conn, defender_id)?)
-            as anyhow::Result<HashMap<i32, DefenderDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let mines = web::block(move || {
-        Ok(util::get_mines(&mut conn, map_id)?) as anyhow::Result<Vec<MineDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let buildings = web::block(move || {
-        Ok(util::get_buildings(&mut conn, map_id)?) as anyhow::Result<Vec<BuildingDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let roads = web::block(move || {
-        Ok(get_valid_road_paths(map_id, &mut conn)?) as anyhow::Result<HashSet<(i32, i32)>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let bomb_types =
-        web::block(move || Ok(util::get_bomb_types(&mut conn)?) as anyhow::Result<Vec<BombType>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let attacker_type = web::block(move || {
-        Ok(util::get_attacker_types(&mut conn)?) as anyhow::Result<HashMap<i32, AttackerType>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let attacker_user_details =
-        web::block(move || Ok(fetch_user(&mut conn, attacker_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let defender_user_details =
-        web::block(move || Ok(fetch_user(&mut conn, defender_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
     let mut defenders: Vec<DefenderDetails> = Vec::new();
 
     for (map_space, (block_type, _, _, defender, prop)) in result.iter() {
         let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {
-            id: defender.id,
+            mapSpaceId: map_space.id,
             name: defender.name.clone(),
             radius: prop.range,
             speed: defender.speed,
@@ -497,6 +530,7 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
     let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
     let buildings: Vec<BuildingDetails> = joined_table
         .load::<(MapSpaces, (BlockType, BuildingType, Prop))>(conn)
+        .load::<(MapSpaces, (BlockType, BuildingType, Prop))>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
             function: function!(),
@@ -505,7 +539,8 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
         .into_iter()
         .map(
             |(map_space, (block_type, building, prop))| BuildingDetails {
-                id: map_space.id,
+                block_id: block_type.id,
+                map_space_id: map_space.id,
                 current_hp: building.hp,
                 total_hp: building.hp,
                 artifacts_obtained: 0,
@@ -517,7 +552,6 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
                 name: building.name,
                 range: prop.range,
                 frequency: prop.frequency,
-                block_id: block_type.id,
             },
         )
         .collect();
@@ -532,16 +566,18 @@ pub fn get_hut_defender(
         .inner_join(defender_type::table)
         .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
         .filter(defender_type::name.eq("Hut_Defender"));
-    let hut_defenders: Vec<DefenderDetails> = joined_table
+    let hut_defenders = joined_table
         .load::<(BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "defender_type",
             function: function!(),
             error: err,
         })?
-        .into_iter()
-        .map(|(block_type, defender_type, prop)| DefenderDetails {
-            id: defender_type.id,
+        .into_iter();
+    let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
+    for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
+        hut_defender_array.push(DefenderDetails {
+            mapSpaceId: (i + 1) as i32,
             name: defender_type.name.clone(),
             radius: prop.range,
             speed: defender_type.speed,
@@ -553,8 +589,26 @@ pub fn get_hut_defender(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender_type.level,
-        })
-        .collect();
+        });
+        log::info!("hut_defenders {:?}", i);
+    }
+
+    // .map(|(block_type, defender_type, prop)| DefenderDetails {
+    //     mapSpaceId: i + 1,
+    //     name: defender_type.name.clone(),
+    //     radius: prop.range,
+    //     speed: defender_type.speed,
+    //     damage: defender_type.damage,
+    //     defender_pos: Coords { x: 0, y: 0 },
+    //     is_alive: true,
+    //     damage_dealt: false,
+    //     target_id: None,
+    //     path_in_current_frame: Vec::new(),
+    //     block_id: block_type.id,
+    //     level: defender_type.level,
+    // })
+    // .collect();
+    log::info!("hut_defenders array {:?}", hut_defender_array);
 
     let joined_table = map_spaces::table
         .inner_join(block_type::table)
@@ -574,11 +628,29 @@ pub fn get_hut_defender(
         .map(|(map_spaces, _, building)| (map_spaces.id, building.level))
         .collect();
 
+    log::info!("hut defeners {:?}", hut_defender_array);
+    // let mut hut_defenders_res: HashMap<i32, Vec<DefenderDetails>> = HashMap::new();
+    // for (i, hut) in huts.iter().enumerate() {
+    //     // log::info!("hut mapspaceid{:?}", hut.0);
+    //     // if let Some(hut_defender) = hut_defender_array.iter().find(|hd| hd.level == hut.1) {
+    //     //     hut_defenders_res.insert(hut.0, hut_defender.clone());
+    //     // }
+    //     for (i, hut_defender) in hut_defender_array.iter().enumerate() {
+    //         if hut_defender.level == hut.1 {
+    //             hut_defenders_res
+    //                 .entry(hut.0)
+    //                 .or_insert_with(Vec::new)
+    //                 .push(hut_defender.clone());
+    //         }
+    //     }
+    // }
     let mut hut_defenders_res: HashMap<i32, DefenderDetails> = HashMap::new();
-    for hut in huts {
-        if let Some(hut_defender) = hut_defenders.iter().find(|hd| hd.level == hut.1) {
-            hut_defenders_res.insert(hut.0, hut_defender.clone());
-        }
+    for (i, hut) in huts.iter().enumerate() {
+        // log::info!("hut mapspaceid{:?}", hut.0);
+        // if let Some(hut_defender) = hut_defender_array.iter().find(|hd| hd.level == hut.1) {
+        //     hut_defenders_res.insert(hut.0, hut_defender.clone());
+        // }
+        hut_defenders_res.insert(hut.0, hut_defender_array[i].clone());
     }
     log::info!("{:?}", hut_defenders_res);
     Ok(hut_defenders_res)
@@ -611,33 +683,45 @@ pub fn update_buidling_artifacts(
 ) -> Result<Vec<BuildingDetails>> {
     use crate::schema::{artifact, map_spaces};
 
-    let game_log = GameLog {
-        g: game_id,
-        a: attacker_user_details.unwrap(),
-        d: defender_user_details.unwrap(),
-        b: defender_base_details,
-        e: Vec::new(),
-        r: ResultResponse {
-            d: 0,
-            a: 0,
-            b: 0,
-            au: 0,
-            na: 0,
-            nd: 0,
-            oa: 0,
-            od: 0,
-        },
-    };
+    let result: Vec<(MapSpaces, Artifact)> = map_spaces::table
+        .inner_join(artifact::table)
+        .filter(map_spaces::map_id.eq(map_id))
+        .load::<(MapSpaces, Artifact)>(conn)
+        .map_err(|err| DieselError {
+            table: "map_spaces",
+            function: function!(),
+            error: err,
+        })?;
 
-    log::info!(
-        "Game:{} is ready for Attacker:{} and Defender:{}",
-        game_id,
-        attacker_id,
-        defender_id
-    );
+    // From the above table, create a hashmap, key being map_space_id and value being the artifact count
+    let mut artifact_count: HashMap<i32, i64> = HashMap::new();
 
-    let (response, session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    for (map_space, artifact) in result.iter() {
+        artifact_count.insert(map_space.id, artifact.count.into());
+    }
 
+    // Update the buildings with the artifact count
+    for building in buildings.iter_mut() {
+        building.artifacts_obtained =
+            *artifact_count.get(&building.map_space_id).unwrap_or(&0) as i32;
+    }
+
+    Ok(buildings)
+}
+
+pub fn terminate_game(
+    game_log: &mut GameLog,
+    conn: &mut PgConnection,
+    damaged_buildings: &[BuildingResponse],
+    redis_conn: &mut RedisConn,
+) -> Result<()> {
+    use crate::schema::{artifact, game};
+    let attacker_id = game_log.a.id;
+    let defender_id = game_log.d.id;
+    let damage_done = game_log.r.d;
+    let bombs_used = game_log.r.b;
+    let artifacts_collected = game_log.r.a;
+    let game_id = game_log.g;
     log::info!(
         "Socket connection established for Game:{}, Attacker:{} and Defender:{}",
         game_id,

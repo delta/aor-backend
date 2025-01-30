@@ -88,7 +88,7 @@ pub fn game_handler(
                 attacker_id: None,
                 bomb_id: None,
                 coords: Coords { x: 0, y: 0 },
-                direction: Direction::Up,
+                // direction: Direction::Up,
                 is_bomb: false,
             };
 
@@ -96,8 +96,8 @@ pub fn game_handler(
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 _game_state.place_attacker(Attacker {
                     id: attacker.id,
-                    path_in_current_frame: Vec::new(),
-                    attacker_pos: socket_request.start_position.unwrap(),
+                    // path_in_current_frame: Vec::new(),
+                    attacker_pos: socket_request.current_position.unwrap(),
                     attacker_health: attacker.max_health,
                     attacker_speed: attacker.speed,
                     bombs: Vec::new(),
@@ -114,7 +114,7 @@ pub fn game_handler(
                 }
 
                 event_response.attacker_id = Some(attacker_id);
-                event_response.coords = socket_request.start_position.unwrap();
+                event_response.coords = socket_request.current_position.unwrap();
             }
 
             // _game_state.set_mines(mine_positions);
@@ -199,16 +199,16 @@ pub fn game_handler(
         ActionType::MoveAttacker => {
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
-                let attacker_delta: Vec<Coords> = socket_request.attacker_path;
-                let attacker_delta_clone = attacker_delta.clone();
+                // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
+                // let attacker_delta_clone = attacker_delta.clone();
 
-                let attacker_result = _game_state.attacker_movement(
+                let _attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
                     Attacker {
                         id: attacker.id,
-                        path_in_current_frame: attacker_delta.clone(),
-                        attacker_pos: socket_request.start_position.unwrap(),
+                        // path_in_current_frame: attacker_delta.clone(),
+                        attacker_pos: socket_request.current_position.unwrap(),
                         attacker_health: attacker.max_health,
                         attacker_speed: attacker.speed,
                         bombs: Vec::new(),
@@ -217,35 +217,35 @@ pub fn game_handler(
                     },
                 );
 
-                let attacker_result_clone = attacker_result.clone().unwrap();
+                // let attacker_result_clone = attacker_result.clone().unwrap();
 
                 defender_damaged_result = _game_state
-                    .defender_movement_new_tick(socket_request.start_position?, _shortest_path);
+                    .defender_movement_one_tick(socket_request.current_position?, _shortest_path);
 
-                for coord in attacker_delta {
-                    let mut direction = Direction::Up;
+                // for coord in attacker_delta {
+                //     let mut direction = Direction::Up;
 
-                    let prev_pos = _game_log.e.last().unwrap().coords;
-                    if prev_pos.x < coord.x {
-                        direction = Direction::Down;
-                    } else if prev_pos.x > coord.x {
-                        direction = Direction::Up;
-                    } else if prev_pos.y < coord.y {
-                        direction = Direction::Left;
-                    } else if prev_pos.y > coord.y {
-                        direction = Direction::Right;
-                    }
+                //     let prev_pos = _game_log.e.last().unwrap().coords;
+                //     if prev_pos.x < coord.x {
+                //         direction = Direction::Down;
+                //     } else if prev_pos.x > coord.x {
+                //         direction = Direction::Up;
+                //     } else if prev_pos.y < coord.y {
+                //         direction = Direction::Left;
+                //     } else if prev_pos.y > coord.y {
+                //         direction = Direction::Right;
+                //     }
 
-                    let event_response = EventResponse {
-                        attacker_id: None,
-                        bomb_id: None,
-                        coords: coord,
-                        direction,
-                        is_bomb: false,
-                    };
+                //     let event_response = EventResponse {
+                //         attacker_id: None,
+                //         bomb_id: None,
+                //         coords: coord,
+                //         direction,
+                //         is_bomb: false,
+                //     };
 
-                    _game_log.e.push(event_response.clone());
-                }
+                //     _game_log.e.push(event_response.clone());
+                // }
 
                 // let mut bool_temp = false;
                 // if attacker_result_clone.trigger_defender {
@@ -292,7 +292,7 @@ pub fn game_handler(
 
                 let result_type = if hut_triggered {
                     ResultType::SpawnHutDefender
-                } else if attacker_result_clone.trigger_defender {
+                } else if defender_damaged_result.clone().defender_response.len() > 0 {
                     ResultType::DefendersDamaged
                 } else {
                     ResultType::Nothing
@@ -321,7 +321,7 @@ pub fn game_handler(
         }
         ActionType::IsMine => {
             // is_mine
-            let start_pos: Option<Coords> = socket_request.start_position;
+            let start_pos: Option<Coords> = socket_request.current_position;
             exploded_mines_result = _game_state.mine_blast(start_pos);
 
             let mut bool_temp = false;
@@ -370,8 +370,8 @@ pub fn game_handler(
             }));
         }
         ActionType::PlaceBombs => {
-            let attacker_delta: Vec<Coords> = socket_request.attacker_path.clone();
-            let current_pos = socket_request.start_position.unwrap();
+            // let attacker_delta: Vec<Coords> = socket_request.attacker_path.clone();
+            let current_pos = socket_request.current_position.unwrap();
             let bomb_coords = socket_request.bomb_position;
 
             if _game_state.bombs.total_count == 0 {
@@ -381,30 +381,30 @@ pub fn game_handler(
                 )));
             }
 
-            for coord in attacker_delta.clone() {
-                let mut direction = Direction::Up;
+            // for coord in attacker_delta.clone() {
+            //     let mut direction = Direction::Up;
 
-                let prev_pos = _game_log.e.last().unwrap().coords;
-                if prev_pos.x < coord.x {
-                    direction = Direction::Down;
-                } else if prev_pos.x > coord.x {
-                    direction = Direction::Up;
-                } else if prev_pos.y < coord.y {
-                    direction = Direction::Left;
-                } else if prev_pos.y > coord.y {
-                    direction = Direction::Right;
-                }
+            //     let prev_pos = _game_log.e.last().unwrap().coords;
+            //     if prev_pos.x < coord.x {
+            //         direction = Direction::Down;
+            //     } else if prev_pos.x > coord.x {
+            //         direction = Direction::Up;
+            //     } else if prev_pos.y < coord.y {
+            //         direction = Direction::Left;
+            //     } else if prev_pos.y > coord.y {
+            //         direction = Direction::Right;
+            //     }
 
-                let event_response = EventResponse {
-                    attacker_id: None,
-                    bomb_id: None,
-                    coords: coord,
-                    direction,
-                    is_bomb: coord == bomb_coords,
-                };
+            //     let event_response = EventResponse {
+            //         attacker_id: None,
+            //         bomb_id: None,
+            //         coords: coord,
+            //         direction,
+            //         is_bomb: coord == bomb_coords,
+            //     };
 
-                _game_log.e.push(event_response.clone());
-            }
+            //     _game_log.e.push(event_response.clone());
+            // }
 
             buildings_damaged_result = _game_state.place_bombs(current_pos, bomb_coords);
 
