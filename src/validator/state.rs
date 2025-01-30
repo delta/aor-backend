@@ -24,7 +24,10 @@ use crate::{
 
 use serde::{Deserialize, Serialize};
 
-use super::util::{Companion, CompanionResult, DefenderTarget, Path};
+use super::util::{
+    select_side_hut_defender, BombType, Challenge, Companion, CompanionResult, DefenderTarget,
+    HutDefenderDetails, MazeChallenge, Path,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
@@ -46,6 +49,7 @@ pub struct State {
     pub in_validation: InValidation,
     pub sentries: Vec<Sentry>,
     pub hut_defenders_released: i32,
+    pub challenge: Challenge,
 }
 
 impl State {
@@ -111,9 +115,12 @@ impl State {
             },
             sentries: Vec::new(),
             hut_defenders_released: 0,
+            challenge: Challenge {
+                challenge_type: None,
+                maze: MazeChallenge { coins: -1 },
+            },
         }
     }
-
     pub fn get_sentries(&mut self) {
         let mut sentries = Vec::new();
         for building in self.buildings.iter() {
