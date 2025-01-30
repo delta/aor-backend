@@ -47,6 +47,7 @@ pub struct IsTriggered {
 pub struct DefenderDetails {
     pub id: i32,
     pub map_id: i32,
+    pub name: String,
     pub radius: i32,
     pub speed: i32,
     pub damage: i32,
@@ -161,9 +162,7 @@ pub fn select_side_hut_defender(
     shadow_tiles: &Vec<(i32, i32)>,
     roads: &HashSet<(i32, i32)>,
     hut_building: &BuildingDetails,
-    attacker: &Attacker,
     hut_defender: &DefenderDetails,
-    i: usize,
 ) -> Option<DefenderDetails> {
     let tile2 = (
         shadow_tiles[shadow_tiles.len() - 2].0 + 1,
@@ -183,22 +182,22 @@ pub fn select_side_hut_defender(
     if roads.contains(&tile2) {
         hut_defender_clone.defender_pos.x = tile2.0;
         hut_defender_clone.defender_pos.y = tile2.1;
-        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile4) {
         hut_defender_clone.defender_pos.x = tile4.0;
         hut_defender_clone.defender_pos.y = tile4.1;
-        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile3) {
         hut_defender_clone.defender_pos.x = tile3.0;
         hut_defender_clone.defender_pos.y = tile3.1;
-        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile1) {
         hut_defender_clone.defender_pos.x = tile1.0;
         hut_defender_clone.defender_pos.y = tile1.1;
-        hut_defender_clone.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
+        hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else {
         None

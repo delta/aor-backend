@@ -197,97 +197,101 @@ impl State {
             };
         }
 
-        for coord in attacker_current.path_in_current_frame.clone().into_iter() {
-            if !roads.contains(&(coord.x, coord.y)) {
-                // GAME_OVER
+        if !roads.contains(&(
+            attacker_current.attacker_pos.x,
+            attacker_current.attacker_pos.y,
+        )) {
+            // GAME_OVER
 
-                println!("attacker out of road at {} frame", frame_no);
-            }
+            println!("attacker out of road at {} frame", frame_no);
         }
 
         let mut attacker = attacker_current.clone();
 
-        if attacker.attacker_speed + 1 != attacker.path_in_current_frame.len() as i32 {
-            println!(
-                "attacker speed abuse at {} frame --- speed  :{}, length: {}",
-                frame_no,
-                attacker.attacker_speed,
-                attacker.path_in_current_frame.len()
-            );
+        // if attacker.attacker_speed + 1 != attacker.path_in_current_frame.len() as i32 {
+        //     println!(
+        //         "attacker speed abuse at {} frame --- speed  :{}, length: {}",
+        //         frame_no,
+        //         attacker.attacker_speed,
+        //         attacker.path_in_current_frame.len()
+        //     );
+        // }
+
+        // let mut coord_temp: Coords = Coords {
+        //     x: attacker_current.path_in_current_frame[0].x,
+        //     y: attacker_current.path_in_current_frame[0].y,
+        // };
+
+        // for (i, coord) in attacker_current
+        //     .path_in_current_frame
+        //     .into_iter()
+        //     .enumerate()
+        // {
+        if (attacker.attacker_pos.x - attacker_current.attacker_pos.x > 1)
+            || (attacker.attacker_pos.y - attacker_current.attacker_pos.y > 1)
+            || ((attacker.attacker_pos.x - attacker_current.attacker_pos.x).abs() == 1
+                && attacker.attacker_pos.y != attacker_current.attacker_pos.y)
+            || ((attacker.attacker_pos.y - attacker_current.attacker_pos.y).abs() == 1
+                && attacker.attacker_pos.x != attacker_current.attacker_pos.x)
+        {
+            // GAME_OVER
+            // println!("attacker skipped a tile at {} frame", frame_no);
+            self.in_validation = InValidation {
+                message: "attacker skipped a tile".to_string(),
+                is_invalidated: true,
+            };
         }
 
-        let mut coord_temp: Coords = Coords {
-            x: attacker_current.path_in_current_frame[0].x,
-            y: attacker_current.path_in_current_frame[0].y,
-        };
+        // let new_pos = coord;
 
-        for (i, coord) in attacker_current
-            .path_in_current_frame
-            .into_iter()
-            .enumerate()
-        {
-            if (coord_temp.x - coord.x > 1)
-                || (coord_temp.y - coord.y > 1)
-                || ((coord_temp.x - coord.x).abs() == 1 && coord_temp.y != coord.y)
-                || ((coord_temp.y - coord.y).abs() == 1 && coord_temp.x != coord.x)
-            {
-                // GAME_OVER
-                // println!("attacker skipped a tile at {} frame", frame_no);
-                self.in_validation = InValidation {
-                    message: "attacker skipped a tile".to_string(),
-                    is_invalidated: true,
-                };
-            }
+        let hut_buildings: Vec<BuildingDetails> = self
+            .buildings
+            .iter()
+            .filter(|&r| r.name == "Defender_Hut")
+            .cloned()
+            .collect();
 
-            let new_pos = coord;
+        for hut_building in hut_buildings {
+            let distance = (hut_building.tile.x - attacker_current.attacker_pos.x).abs()
+                + (hut_building.tile.y - attacker_current.attacker_pos.y).abs();
 
-            let hut_buildings: Vec<BuildingDetails> = self
-                .buildings
-                .iter()
-                .filter(|&r| r.name == "Defender_Hut")
-                .cloned()
-                .collect();
-
-            for hut_building in hut_buildings {
-                let distance = (hut_building.tile.x - new_pos.x).abs()
-                    + (hut_building.tile.y - new_pos.y).abs();
-
-                if distance <= hut_building.range {
-                    if let Some(hut) = self.hut.get_mut(&hut_building.id) {
-                        if !hut.hut_triggered {
-                            // Hut triggered
-                            log::info!("In range!");
-                            //trigger hut
-                            hut.hut_triggered = true;
-                        }
+            if distance <= hut_building.range {
+                if let Some(hut) = self.hut.get_mut(&hut_building.id) {
+                    if !hut.hut_triggered {
+                        // Hut triggered
+                        log::info!("In range!");
+                        //trigger hut
+                        hut.hut_triggered = true;
                     }
                 }
             }
+        }
 
-            for defender in self.defenders.iter_mut() {
-                if defender.target_id.is_none()
-                    && defender.is_alive
-                    && (((defender.defender_pos.x - new_pos.x).abs()
-                        + (defender.defender_pos.y - new_pos.y).abs())
-                        <= defender.radius)
-                {
-                    // println!(
-                    //     "defender triggered when attacker was at ---- x:{}, y:{} and defender id: {}",
-                    //     new_pos.x, new_pos.y, defender.id
-                    // );
-                    defender.target_id = Some((i) as f32 / attacker.attacker_speed as f32);
-                    attacker.trigger_defender = true;
-                }
+        for defender in self.defenders.iter_mut() {
+            if defender.target_id.is_none()
+                && defender.is_alive
+                && (((defender.defender_pos.x - attacker_current.attacker_pos.x).abs()
+                    + (defender.defender_pos.y - attacker_current.attacker_pos.y).abs())
+                    <= defender.radius)
+            {
+                // println!(
+                //     "defender triggered when attacker was at ---- x:{}, y:{} and defender id: {}",
+                //     new_pos.x, new_pos.y, defender.id
+                // );
+                defender.target_id = Some(0.0);
+                attacker.trigger_defender = true;
             }
+            // }
 
-            coord_temp = coord;
+            // coord_temp = coord;
         }
 
         self.frame_no += 1;
+        attacker.attacker_pos = attacker_current.attacker_pos;
 
         let attacker_result = Attacker {
             id: attacker.id,
-            attacker_pos: *attacker.path_in_current_frame.last().unwrap(),
+            attacker_pos: attacker.attacker_pos,
             attacker_health: attacker.attacker_health,
             attacker_speed: attacker.attacker_speed,
             path_in_current_frame: attacker.path_in_current_frame.clone(),
@@ -301,9 +305,9 @@ impl State {
     pub fn spawn_hut_defender(
         &mut self,
         roads: &HashSet<(i32, i32)>,
-        attacker_current: Attacker,
+        // attacker_current: Attacker,
     ) -> Option<Vec<DefenderDetails>> {
-        let attacker = attacker_current.clone();
+        // let attacker = attacker_current.clone();
         let hut_buildings: Vec<&BuildingDetails> = self
             .buildings
             .iter()
@@ -311,77 +315,75 @@ impl State {
             .collect();
 
         let mut response = Vec::new();
-        for (i, _coord) in attacker_current
-            .path_in_current_frame
-            .into_iter()
-            .enumerate()
-        {
-            for &hut_building in &hut_buildings {
-                //get shadow tile for each hut.
-                let mut shadow_tiles: Vec<(i32, i32)> = Vec::new();
-                for i in 0..hut_building.width {
-                    for j in 0..hut_building.width {
-                        shadow_tiles.push((hut_building.tile.x + i, hut_building.tile.y + j));
-                    }
+        // for (i, _coord) in attacker_current
+        //     .path_in_current_frame
+        //     .into_iter()
+        //     .enumerate()
+        // {
+        for &hut_building in &hut_buildings {
+            //get shadow tile for each hut.
+            let mut shadow_tiles: Vec<(i32, i32)> = Vec::new();
+            for i in 0..hut_building.width {
+                for j in 0..hut_building.width {
+                    shadow_tiles.push((hut_building.tile.x + i, hut_building.tile.y + j));
                 }
-                //see if hut is triggered
-                let hut_triggered = self.hut.get(&hut_building.id).unwrap().hut_triggered;
+            }
+            //see if hut is triggered
+            let hut_triggered = self.hut.get(&hut_building.id).unwrap().hut_triggered;
 
-                //if hut is triggered and hut defenders are > 0, get the hut defender.
-                let time_elapsed = if let Some(time_stamp) = self
-                    .hut
-                    .get(&hut_building.id)
-                    .unwrap()
-                    .hut_defender_latest_time
-                {
+            //if hut is triggered and hut defenders are > 0, get the hut defender.
+            let time_elapsed = if let Some(time_stamp) = self
+                .hut
+                .get(&hut_building.id)
+                .unwrap()
+                .hut_defender_latest_time
+            {
+                let start = SystemTime::now();
+                let now = start
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards");
+                let time_interval = hut_building.frequency as u128;
+                //check if time elapsed is greater than time stamp.
+                now.as_millis() >= time_stamp + time_interval
+            } else {
+                true
+            };
+            if hut_triggered
+                && self.hut.get(&hut_building.id).unwrap().hut_defenders_count > 0
+                && time_elapsed
+                && hut_building.current_hp > 0
+            {
+                if let Some(hut_defender) = select_side_hut_defender(
+                    &shadow_tiles,
+                    roads,
+                    &hut_building,
+                    &self.hut.get(&hut_building.id).unwrap().hut_defender,
+                ) {
+                    //push it to state.
+                    println!("Hut defender spawned");
+                    self.defenders.push(hut_defender.clone());
+                    //push it to frontend response.
+                    response.push(hut_defender);
+
+                    //update time
                     let start = SystemTime::now();
                     let now = start
                         .duration_since(UNIX_EPOCH)
                         .expect("Time went backwards");
-                    let time_interval = hut_building.frequency as u128;
-                    //check if time elapsed is greater than time stamp.
-                    now.as_millis() >= time_stamp + time_interval
-                } else {
-                    true
-                };
-                if hut_triggered
-                    && self.hut.get(&hut_building.id).unwrap().hut_defenders_count > 0
-                    && time_elapsed
-                    && hut_building.current_hp > 0
-                {
-                    if let Some(hut_defender) = select_side_hut_defender(
-                        &shadow_tiles,
-                        roads,
-                        &hut_building,
-                        &attacker,
-                        &self.hut.get(&hut_building.id).unwrap().hut_defender,
-                        i,
-                    ) {
-                        //push it to state.
-                        self.defenders.push(hut_defender.clone());
-                        //push it to frontend response.
-                        response.push(hut_defender);
+                    self.hut
+                        .get_mut(&hut_building.id)
+                        .unwrap()
+                        .hut_defender_latest_time = Some(now.as_millis());
 
-                        //update time
-                        let start = SystemTime::now();
-                        let now = start
-                            .duration_since(UNIX_EPOCH)
-                            .expect("Time went backwards");
-                        self.hut
-                            .get_mut(&hut_building.id)
-                            .unwrap()
-                            .hut_defender_latest_time = Some(now.as_millis());
-
-                        //update hut_defenders count.
-                        let curr_count =
-                            self.hut.get(&hut_building.id).unwrap().hut_defenders_count;
-                        self.hut
-                            .get_mut(&hut_building.id)
-                            .unwrap()
-                            .hut_defenders_count = curr_count - 1;
-                    }
+                    //update hut_defenders count.
+                    let curr_count = self.hut.get(&hut_building.id).unwrap().hut_defenders_count;
+                    self.hut
+                        .get_mut(&hut_building.id)
+                        .unwrap()
+                        .hut_defenders_count = curr_count - 1;
                 }
             }
+            // }
         }
         return Some(response);
     }
@@ -418,151 +420,148 @@ impl State {
         self.bomb_blast(bomb_position)
     }
 
-    pub fn defender_movement(
-        &mut self,
-        attacker_delta: Vec<Coords>,
-        shortest_path: &HashMap<SourceDestXY, Coords>,
-    ) -> DefenderReturnType {
-        let attacker = self.attacker.as_mut().unwrap();
-        let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
-        let bullet_hits: Vec<BulletHit> = Vec::new();
+    // pub fn defender_movement(
+    //     &mut self,
+    //     attacker_delta: Vec<Coords>,
+    //     shortest_path: &HashMap<SourceDestXY, Coords>,
+    // ) -> DefenderReturnType {
+    //     let attacker = self.attacker.as_mut().unwrap();
+    //     let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
 
-        // if attacker is dead, no need to move the defenders
-        if attacker.attacker_health == 0 {
-            return DefenderReturnType {
-                attacker_health: attacker.attacker_health,
-                defender_response: defenders_damaged,
-                bullet_hits,
-                state: self.clone(),
-            };
-        }
+    //     // if attacker is dead, no need to move the defenders
+    //     if attacker.attacker_health == 0 {
+    //         return DefenderReturnType {
+    //             attacker_health: attacker.attacker_health,
+    //             defender_response: defenders_damaged,
+    //             state: self.clone(),
+    //         };
+    //     }
 
-        let mut collision_array: Vec<(usize, f32)> = Vec::new();
+    //     let mut collision_array: Vec<(usize, f32)> = Vec::new();
 
-        for (index, defender) in self.defenders.iter_mut().enumerate() {
-            if !defender.is_alive || defender.target_id.is_none() {
-                continue;
-            }
+    //     for (index, defender) in self.defenders.iter_mut().enumerate() {
+    //         if !defender.is_alive || defender.target_id.is_none() {
+    //             continue;
+    //         }
 
-            let attacker_ratio = attacker.attacker_speed as f32 / defender.speed as f32;
-            let mut attacker_float_coords = (
-                attacker.attacker_pos.x as f32,
-                attacker.attacker_pos.y as f32,
-            );
-            let mut attacker_delta_index = 1;
+    //         let attacker_ratio = attacker.attacker_speed as f32 / defender.speed as f32;
+    //         let mut attacker_float_coords = (
+    //             attacker.attacker_pos.x as f32,
+    //             attacker.attacker_pos.y as f32,
+    //         );
+    //         let mut attacker_delta_index = 1;
 
-            defender.path_in_current_frame.clear();
-            defender.path_in_current_frame.push(defender.defender_pos);
+    //         defender.path_in_current_frame.clear();
+    //         defender.path_in_current_frame.push(defender.defender_pos);
 
-            // for every tile of defender's movement
-            for i in 1..=defender.speed {
-                let next_hop = shortest_path
-                    .get(&SourceDestXY {
-                        source_x: defender.defender_pos.x,
-                        source_y: defender.defender_pos.y,
-                        dest_x: attacker.attacker_pos.x,
-                        dest_y: attacker.attacker_pos.y,
-                    })
-                    .unwrap_or(&defender.defender_pos);
+    //         // for every tile of defender's movement
+    //         for i in 1..=defender.speed {
+    //             let next_hop = shortest_path
+    //                 .get(&SourceDestXY {
+    //                     source_x: defender.defender_pos.x,
+    //                     source_y: defender.defender_pos.y,
+    //                     dest_x: attacker.attacker_pos.x,
+    //                     dest_y: attacker.attacker_pos.y,
+    //                 })
+    //                 .unwrap_or(&defender.defender_pos);
 
-                let mut attacker_tiles_covered_fract = (((i - 1) as f32) * attacker_ratio).fract();
+    //             let mut attacker_tiles_covered_fract = (((i - 1) as f32) * attacker_ratio).fract();
 
-                let mut attacker_mov_x = 0.0;
-                let mut attacker_mov_y = 0.0;
+    //             let mut attacker_mov_x = 0.0;
+    //             let mut attacker_mov_y = 0.0;
 
-                let mut attacker_tiles_left = attacker_ratio;
-                while attacker_tiles_left > 1e-6 {
-                    let attacker_tiles_fract_left = attacker_tiles_left
-                        .min(1.0)
-                        .min(1.0 - attacker_tiles_covered_fract);
+    //             let mut attacker_tiles_left = attacker_ratio;
+    //             while attacker_tiles_left > 1e-6 {
+    //                 let attacker_tiles_fract_left = attacker_tiles_left
+    //                     .min(1.0)
+    //                     .min(1.0 - attacker_tiles_covered_fract);
 
-                    attacker_mov_x += attacker_tiles_fract_left
-                        * ((attacker_delta[attacker_delta_index].x
-                            - attacker_delta[attacker_delta_index - 1].x)
-                            as f32);
-                    attacker_mov_y += attacker_tiles_fract_left
-                        * ((attacker_delta[attacker_delta_index].y
-                            - attacker_delta[attacker_delta_index - 1].y)
-                            as f32);
+    //                 attacker_mov_x += attacker_tiles_fract_left
+    //                     * ((attacker_delta[attacker_delta_index].x
+    //                         - attacker_delta[attacker_delta_index - 1].x)
+    //                         as f32);
+    //                 attacker_mov_y += attacker_tiles_fract_left
+    //                     * ((attacker_delta[attacker_delta_index].y
+    //                         - attacker_delta[attacker_delta_index - 1].y)
+    //                         as f32);
 
-                    attacker_tiles_left -= attacker_tiles_fract_left;
-                    attacker_tiles_covered_fract =
-                        (attacker_tiles_covered_fract + attacker_tiles_fract_left).fract();
-                    if attacker_tiles_covered_fract == 0.0 {
-                        attacker_delta_index += 1;
-                    }
-                }
+    //                 attacker_tiles_left -= attacker_tiles_fract_left;
+    //                 attacker_tiles_covered_fract =
+    //                     (attacker_tiles_covered_fract + attacker_tiles_fract_left).fract();
+    //                 if attacker_tiles_covered_fract == 0.0 {
+    //                     attacker_delta_index += 1;
+    //                 }
+    //             }
 
-                attacker_float_coords.0 += attacker_mov_x;
-                attacker_float_coords.1 += attacker_mov_y;
+    //             attacker_float_coords.0 += attacker_mov_x;
+    //             attacker_float_coords.1 += attacker_mov_y;
 
-                attacker.attacker_pos = Coords {
-                    x: attacker_float_coords.0.round() as i32,
-                    y: attacker_float_coords.1.round() as i32,
-                };
+    //             attacker.attacker_pos = Coords {
+    //                 x: attacker_float_coords.0.round() as i32,
+    //                 y: attacker_float_coords.1.round() as i32,
+    //             };
 
-                // if defender lags
-                if defender.target_id.unwrap() >= ((i as f32) / (defender.speed as f32)) {
-                    defender.path_in_current_frame.push(defender.defender_pos);
-                    continue;
-                }
-                defender.defender_pos = *next_hop;
-                defender.path_in_current_frame.push(defender.defender_pos);
+    //             // if defender lags
+    //             if defender.target_id.unwrap() >= ((i as f32) / (defender.speed as f32)) {
+    //                 defender.path_in_current_frame.push(defender.defender_pos);
+    //                 continue;
+    //             }
+    //             defender.defender_pos = *next_hop;
+    //             defender.path_in_current_frame.push(defender.defender_pos);
 
-                // if defender and attacker are on the same tile, add the defender to the collision_array
-                if (defender.defender_pos == attacker.attacker_pos)
-                    || (defender.path_in_current_frame[(i - 1) as usize] == attacker.attacker_pos)
-                {
-                    collision_array.push((index, (i as f32) / (defender.speed as f32)));
-                    defender.damage_dealt = true;
-                    break;
-                }
-            }
-            defender.target_id = Some(0.0);
-            if !defender.damage_dealt {
-                collision_array.push((index, 2.0));
-            }
-            attacker.attacker_pos = *attacker_delta.first().unwrap();
-        }
+    //             // if defender and attacker are on the same tile, add the defender to the collision_array
+    //             if (defender.defender_pos == attacker.attacker_pos)
+    //                 || (defender.path_in_current_frame[(i - 1) as usize] == attacker.attacker_pos)
+    //             {
+    //                 collision_array.push((index, (i as f32) / (defender.speed as f32)));
+    //                 defender.damage_dealt = true;
+    //                 break;
+    //             }
+    //         }
+    //         defender.target_id = Some(0.0);
+    //         if !defender.damage_dealt {
+    //             collision_array.push((index, 2.0));
+    //         }
+    //         attacker.attacker_pos = *attacker_delta.first().unwrap();
+    //     }
 
-        attacker.attacker_pos = *attacker_delta.last().unwrap();
-        // sort the collision_array by the time of collision
-        collision_array.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        let mut attacker_death_time = 0.0; // frame fraction at which attacker dies
-        for (index, time) in collision_array {
-            self.defenders[index].target_id = None;
-            if time > 1.0 {
-                break;
-            }
-            if attacker.attacker_health == 0 {
-                self.defenders[index].defender_pos = self.defenders[index].path_in_current_frame
-                    [(attacker_death_time * (self.defenders[index].speed as f32)) as usize];
-                continue;
-            }
-            defenders_damaged.push(DefenderResponse {
-                id: self.defenders[index].id,
-                position: self.defenders[index].defender_pos,
-                damage: self.defenders[index].damage,
-            });
-            self.defenders[index].damage_dealt = true;
-            attacker.trigger_defender = true;
-            attacker.attacker_health =
-                max(0, attacker.attacker_health - self.defenders[index].damage);
-            self.defenders[index].is_alive = false;
+    //     attacker.attacker_pos = *attacker_delta.last().unwrap();
+    //     // sort the collision_array by the time of collision
+    //     collision_array.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    //     let mut attacker_death_time = 0.0; // frame fraction at which attacker dies
+    //     for (index, time) in collision_array {
+    //         self.defenders[index].target_id = None;
+    //         if time > 1.0 {
+    //             break;
+    //         }
+    //         if attacker.attacker_health == 0 {
+    //             self.defenders[index].defender_pos = self.defenders[index].path_in_current_frame
+    //                 [(attacker_death_time * (self.defenders[index].speed as f32)) as usize];
+    //             continue;
+    //         }
+    //         defenders_damaged.push(DefenderResponse {
+    //             id: self.defenders[index].id,
+    //             position: self.defenders[index].defender_pos,
+    //             damage: self.defenders[index].damage,
+    //         });
+    //         self.defenders[index].damage_dealt = true;
+    //         attacker.trigger_defender = true;
+    //         attacker.attacker_health =
+    //             max(0, attacker.attacker_health - self.defenders[index].damage);
+    //         self.defenders[index].is_alive = false;
 
-            if attacker.attacker_health == 0 {
-                attacker_death_time = time;
-                self.attacker_death_count += 1;
-            }
-        }
+    //         if attacker.attacker_health == 0 {
+    //             attacker_death_time = time;
+    //             self.attacker_death_count += 1;
+    //         }
+    //     }
 
-        DefenderReturnType {
-            attacker_health: attacker.attacker_health,
-            defender_response: defenders_damaged,
-            bullet_hits,
-            state: self.clone(),
-        }
-    }
+    //     DefenderReturnType {
+    //         attacker_health: attacker.attacker_health,
+    //         defender_response: defenders_damaged,
+    //         state: self.clone(),
+    //     }
+    // }
 
     pub fn mine_blast(&mut self, start_pos: Option<Coords>) -> Vec<MineDetails> {
         let mut damage_to_attacker;
@@ -651,6 +650,67 @@ impl State {
         self.bombs.total_count -= 1;
 
         buildings_damaged
+    }
+
+    pub fn defender_movement_new_tick(
+        &mut self,
+        attacker_position: Coords,
+        shortest_path: &HashMap<SourceDestXY, Coords>,
+    ) -> DefenderReturnType {
+        let attacker = self.attacker.as_mut().unwrap();
+        let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+
+        for defender in self.defenders.iter_mut() {
+            if !defender.is_alive || defender.target_id.is_none() {
+                continue;
+            }
+
+            let next_hop = shortest_path
+                .get(&SourceDestXY {
+                    source_x: defender.defender_pos.x,
+                    source_y: defender.defender_pos.y,
+                    dest_x: attacker_position.x,
+                    dest_y: attacker_position.y,
+                })
+                .unwrap_or(&defender.defender_pos);
+
+            defender.defender_pos = *next_hop;
+
+            // if defender.name.starts_with("Hut") {
+            if attacker_position.x == defender.defender_pos.x
+                && attacker_position.y == defender.defender_pos.y
+            {
+                log::info!(
+                    "Defender pos {} {}",
+                    defender.defender_pos.x,
+                    defender.defender_pos.y
+                );
+
+                defenders_damaged.push(DefenderResponse {
+                    id: defender.id,
+                    position: defender.defender_pos,
+                    damage: defender.damage,
+                });
+                defender.is_alive = false;
+                attacker.attacker_health = max(0, attacker.attacker_health - defender.damage);
+            }
+            // }
+        }
+
+        // if attacker is dead, no need to move the defenders
+        if attacker.attacker_health == 0 {
+            return DefenderReturnType {
+                attacker_health: attacker.attacker_health,
+                defender_response: defenders_damaged,
+                state: self.clone(),
+            };
+        }
+
+        DefenderReturnType {
+            attacker_health: attacker.attacker_health,
+            defender_response: defenders_damaged,
+            state: self.clone(),
+        }
     }
     pub fn defender_ranged_attack(&mut self, frame_number: i32) -> DefenderReturnType {
         // log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);

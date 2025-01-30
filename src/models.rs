@@ -45,15 +45,15 @@ pub struct NewAttackType<'a> {
     pub attack_damage: &'a i32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct AttackerPath {
-    pub id: usize,
-    pub y_coord: i32,
-    pub x_coord: i32,
-    pub is_emp: bool,
-    pub emp_type: Option<i32>,
-    pub emp_time: Option<i32>,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub struct AttackerPath {
+//     pub id: usize,
+//     pub y_coord: i32,
+//     pub x_coord: i32,
+//     pub is_emp: bool,
+//     pub emp_type: Option<i32>,
+//     pub emp_time: Option<i32>,
+// }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NewAttackerPath {

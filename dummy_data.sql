@@ -120,18 +120,18 @@ COPY public.building_type FROM stdin;
 \.
 
 COPY public.defender_type FROM stdin;
-1	4	50	1	10	Defender_1	1
-2	4	40	1	10	Defender_2	2
-3	4	30	1	10	Defender_3	3
-4	4	60	2	150	Defender_1	4
-5	4	50	2	250	Defender_2	5
-6	4	40	2	350	Defender_3	6
-7	4	70	3	-1	Defender_1	7
-8	4	60	3	-1	Defender_2	8
-9	4	50	3	-1	Defender_3	9
-10	4	20	1	-1	Hut_Defender	19
-11	4	30	2	-1	Hut_Defender	20
-12	4	50	3	-1	Hut_Defender	21
+1	1	50	1	10	Defender_1	1
+2	1	40	1	10	Defender_2	2
+3	1	30	1	10	Defender_3	3
+4	1	60	2	150	Defender_1	4
+5	1	50	2	250	Defender_2	5
+6	1	40	2	350	Defender_3	6
+7	1	70	3	-1	Defender_1	7
+8	1	60	3	-1	Defender_2	8
+9	1	50	3	-1	Defender_3	9
+10	1	20	1	-1	Hut_Defender	19
+11	1	30	2	-1	Hut_Defender	20
+12	1	50	3	-1	Hut_Defender	21
 \.
 
 COPY public.emp_type FROM stdin;
@@ -153,15 +153,15 @@ COPY public.mine_type FROM stdin;
 \.
 
 COPY public.attacker_type FROM stdin;
-1	100	4	10	1	10	Attacker_1	0
-2	120	4	12	1	10	Attacker_2	0
-3	80	4	8	1	10	Attacker_3	0
-4	150	4	15	2	80	Attacker_1	0
-5	180	4	18	2	100	Attacker_2	0
-6	120	4	12	2	60	Attacker_3	0
-7	200	4	20	3	-1	Attacker_1	0
-8	240	4	24	3	-1	Attacker_2	0
-9	160	4	16	3	-1	Attacker_3	0
+1	100	1	10	1	10	Attacker_1	0
+2	120	1	12	1	10	Attacker_2	0
+3	80	1	8	1	10	Attacker_3	0
+4	150	1	15	2	80	Attacker_1	0
+5	180	1	18	2	100	Attacker_2	0
+6	120	1	12	2	60	Attacker_3	0
+7	200	1	20	3	-1	Attacker_1	0
+8	240	1	24	3	-1	Attacker_2	0
+9	160	1	16	3	-1	Attacker_3	0
 \.
 
 COPY public.block_type FROM stdin;

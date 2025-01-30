@@ -5,7 +5,7 @@ use crate::models::UpdateUser;
 use actix_web::error::{ErrorBadRequest, ErrorConflict, ErrorNotFound};
 use actix_web::web::{self, Data, Json, Path};
 use actix_web::{Responder, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 pub mod util;
 
@@ -22,14 +22,14 @@ pub struct InputUser {
     username: String,
 }
 
-#[derive(Debug, Serialize)]
-struct ErrorResponse {
-    message: String,
-}
-#[derive(Debug, Serialize)]
-struct SuccessResponse {
-    message: String,
-}
+// #[derive(Debug, Serialize)]
+// struct ErrorResponse {
+//     message: String,
+// }
+// #[derive(Debug, Serialize)]
+// struct SuccessResponse {
+//     message: String,
+// }
 async fn register(
     pg_pool: Data<PgPool>,
     redis_pool: Data<RedisPool>,

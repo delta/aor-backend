@@ -219,8 +219,8 @@ pub fn game_handler(
 
                 let attacker_result_clone = attacker_result.clone().unwrap();
 
-                defender_damaged_result =
-                    _game_state.defender_movement(attacker_delta.clone(), _shortest_path);
+                defender_damaged_result = _game_state
+                    .defender_movement_new_tick(socket_request.start_position?, _shortest_path);
 
                 for coord in attacker_delta {
                     let mut direction = Direction::Up;
@@ -275,16 +275,16 @@ pub fn game_handler(
                 let spawn_result = _game_state
                     .spawn_hut_defender(
                         _roads,
-                        Attacker {
-                            id: attacker.id,
-                            path_in_current_frame: attacker_delta_clone.clone(),
-                            attacker_pos: socket_request.start_position.unwrap(),
-                            attacker_health: attacker.max_health,
-                            attacker_speed: attacker.speed,
-                            bombs: Vec::new(),
-                            trigger_defender: false,
-                            bomb_count: attacker.amt_of_emps,
-                        },
+                        // Attacker {
+                        //     id: attacker.id,
+                        //     path_in_current_frame: attacker_delta_clone.clone(),
+                        //     attacker_pos: socket_request.start_position.unwrap(),
+                        //     attacker_health: attacker.max_health,
+                        //     attacker_speed: attacker.speed,
+                        //     bombs: Vec::new(),
+                        //     trigger_defender: false,
+                        //     bomb_count: attacker.amt_of_emps,
+                        // },
                     )
                     .unwrap();
 

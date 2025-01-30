@@ -440,6 +440,7 @@ async fn socket_handler(
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {
             id: defender.id,
+            name: defender.name.clone(),
             radius: prop.range,
             speed: defender.speed,
             damage: defender.damage,
@@ -541,6 +542,7 @@ pub fn get_hut_defender(
         .into_iter()
         .map(|(block_type, defender_type, prop)| DefenderDetails {
             id: defender_type.id,
+            name: defender_type.name.clone(),
             radius: prop.range,
             speed: defender_type.speed,
             damage: defender_type.damage,
