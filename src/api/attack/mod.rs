@@ -394,6 +394,7 @@ async fn socket_handler(
             nd: 0,
             oa: 0,
             od: 0,
+            sc: 0,
         },
     };
 
@@ -582,6 +583,9 @@ async fn socket_handler(
                     }
                 }
                 Message::Close(_s) => {
+                    if game_logs.d.is_pragyan {
+                        //challenge game terminate
+                    }
                     if util::terminate_game(
                         game_logs,
                         &mut conn,

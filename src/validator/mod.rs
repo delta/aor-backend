@@ -194,6 +194,10 @@ pub fn game_handler(
                     },
                 );
 
+                if let Some(challenge) = _game_state.challenge {
+                    _game_log.r.sc = challenge.score;
+                }
+
                 // let attacker_result_clone = attacker_result.clone().unwrap();
 
                 defender_damaged_result = _game_state

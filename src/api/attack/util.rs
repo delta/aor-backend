@@ -91,6 +91,7 @@ pub struct ResultResponse {
     pub nd: i32, //new_defender_trophies
     pub oa: i32, //old_attacker_trophies
     pub od: i32, //old_defender_trophies
+    pub sc: i32, //challenge_score
 }
 
 #[derive(Serialize, Clone)]
