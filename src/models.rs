@@ -263,6 +263,7 @@ pub struct User {
     pub trophies: i32,
     pub avatar_id: i32,
     pub artifacts: i32,
+    pub is_mod: bool,
 }
 
 #[derive(Insertable, Debug)]
