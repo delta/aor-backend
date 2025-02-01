@@ -1,0 +1,683 @@
+{
+  "2": {
+    "building": [
+      {
+        "id": 1,
+        "cost": 10,
+        "blockId": 1,
+        "mapSpaceId": 334,
+        "level": 1,
+        "name": "Bank",
+        "widthInTiles": 3,
+        "lengthInTiles": 3,
+        "posX": 1,
+        "posY": 1,
+        "artifacts": 0,
+        "hp": 120,
+        "isBank": true,
+        "isDefenceBuilding": false,
+        "capacity": 2147483647,
+        "range": 0,
+        "frequency": 0,
+        "isPlaced": true
+      }
+    ],
+    "defenders": [],
+    "mineType": [
+      {
+        "id": 55,
+        "blockId": 55,
+        "mapSpaceId": 251,
+        "level": 1,
+        "cost": 10,
+        "name": "",
+        "widthInTiles": 1,
+        "lengthInTiles": 1,
+        "posX": 16,
+        "posY": 16,
+        "isPlaced": true,
+        "radius": 5,
+        "damage": 50
+      }
+    ],
+    "road": [
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 1
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 2
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 3
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 4
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 5
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 6
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 7
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 8
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 9
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 10
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 11
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 12
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 13
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 14
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 15
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 0,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 1,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 1,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 2,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 2,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 3,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 3,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 4,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 4,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 5,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 5,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 6,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 6,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 7,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 7,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 8,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 8,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 9,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 9,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 10,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 10,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 11,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 11,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 12,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 12,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 13,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 13,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 14,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 14,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 15,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 15,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 16,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 17,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 17,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 18,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 18,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 19,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 19,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 20,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 20,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 21,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 21,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 22,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 22,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 23,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 23,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 24,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 24,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 25,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 25,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 26,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 26,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 27,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 27,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 28,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 28,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 29,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 29,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 30,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 30,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 31,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 31,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 32,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 32,
+        "posY": 16
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 32,
+        "posY": 17
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 32,
+        "posY": 18
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 32,
+        "posY": 19
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 32,
+        "posY": 20
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 33,
+        "posY": 0
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 33,
+        "posY": 20
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 34,
+        "posY": 20
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 35,
+        "posY": 20
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 36,
+        "posY": 20
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 37,
+        "posY": 20
+      },
+      {
+        "id": 0,
+        "mapSpaceId": 12,
+        "blockId": 0,
+        "posX": 38,
+        "posY": 20
+      }
+    ]
+  }
+}

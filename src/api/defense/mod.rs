@@ -8,12 +8,20 @@ use super::PgPool;
 use super::RedisPool;
 use crate::api::error;
 use crate::api::util::HistoryboardQuery;
+use crate::constants::MOD_USER_BASE_PATH;
 use crate::models::*;
 use actix_web::error::{ErrorBadRequest, ErrorNotFound};
 use actix_web::web::{self, Data, Json};
 use actix_web::{Responder, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::fs::OpenOptions;
+use std::hash::Hash;
+use std::io::Read;
+use std::io::Write;
+use util::AdminSaveData;
 
 pub mod shortest_path;
 pub mod util;
@@ -29,6 +37,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/transfer").route(web::post().to(post_transfer_artifacts)))
     .service(web::resource("/batch_transfer").route(web::post().to(post_batch_transfer_artifacts)))
     .service(web::resource("/save").route(web::put().to(confirm_base_details)))
+    .service(web::resource("/save_admin").route(web::put().to(save_admin_base)))
     .service(web::resource("/game/{id}").route(web::get().to(get_game_base_details)))
     .service(web::resource("/history").route(web::get().to(defense_history)))
     .service(web::resource("/{defender_id}").route(web::get().to(get_other_base_details)))
@@ -353,7 +362,6 @@ async fn get_user_base_details(pool: Data<PgPool>, user: AuthUser) -> Result<imp
         let mut conn = pool.get()?;
         let user = fetch_user(&mut conn, defender_id)?;
         let map = util::fetch_map_layout(&mut conn, &defender_id)?;
-        log::info!("User {:?}", user);
         util::get_details_from_map_layout(&mut conn, map, user)
     })
     .await?
@@ -466,7 +474,8 @@ async fn confirm_base_details(
     }
 
     let map_spaces = map_spaces.into_inner();
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
+        pool.get().map_err(|err| error::handle_error(err.into()))?;
     let (map, blocks, mut level_constraints, buildings, defenders, mines, user_artifacts) =
         web::block(move || {
             let map = util::fetch_map_layout(&mut conn, &defender_id)?;
@@ -512,6 +521,54 @@ async fn confirm_base_details(
     .map_err(|err| error::handle_error(err.into()))?;
 
     Ok("Saved successfully")
+}
+
+async fn save_admin_base(
+    save_data: Json<AdminSaveData>,
+    redis_pool: Data<RedisPool>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let defender_id = user.0;
+    let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
+        pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let is_mod = web::block(move || fetch_user(&mut conn, defender_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+        .unwrap()
+        .is_mod;
+
+    if is_mod {
+        log::info!("{:?}", save_data);
+        let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+        log::info!("Json path: {}", json_path.display());
+        let mut json_data_str = String::new();
+        if json_path.exists() {
+            let mut file = fs::File::open(json_path.clone())?;
+            file.read_to_string(&mut json_data_str)?;
+        }
+
+        let mut json_data: HashMap<i32, AdminSaveData> = if json_data_str.is_empty() {
+            HashMap::new()
+        } else {
+            serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+        };
+
+        json_data.insert(defender_id, save_data.into_inner());
+        log::info!("Json data {:?}", json_data);
+
+        let updated_json_str = serde_json::to_string_pretty(&json_data)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(json_path)?;
+        file.write_all(updated_json_str.as_bytes())?;
+
+        Ok("Saved Admin")
+    } else {
+        Ok("Saved")
+    }
 }
 
 async fn defense_history(
