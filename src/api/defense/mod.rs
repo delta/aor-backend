@@ -353,6 +353,7 @@ async fn get_user_base_details(pool: Data<PgPool>, user: AuthUser) -> Result<imp
         let mut conn = pool.get()?;
         let user = fetch_user(&mut conn, defender_id)?;
         let map = util::fetch_map_layout(&mut conn, &defender_id)?;
+        log::info!("User {:?}", user);
         util::get_details_from_map_layout(&mut conn, map, user)
     })
     .await?

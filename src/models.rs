@@ -278,6 +278,7 @@ pub struct NewUser<'a> {
     pub trophies: &'a i32,
     pub avatar_id: &'a i32,
     pub artifacts: &'a i32,
+    pub is_mod: &'a bool,
 }
 
 #[derive(Queryable, Deserialize, Serialize)]

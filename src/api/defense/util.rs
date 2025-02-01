@@ -433,6 +433,7 @@ pub fn get_details_from_map_layout(
             artifacts: user.artifacts,
             email: user.email,
             token: None,
+            is_mod: user.is_mod,
         })
     } else {
         None
@@ -979,6 +980,7 @@ pub fn add_user_default_base(
             email: user_email,
             username,
             is_pragyan: &false,
+            is_mod: &false,
             attacks_won: &0,
             defenses_won: &0,
             trophies: &INITIAL_RATING,
