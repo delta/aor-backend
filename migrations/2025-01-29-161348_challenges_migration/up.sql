@@ -30,3 +30,5 @@ CREATE TABLE challenges_responses
     CONSTRAINT chall_response_mapid FOREIGN KEY (map_id) REFERENCES map_layout(id),
     CONSTRAINT unique_attacker_challenge UNIQUE (attacker_id, challenge_id)
 );
+
+ALTER TABLE "user" ADD COLUMN is_mod BOOLEAN NOT NULL;
