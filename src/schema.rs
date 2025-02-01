@@ -89,6 +89,7 @@ diesel::table! {
         cost -> Int4,
         name -> Varchar,
         prop_id -> Int4,
+        max_health -> Int4,
     }
 }
 

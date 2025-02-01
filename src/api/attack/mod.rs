@@ -6,7 +6,9 @@ use super::defense::util::{
 };
 use super::user::util::fetch_user;
 use super::{error, PgPool, RedisPool};
-use crate::api::attack::socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse};
+use crate::api::attack::socket::{
+    BuildingDamageResponse, ResultType, SocketRequest, SocketResponse,
+};
 use crate::api::util::HistoryboardQuery;
 use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
 use crate::models::{AttackerType, User};
@@ -18,6 +20,7 @@ use actix_web::error::ErrorBadRequest;
 use actix_web::web::{Data, Json};
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
 use log;
+use socket::BaseItemsDamageResponse;
 use std::collections::{HashMap, HashSet};
 use std::time;
 
@@ -367,7 +370,10 @@ async fn socket_handler(
         return Err(ErrorBadRequest("Internal Server Error"));
     }
 
-    let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
+    let mut damaged_base_items: BaseItemsDamageResponse = BaseItemsDamageResponse {
+        buildings_damaged: Vec::new(),
+        defenders_damaged: Vec::new(),
+    };
 
     let game_log = GameLog {
         g: game_id,
@@ -474,7 +480,7 @@ async fn socket_handler(
                                         if util::terminate_game(
                                             game_logs,
                                             &mut conn,
-                                            &damaged_buildings,
+                                            &damaged_base_items.buildings_damaged,
                                             &mut redis_conn,
                                         )
                                         .is_err()
@@ -561,7 +567,7 @@ async fn socket_handler(
                     if util::terminate_game(
                         game_logs,
                         &mut conn,
-                        &damaged_buildings,
+                        &damaged_base_items.buildings_damaged,
                         &mut redis_conn,
                     )
                     .is_err()
@@ -613,7 +619,7 @@ async fn socket_handler(
                     defender_damaged: None,
                     hut_triggered: false,
                     hut_defenders: None,
-                    damaged_buildings: None,
+                    damaged_base_items: None,
                     total_damage_percentage: None,
                     is_sync: false,
                     is_game_over: true,

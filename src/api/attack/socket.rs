@@ -29,7 +29,7 @@ pub struct SocketResponse {
     pub defender_damaged: Option<Vec<DefenderResponse>>,
     pub hut_triggered: bool,
     pub hut_defenders: Option<Vec<DefenderDetails>>,
-    pub damaged_buildings: Option<Vec<BuildingResponse>>,
+    pub damaged_base_items: Option<BaseItemsDamageResponse>,
     pub total_damage_percentage: Option<f32>,
     pub is_sync: bool,
     // pub state: Option<GameStateResponse>,
@@ -76,11 +76,24 @@ pub struct DefenderResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct BuildingResponse {
+pub struct BuildingDamageResponse {
     pub id: i32,
     pub position: Coords,
     pub hp: i32,
     pub artifacts_if_damaged: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DefenderDamageResponse {
+    pub defender_id: i32,
+    pub position: Coords,
+    pub health: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BaseItemsDamageResponse {
+    pub buildings_damaged: Vec<BuildingDamageResponse>,
+    pub defenders_damaged: Vec<DefenderDamageResponse>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::attack::{
-        socket::{ActionType, BuildingResponse, ResultType, SocketRequest, SocketResponse},
+        socket::{
+            ActionType, BaseItemsDamageResponse, BuildingDamageResponse, ResultType, SocketRequest,
+            SocketResponse,
+        },
         util::{EventResponse, GameLog},
     },
     models::AttackerType,
@@ -30,7 +33,7 @@ pub fn game_handler(
 ) -> Option<Result<SocketResponse>> {
     let defender_damaged_result: DefenderReturnType;
     let exploded_mines_result: Vec<MineDetails>;
-    let buildings_damaged_result: Vec<BuildingResponse>;
+    let base_items_damaged_result: BaseItemsDamageResponse;
     match socket_request.action_type {
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
@@ -90,7 +93,7 @@ pub fn game_handler(
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
-                damaged_buildings: None,
+                damaged_base_items: None,
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
@@ -211,7 +214,7 @@ pub fn game_handler(
                     exploded_mines: None,
                     // triggered_defenders: Some(defender_damaged_result.clone().defender_response),
                     defender_damaged: Some(defender_damaged_result.clone().defender_response),
-                    damaged_buildings: None,
+                    damaged_base_items: None,
                     hut_triggered,
                     hut_defenders: Some(spawn_result),
                     total_damage_percentage: Some(_game_state.damage_percentage),
@@ -261,7 +264,7 @@ pub fn game_handler(
                 exploded_mines: Some(exploded_mines_result),
                 // triggered_defenders: None,
                 defender_damaged: None,
-                damaged_buildings: None,
+                damaged_base_items: None,
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
@@ -307,14 +310,14 @@ pub fn game_handler(
             //     _game_log.e.push(event_response.clone());
             // }
 
-            buildings_damaged_result = _game_state.place_bombs(current_pos, bomb_coords);
+            base_items_damaged_result = _game_state.place_bombs(current_pos, bomb_coords);
 
             _game_log.r.b += 1;
             _game_log.r.d = _game_state.damage_percentage as i32;
             _game_log.r.a = _game_state.artifacts;
 
             let mut bool_temp = false;
-            if !buildings_damaged_result.is_empty() {
+            if !base_items_damaged_result.buildings_damaged.is_empty() || !base_items_damaged_result.defenders_damaged.is_empty() {
                 bool_temp = true;
             }
             let result_type = if bool_temp {
@@ -339,7 +342,7 @@ pub fn game_handler(
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
-                damaged_buildings: Some(buildings_damaged_result),
+                damaged_base_items: Some(base_items_damaged_result),
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
@@ -358,7 +361,7 @@ pub fn game_handler(
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
-                damaged_buildings: None,
+                damaged_base_items: None,
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
@@ -376,7 +379,7 @@ pub fn game_handler(
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
-                damaged_buildings: None,
+                damaged_base_items: None,
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
@@ -397,7 +400,7 @@ pub fn game_handler(
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
-                damaged_buildings: None,
+                damaged_base_items: None,
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),

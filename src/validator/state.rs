@@ -4,9 +4,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
+use crate::{api::attack::socket::BaseItemsDamageResponse, constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE}};
 use crate::{
-    api::attack::socket::{BuildingResponse, DefenderResponse},
+    api::attack::socket::{BuildingDamageResponse, DefenderResponse, DefenderDamageResponse},
     validator::util::{
         Attacker, BuildingDetails, Coords, DefenderDetails, DefenderReturnType, InValidation,
         MineDetails, SourceDestXY,
@@ -376,7 +376,7 @@ impl State {
         &mut self,
         current_pos: Coords,
         bomb_position: Coords,
-    ) -> Vec<BuildingResponse> {
+    ) -> BaseItemsDamageResponse {
         // if attacker_current.bombs.len() - attacker.bombs.len() > 1 {
 
         // }
@@ -569,9 +569,9 @@ impl State {
         triggered_mines
     }
 
-    pub fn bomb_blast(&mut self, bomb_position: Coords) -> Vec<BuildingResponse> {
+    pub fn bomb_blast(&mut self, bomb_position: Coords) -> BaseItemsDamageResponse {
         let bomb = &mut self.bombs;
-        let mut buildings_damaged: Vec<BuildingResponse> = Vec::new();
+        let mut buildings_damaged: Vec<BuildingDamageResponse> = Vec::new();
         for building in self.buildings.iter_mut() {
             if building.current_hp > 0 {
                 let mut artifacts_taken_by_destroying_building: i32 = 0;
@@ -630,10 +630,66 @@ impl State {
                 continue;
             }
         }
+        let mut defenders_damaged: Vec<DefenderDamageResponse> = Vec::new();
+        for defender in self.defenders.iter_mut() {
+            if defender.current_health > 0 {
+                let defender_position = Coords {
+                    x: defender.defender_pos.x,
+                    y: defender.defender_pos.y,
+                };
+                let defender_position_matrix = HashSet::from([defender_position]);
+
+                let bomb_matrix: HashSet<Coords> = (bomb_position.y - bomb.radius
+                    ..bomb_position.y + bomb.radius + 1)
+                    .flat_map(|y| {
+                        (bomb_position.x - bomb.radius..bomb_position.x + bomb.radius + 1)
+                            .map(move |x| Coords { x, y })
+                    })
+                    .collect();
+
+                let coinciding_coords_damage = defender_position_matrix.intersection(&bomb_matrix).count();
+                if coinciding_coords_damage > 0 {
+                    let old_health = defender.current_health;
+                    let mut current_damage = (bomb.damage as f32 * 0.5).round() as i32;
+
+                    defender.current_health -= current_damage;
+
+                    if defender.current_health <= 0 {
+                        defender.current_health = 0;
+                        current_damage = old_health;
+                        self.damage_percentage +=
+                            (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
+                    } else {
+                        self.damage_percentage +=
+                            (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
+                    }
+
+                    defenders_damaged.push(DefenderDamageResponse {
+                        position: defender_position,
+                        health: defender.current_health,
+                        defender_id: defender.defender_id,
+                    });
+                }
+            } else {
+                continue;
+            }
+        }
+
+        for defender in defenders_damaged.iter() {
+            if defender.health > 0 {
+                log::info!("Defender:{} is damaged", defender.defender_id);
+            }
+            if defender.health == 0 {
+                log::info!("Defender:{} is dead", defender.defender_id);
+            }
+        }
 
         self.bombs.total_count -= 1;
-
-        buildings_damaged
+        let base_items_damaged= BaseItemsDamageResponse {
+            buildings_damaged: buildings_damaged.clone(),
+            defenders_damaged: defenders_damaged.clone(),
+        };
+        base_items_damaged
     }
 
     pub fn defender_movement_one_tick(

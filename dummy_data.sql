@@ -120,18 +120,18 @@ COPY public.building_type FROM stdin;
 \.
 
 COPY public.defender_type FROM stdin;
-1	1	50	1	10	Defender_1	1
-2	1	40	1	10	Defender_2	2
-3	1	30	1	10	Defender_3	3
-4	1	60	2	150	Defender_1	4
-5	1	50	2	250	Defender_2	5
-6	1	40	2	350	Defender_3	6
-7	1	70	3	-1	Defender_1	7
-8	1	60	3	-1	Defender_2	8
-9	1	50	3	-1	Defender_3	9
-10	1	20	1	-1	Hut_Defender	19
-11	1	30	2	-1	Hut_Defender	20
-12	1	50	3	-1	Hut_Defender	21
+1	1	50	1	10	Defender_1	1	120
+2	1	40	1	10	Defender_2	2	120
+3	1	30	1	10	Defender_3	3	120
+4	1	60	2	150	Defender_1	4	120
+5	1	50	2	250	Defender_2	5	120
+6	1	40	2	350	Defender_3	6	120
+7	1	70	3	-1	Defender_1	7	120
+8	1	60	3	-1	Defender_2	8	120
+9	1	50	3	-1	Defender_3	9	120
+10	1	20	1	-1	Hut_Defender	19	100
+11	1	30	2	-1	Hut_Defender	20	100
+12	1	50	3	-1	Hut_Defender	21	100
 \.
 
 COPY public.emp_type FROM stdin;

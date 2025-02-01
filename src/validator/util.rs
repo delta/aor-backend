@@ -54,6 +54,8 @@ pub struct DefenderDetails {
     pub path_in_current_frame: Vec<Coords>,
     pub block_id: i32,
     pub level: i32,
+    pub current_health: i32,
+    pub total_health: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -140,7 +142,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         attacker_health: None,
         exploded_mines: None,
         defender_damaged: None,
-        damaged_buildings: None,
+        damaged_base_items: None,
         hut_triggered: false,
         hut_defenders: None,
         total_damage_percentage: None,
