@@ -21,6 +21,7 @@ use std::fs::OpenOptions;
 use std::hash::Hash;
 use std::io::Read;
 use std::io::Write;
+use util::AdminBaseRequest;
 use util::AdminSaveData;
 
 pub mod shortest_path;
@@ -33,6 +34,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
             .route(web::put().to(set_base_details))
             .route(web::get().to(get_user_base_details)),
     )
+    .service(web::resource("/admin_base").route(web::get().to(get_admin_base)))
     .service(web::resource("/top").route(web::get().to(get_top_defenses)))
     .service(web::resource("/transfer").route(web::post().to(post_transfer_artifacts)))
     .service(web::resource("/batch_transfer").route(web::post().to(post_batch_transfer_artifacts)))
@@ -370,6 +372,52 @@ async fn get_user_base_details(pool: Data<PgPool>, user: AuthUser) -> Result<imp
     Ok(Json(response))
 }
 
+async fn get_admin_base(
+    base_req: Json<AdminBaseRequest>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let defender_id = user.0;
+    let base_req = base_req.into_inner();
+    let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
+        pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let is_mod = web::block(move || fetch_user(&mut conn, defender_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+        .unwrap()
+        .is_mod;
+
+    log::info!("{:?}", base_req.map_id);
+    let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+    log::info!("Json path: {}", json_path.display());
+    let mut json_data_str = String::new();
+    if json_path.exists() {
+        let mut file = fs::File::open(json_path.clone())?;
+        file.read_to_string(&mut json_data_str)?;
+    }
+
+    let json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
+        HashMap::new()
+    } else {
+        serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+    };
+
+    let default_user_rec = HashMap::new();
+    let map_data = json_data.get(&defender_id).unwrap_or(&default_user_rec);
+    let map_data = map_data
+        .get(&base_req.map_id)
+        .unwrap_or(&AdminSaveData {
+            map_id: base_req.map_id,
+            building: Vec::new(),
+            defenders: Vec::new(),
+            mine_type: Vec::new(),
+            road: Vec::new(),
+        })
+        .clone();
+    Ok(Json(map_data))
+}
+
 async fn get_other_base_details(
     defender_id: web::Path<i32>,
     pool: web::Data<PgPool>,
@@ -530,6 +578,7 @@ async fn save_admin_base(
     user: AuthUser,
 ) -> Result<impl Responder> {
     let defender_id = user.0;
+    let save_data = save_data.into_inner();
     let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
         pool.get().map_err(|err| error::handle_error(err.into()))?;
 
@@ -549,13 +598,20 @@ async fn save_admin_base(
             file.read_to_string(&mut json_data_str)?;
         }
 
-        let mut json_data: HashMap<i32, AdminSaveData> = if json_data_str.is_empty() {
+        let mut json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
             HashMap::new()
         } else {
             serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
         };
+        let user_record = json_data.get_mut(&defender_id);
+        if let Some(user_record) = user_record {
+            user_record.insert(save_data.map_id, save_data);
+        } else {
+            let mut user_record = HashMap::new();
+            user_record.insert(save_data.map_id, save_data);
+            json_data.insert(defender_id, user_record);
+        }
 
-        json_data.insert(defender_id, save_data.into_inner());
         log::info!("Json data {:?}", json_data);
 
         let updated_json_str = serde_json::to_string_pretty(&json_data)?;
@@ -564,11 +620,8 @@ async fn save_admin_base(
             .truncate(true)
             .open(json_path)?;
         file.write_all(updated_json_str.as_bytes())?;
-
-        Ok("Saved Admin")
-    } else {
-        Ok("Saved")
     }
+    Ok("Saved Admin")
 }
 
 async fn defense_history(

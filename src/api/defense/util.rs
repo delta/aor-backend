@@ -135,80 +135,92 @@ pub struct DefenceHistoryResponse {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildingSave {
-    id: i32,
-    cost: i32,
-    block_id: i32,
-    map_space_id: i32,
-    level: i32,
-    name: String,
-    width_in_tiles: i32,
-    length_in_tiles: i32,
-    pos_x: i32,
-    pos_y: i32,
-    artifacts: i32,
-    hp: i32,
-    is_bank: bool,
-    is_defence_building: bool,
-    capacity: i32,
-    range: i32,
-    frequency: i32,
-    is_placed: bool,
+    pub id: i32,
+    pub cost: i32,
+    pub block_id: i32,
+    pub map_space_id: i32,
+    pub level: i32,
+    pub name: String,
+    pub width_in_tiles: i32,
+    pub length_in_tiles: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub artifacts: i32,
+    pub hp: i32,
+    pub is_bank: bool,
+    pub is_defence_building: bool,
+    pub capacity: i32,
+    pub range: i32,
+    pub frequency: i32,
+    pub is_placed: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DefenderSave {
-    radius: i32,
-    speed: i32,
-    damage: i32,
-    id: i32,
-    block_id: i32,
-    map_space_id: i32,
-    level: i32,
-    cost: i32,
-    name: String,
-    width_in_tiles: i32,
-    length_in_tiles: i32,
-    pos_x: i32,
-    pos_y: i32,
-    is_placed: bool,
+    pub radius: i32,
+    pub speed: i32,
+    pub damage: i32,
+    pub id: i32,
+    pub block_id: i32,
+    pub map_space_id: i32,
+    pub level: i32,
+    pub cost: i32,
+    pub name: String,
+    pub width_in_tiles: i32,
+    pub length_in_tiles: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub is_placed: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MineSave {
-    id: i32,
-    block_id: i32,
-    map_space_id: i32,
-    level: i32,
-    cost: i32,
-    name: String,
-    width_in_tiles: i32,
-    length_in_tiles: i32,
-    pos_x: i32,
-    pos_y: i32,
-    is_placed: bool,
-    radius: i32,
-    damage: i32,
+    pub id: i32,
+    pub block_id: i32,
+    pub map_space_id: i32,
+    pub level: i32,
+    pub cost: i32,
+    pub name: String,
+    pub width_in_tiles: i32,
+    pub length_in_tiles: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub is_placed: bool,
+    pub radius: i32,
+    pub damage: i32,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoadSave {
-    id: i32,
-    map_space_id: i32,
-    block_id: i32,
-    pos_x: i32,
-    pos_y: i32,
+    pub id: i32,
+    pub map_space_id: i32,
+    pub block_id: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminSaveData {
-    building: Vec<BuildingSave>,
-    defenders: Vec<DefenderSave>,
-    mine_type: Vec<MineSave>,
-    road: Vec<RoadSave>,
+    pub map_id: i32,
+    pub building: Vec<BuildingSave>,
+    pub defenders: Vec<DefenderSave>,
+    pub mine_type: Vec<MineSave>,
+    pub road: Vec<RoadSave>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminBaseRequest {
+    pub map_id: i32,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+pub struct AdminBaseResponse {
+    base: AdminSaveData,
 }
 
 pub fn check_valid_map_id(
