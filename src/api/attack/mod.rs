@@ -517,8 +517,10 @@ async fn socket_handler(
                                     //     }
                                     // }
                                     else if response.result_type == ResultType::BuildingsDamaged {
-                                        damaged_buildings
-                                            .extend(response.damaged_buildings.unwrap());
+                                        damaged_base_items.buildings_damaged
+                                            .extend(response.damaged_base_items.clone().unwrap().buildings_damaged);
+                                        damaged_base_items.defenders_damaged
+                                            .extend(response.damaged_base_items.clone().unwrap().defenders_damaged);
                                         // if util::deduct_artifacts_from_building(
                                         //     response.damaged_buildings.unwrap(),
                                         //     &mut conn,

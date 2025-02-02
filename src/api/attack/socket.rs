@@ -70,7 +70,7 @@ pub struct MineResponse {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct DefenderResponse {
-    pub mapSpaceId: i32,
+    pub map_space_id: i32,
     pub position: Coords,
     pub damage: i32,
 }
@@ -85,7 +85,7 @@ pub struct BuildingDamageResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DefenderDamageResponse {
-    pub defender_id: i32,
+    pub map_space_id: i32,
     pub position: Coords,
     pub health: i32,
 }

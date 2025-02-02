@@ -617,7 +617,7 @@ pub fn get_defenders(
         let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {
-            mapSpaceId: map_space.id,
+            map_space_id: map_space.id,
             name: defender.name.clone(),
             radius: prop.range,
             speed: defender.speed,
@@ -630,7 +630,7 @@ pub fn get_defenders(
             block_id: block_type.id,
             level: defender.level,
             current_health: defender.max_health,
-            total_health: defender.max_health,
+            max_health: defender.max_health,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -698,7 +698,7 @@ pub fn get_hut_defender(
     let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
     for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
         hut_defender_array.push(DefenderDetails {
-            mapSpaceId: (i + 1) as i32,
+            map_space_id: (i + 1) as i32,
             name: defender_type.name.clone(),
             radius: prop.range,
             speed: defender_type.speed,
@@ -711,7 +711,7 @@ pub fn get_hut_defender(
             block_id: block_type.id,
             level: defender_type.level,
             current_health: defender_type.max_health,
-            total_health: defender_type.max_health,
+            max_health: defender_type.max_health,
         });
         log::info!("hut_defenders {:?}", i);
     }

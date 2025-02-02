@@ -4,9 +4,12 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{api::attack::socket::BaseItemsDamageResponse, constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE}};
 use crate::{
-    api::attack::socket::{BuildingDamageResponse, DefenderResponse, DefenderDamageResponse},
+    api::attack::socket::BaseItemsDamageResponse,
+    constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE},
+};
+use crate::{
+    api::attack::socket::{BuildingDamageResponse, DefenderDamageResponse, DefenderResponse},
     validator::util::{
         Attacker, BuildingDetails, Coords, DefenderDetails, DefenderReturnType, InValidation,
         MineDetails, SourceDestXY,
@@ -14,7 +17,7 @@ use crate::{
 };
 
 use serde::{Deserialize, Serialize};
-
+use chrono::Local;
 use super::util::{select_side_hut_defender, BombType, HutDefenderDetails};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -582,7 +585,9 @@ impl State {
                     .map(move |x| Coords { x, y })
             })
             .collect();
-        log::info!("Bomb position : {}, {}, range x: {} to {} range y: {} to {}", bomb_position.x, bomb_position.y, bomb_position.x - bomb.radius, bomb_position.x + bomb.radius, bomb_position.y - bomb.radius, bomb_position.y + bomb.radius);
+        let now = Local::now();
+        let time24 = now.format("%H:%M:%S").to_string();
+        log::info!("BOMB EXPLODED! time : {}", time24);
         for building in self.buildings.iter_mut() {
             if building.current_hp > 0 {
                 let mut artifacts_taken_by_destroying_building: i32 = 0;
@@ -622,7 +627,7 @@ impl State {
                             (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
                     }
 
-                    buildings_damaged.push(BuildingResponse {
+                    buildings_damaged.push(BuildingDamageResponse {
                         id: building.map_space_id,
                         position: building.tile,
                         hp: building.current_hp,
@@ -641,7 +646,8 @@ impl State {
                     y: defender.defender_pos.y,
                 };
                 let defender_position_matrix = HashSet::from([defender_position]);
-                let coinciding_coords_damage = defender_position_matrix.intersection(&bomb_matrix).count();
+                let coinciding_coords_damage =
+                    defender_position_matrix.intersection(&bomb_matrix).count();
                 if coinciding_coords_damage > 0 {
                     let current_damage = bomb.damage;
 
@@ -649,12 +655,12 @@ impl State {
 
                     if defender.current_health <= 0 {
                         defender.current_health = 0;
-                    } 
+                    }
 
                     defenders_damaged.push(DefenderDamageResponse {
                         position: defender_position,
                         health: defender.current_health,
-                        defender_id: defender.defender_id,
+                        map_space_id: defender.map_space_id,
                     });
                 }
             } else {
@@ -663,16 +669,13 @@ impl State {
         }
 
         for defender in defenders_damaged.iter() {
-            if defender.health > 0 {
-                log::info!("Defender:{} is damaged, health is : {}, position is {}, {}", defender.defender_id, defender.health, defender.position.x, defender.position.y);
-            }
             if defender.health == 0 {
-                log::info!("Defender:{} is dead, died at position {}, {}", defender.defender_id, defender.position.x, defender.position.y);
+                log::info!("Defender:{} is dead, died at position {}, {}", defender.map_space_id, defender.position.x, defender.position.y);
             }
         }
 
         self.bombs.total_count -= 1;
-        let base_items_damaged= BaseItemsDamageResponse {
+        let base_items_damaged = BaseItemsDamageResponse {
             buildings_damaged: buildings_damaged.clone(),
             defenders_damaged: defenders_damaged.clone(),
         };
@@ -686,9 +689,6 @@ impl State {
     ) -> DefenderReturnType {
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
-        // for defender in self.defenders.iter() {
-        //     log::info!("defender : id {}, position x: {}, y: {}", defender.defender_id, defender_position.x, defender_position.y);
-        // }
 
         for defender in self.defenders.iter_mut() {
             if !defender.is_alive || defender.target_id.is_none() {
@@ -710,15 +710,8 @@ impl State {
             if attacker_position.x == defender.defender_pos.x
                 && attacker_position.y == defender.defender_pos.y
             {
-                log::info!(
-                    "Defender pos {} {} and id {}",
-                    defender.defender_pos.x,
-                    defender.defender_pos.y,
-                    defender.mapSpaceId
-                );
-
                 defenders_damaged.push(DefenderResponse {
-                    mapSpaceId: defender.mapSpaceId,
+                    map_space_id: defender.map_space_id,
                     position: defender.defender_pos,
                     damage: defender.damage,
                 });

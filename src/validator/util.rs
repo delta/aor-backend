@@ -42,7 +42,7 @@ pub struct IsTriggered {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DefenderDetails {
-    pub mapSpaceId: i32,
+    pub map_space_id: i32,
     pub name: String,
     pub radius: i32,
     pub speed: i32,
@@ -55,7 +55,7 @@ pub struct DefenderDetails {
     pub block_id: i32,
     pub level: i32,
     pub current_health: i32,
-    pub total_health: i32,
+    pub max_health: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -177,28 +177,28 @@ pub fn select_side_hut_defender(
     if roads.contains(&tile2) {
         hut_defender_clone.defender_pos.x = tile2.0;
         hut_defender_clone.defender_pos.y = tile2.1;
-        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        hut_defender_clone.map_space_id = *previous_hut_defender_id + 1;
         *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile4) {
         hut_defender_clone.defender_pos.x = tile4.0;
         hut_defender_clone.defender_pos.y = tile4.1;
-        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        hut_defender_clone.map_space_id = *previous_hut_defender_id + 1;
         *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile3) {
         hut_defender_clone.defender_pos.x = tile3.0;
         hut_defender_clone.defender_pos.y = tile3.1;
-        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        hut_defender_clone.map_space_id = *previous_hut_defender_id + 1;
         *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile1) {
         hut_defender_clone.defender_pos.x = tile1.0;
         hut_defender_clone.defender_pos.y = tile1.1;
-        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        hut_defender_clone.map_space_id = *previous_hut_defender_id + 1;
         *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)

@@ -84,10 +84,6 @@ pub fn game_handler(
                 )));
             }
 
-            for defender in _game_state.defenders.iter() {
-                log::info!("defender id : {} , position x {}, y {} ", defender.defender_id, defender.defender_pos.x, defender.defender_pos.y);
-            }
-
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::PlacedAttacker,

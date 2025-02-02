@@ -875,9 +875,6 @@ pub fn fetch_defender_types(
             max_health: defender.max_health,
         })
     }
-    for defender in defenders.iter_mut() {
-        log::info!("Defender: {}", defender.defender_id);
-    }
     Ok(defenders)
 }
 
