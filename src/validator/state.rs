@@ -33,6 +33,7 @@ pub struct State {
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
     pub in_validation: InValidation,
+    pub hut_defenders_released: i32,
 }
 
 impl State {
@@ -89,6 +90,7 @@ impl State {
                 message: "".to_string(),
                 is_invalidated: false,
             },
+            hut_defenders_released: 0,
         }
     }
 
@@ -338,6 +340,7 @@ impl State {
                         .get(&hut_building.map_space_id)
                         .unwrap()
                         .hut_defender,
+                    &mut self.hut_defenders_released,
                 ) {
                     //push it to state.
                     println!("Hut defender spawned");
@@ -572,6 +575,14 @@ impl State {
     pub fn bomb_blast(&mut self, bomb_position: Coords) -> BaseItemsDamageResponse {
         let bomb = &mut self.bombs;
         let mut buildings_damaged: Vec<BuildingDamageResponse> = Vec::new();
+        let bomb_matrix: HashSet<Coords> = (bomb_position.y - bomb.radius
+            ..bomb_position.y + bomb.radius + 1)
+            .flat_map(|y| {
+                (bomb_position.x - bomb.radius..bomb_position.x + bomb.radius + 1)
+                    .map(move |x| Coords { x, y })
+            })
+            .collect();
+        log::info!("Bomb position : {}, {}, range x: {} to {} range y: {} to {}", bomb_position.x, bomb_position.y, bomb_position.x - bomb.radius, bomb_position.x + bomb.radius, bomb_position.y - bomb.radius, bomb_position.y + bomb.radius);
         for building in self.buildings.iter_mut() {
             if building.current_hp > 0 {
                 let mut artifacts_taken_by_destroying_building: i32 = 0;
@@ -580,14 +591,6 @@ impl State {
                     ..building.tile.y + building.width)
                     .flat_map(|y| {
                         (building.tile.x..building.tile.x + building.width)
-                            .map(move |x| Coords { x, y })
-                    })
-                    .collect();
-
-                let bomb_matrix: HashSet<Coords> = (bomb_position.y - bomb.radius
-                    ..bomb_position.y + bomb.radius + 1)
-                    .flat_map(|y| {
-                        (bomb_position.x - bomb.radius..bomb_position.x + bomb.radius + 1)
                             .map(move |x| Coords { x, y })
                     })
                     .collect();
@@ -638,31 +641,15 @@ impl State {
                     y: defender.defender_pos.y,
                 };
                 let defender_position_matrix = HashSet::from([defender_position]);
-
-                let bomb_matrix: HashSet<Coords> = (bomb_position.y - bomb.radius
-                    ..bomb_position.y + bomb.radius + 1)
-                    .flat_map(|y| {
-                        (bomb_position.x - bomb.radius..bomb_position.x + bomb.radius + 1)
-                            .map(move |x| Coords { x, y })
-                    })
-                    .collect();
-
                 let coinciding_coords_damage = defender_position_matrix.intersection(&bomb_matrix).count();
                 if coinciding_coords_damage > 0 {
-                    let old_health = defender.current_health;
-                    let mut current_damage = (bomb.damage as f32 * 0.5).round() as i32;
+                    let current_damage = bomb.damage;
 
                     defender.current_health -= current_damage;
 
                     if defender.current_health <= 0 {
                         defender.current_health = 0;
-                        current_damage = old_health;
-                        self.damage_percentage +=
-                            (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
-                    } else {
-                        self.damage_percentage +=
-                            (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
-                    }
+                    } 
 
                     defenders_damaged.push(DefenderDamageResponse {
                         position: defender_position,
@@ -677,10 +664,10 @@ impl State {
 
         for defender in defenders_damaged.iter() {
             if defender.health > 0 {
-                log::info!("Defender:{} is damaged", defender.defender_id);
+                log::info!("Defender:{} is damaged, health is : {}, position is {}, {}", defender.defender_id, defender.health, defender.position.x, defender.position.y);
             }
             if defender.health == 0 {
-                log::info!("Defender:{} is dead", defender.defender_id);
+                log::info!("Defender:{} is dead, died at position {}, {}", defender.defender_id, defender.position.x, defender.position.y);
             }
         }
 
@@ -699,6 +686,9 @@ impl State {
     ) -> DefenderReturnType {
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+        // for defender in self.defenders.iter() {
+        //     log::info!("defender : id {}, position x: {}, y: {}", defender.defender_id, defender_position.x, defender_position.y);
+        // }
 
         for defender in self.defenders.iter_mut() {
             if !defender.is_alive || defender.target_id.is_none() {

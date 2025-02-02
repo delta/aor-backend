@@ -107,6 +107,12 @@ async fn init_attack(
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
 
+    for defender in opponent_base.defender_types.iter() {
+        log::info!(
+            "defender ids {} ", defender.defender_id
+        )
+    }
+
     log::info!("Base details of Opponent:{} fetched", opponent_id);
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;

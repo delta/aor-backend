@@ -9,7 +9,7 @@ use crate::api::util::{HistoryboardEntry, HistoryboardResponse};
 use crate::api::{self};
 use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, ROAD_ID};
 use crate::models::*;
-use crate::schema::prop;
+use crate::schema::{map_spaces, prop};
 use crate::util::function;
 use crate::{api::util::GameHistoryResponse, error::DieselError};
 use anyhow::{Ok, Result};
@@ -17,7 +17,7 @@ use diesel::dsl::exists;
 use diesel::{prelude::*, select};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize, Clone)]
 pub struct MapSpacesResponseWithArifacts {
@@ -58,6 +58,7 @@ pub struct MineTypeResponse {
 #[derive(Serialize, Clone)]
 pub struct DefenderTypeResponse {
     pub id: i32,
+    pub defender_id: i32,
     pub radius: i32,
     pub speed: i32,
     pub damage: i32,
@@ -65,6 +66,7 @@ pub struct DefenderTypeResponse {
     pub level: i32,
     pub cost: i32,
     pub name: String,
+    pub max_health: i32,
 }
 
 #[derive(Serialize, Clone)]
@@ -832,37 +834,51 @@ pub fn fetch_defender_types(
     conn: &mut PgConnection,
     user_id: &i32,
 ) -> Result<Vec<DefenderTypeResponse>> {
-    use crate::schema::{available_blocks, block_type, defender_type};
+    use crate::schema::{available_blocks, block_type, defender_type, map_spaces, building_type};
 
-    let joined_table = available_blocks::table
+    let result: Vec<(
+        MapSpaces,
+        (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
+    )> = map_spaces::table
         .inner_join(
             block_type::table
+                .inner_join(available_blocks::table)
+                .inner_join(building_type::table)
                 .inner_join(defender_type::table)
                 .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id))),
         )
-        .filter(available_blocks::user_id.eq(user_id));
-    let defenders: Result<Vec<DefenderTypeResponse>> = joined_table
-        .load::<(AvailableBlocks, (BlockType, DefenderType, Prop))>(conn)
+        .filter(map_spaces::map_id.eq(user_id))
+        .filter(available_blocks::user_id.eq(user_id))
+        .load::<(
+            MapSpaces,
+            (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
+        )>(conn)
         .map_err(|err| DieselError {
-            table: "defender_type",
+            table: "map_spaces",
             function: function!(),
             error: err,
-        })?
-        .into_iter()
-        .map(|(_, (block_type, defender_type, prop))| {
-            Ok(DefenderTypeResponse {
-                id: defender_type.id,
-                radius: prop.range,
-                speed: defender_type.speed,
-                damage: defender_type.damage,
-                block_id: block_type.id,
-                level: defender_type.level,
-                cost: defender_type.cost,
-                name: defender_type.name,
-            })
+        })?;
+
+    let mut defenders: Vec<DefenderTypeResponse> = Vec::new();
+
+    for (map_space, (block_type, _, _, defender, prop)) in result.iter() {
+        defenders.push(DefenderTypeResponse {
+            id: defender.id,
+            defender_id: map_space.id,
+            name: defender.name.clone(),
+            radius: prop.range,
+            speed: defender.speed,
+            damage: defender.damage,
+            block_id: block_type.id,
+            level: defender.level,
+            cost: defender.cost,
+            max_health: defender.max_health,
         })
-        .collect();
-    defenders
+    }
+    for defender in defenders.iter_mut() {
+        log::info!("Defender: {}", defender.defender_id);
+    }
+    Ok(defenders)
 }
 
 pub fn fetch_building_blocks(

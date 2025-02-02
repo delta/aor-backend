@@ -157,6 +157,7 @@ pub fn select_side_hut_defender(
     roads: &HashSet<(i32, i32)>,
     hut_building: &BuildingDetails,
     hut_defender: &DefenderDetails,
+    previous_hut_defender_id: &mut i32,
 ) -> Option<DefenderDetails> {
     let tile2 = (
         shadow_tiles[shadow_tiles.len() - 2].0 + 1,
@@ -176,21 +177,29 @@ pub fn select_side_hut_defender(
     if roads.contains(&tile2) {
         hut_defender_clone.defender_pos.x = tile2.0;
         hut_defender_clone.defender_pos.y = tile2.1;
+        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile4) {
         hut_defender_clone.defender_pos.x = tile4.0;
         hut_defender_clone.defender_pos.y = tile4.1;
+        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile3) {
         hut_defender_clone.defender_pos.x = tile3.0;
         hut_defender_clone.defender_pos.y = tile3.1;
+        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else if roads.contains(&tile1) {
         hut_defender_clone.defender_pos.x = tile1.0;
         hut_defender_clone.defender_pos.y = tile1.1;
+        hut_defender_clone.defender_id = *previous_hut_defender_id + 1;
+        *previous_hut_defender_id += 1;
         hut_defender_clone.target_id = Some(0.0);
         Some(hut_defender_clone)
     } else {

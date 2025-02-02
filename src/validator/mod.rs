@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     api::attack::{
         socket::{
-            ActionType, BaseItemsDamageResponse, BuildingDamageResponse, ResultType, SocketRequest,
+            ActionType, BaseItemsDamageResponse, ResultType, SocketRequest,
             SocketResponse,
         },
         util::{EventResponse, GameLog},
@@ -82,6 +82,10 @@ pub fn game_handler(
                     socket_request.frame_number,
                     _game_state.in_validation.message.clone(),
                 )));
+            }
+
+            for defender in _game_state.defenders.iter() {
+                log::info!("defender id : {} , position x {}, y {} ", defender.defender_id, defender.defender_pos.x, defender.defender_pos.y);
             }
 
             return Some(Ok(SocketResponse {
