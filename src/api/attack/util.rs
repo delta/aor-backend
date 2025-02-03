@@ -672,7 +672,6 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
                 width: building.width,
                 range: prop.range,
                 frequency: prop.frequency,
-                block_id: block_type.id,
                 name: building.name,
             },
         )

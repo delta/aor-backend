@@ -119,7 +119,7 @@ impl State {
         for building in self.buildings.iter() {
             if building.name == "Sentry" {
                 sentries.push(Sentry {
-                    id: building.id,
+                    id: building.map_space_id,
                     is_sentry_activated: false,
                     current_collided_bullet_id: 0,
                     sentry_start_time: SystemTime::now(),
@@ -293,10 +293,9 @@ impl State {
                 attacker.trigger_defender = true;
             }
             // }
-
-            self.activate_sentry(new_pos);
             // coord_temp = coord;
         }
+        self.activate_sentry(attacker_current.attacker_pos.clone());
 
         self.frame_no += 1;
         attacker.attacker_pos = attacker_current.attacker_pos;
@@ -684,7 +683,7 @@ impl State {
     pub fn activate_sentry(&mut self, new_pos: Coords) {
         for sentry in self.sentries.iter_mut() {
             let mut current_sentry_data: BuildingDetails = BuildingDetails {
-                id: 0,
+                map_space_id: 0,
                 current_hp: 0,
                 total_hp: 0,
                 artifacts_obtained: 0,
@@ -697,7 +696,7 @@ impl State {
                 level: 0,
             };
             for building in self.buildings.iter() {
-                if building.id == sentry.building_data.id {
+                if building.map_space_id == sentry.building_data.map_space_id {
                     current_sentry_data = building.clone();
                 }
             }
