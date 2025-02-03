@@ -75,6 +75,7 @@ pub struct DefenderTypeResponse {
     cost: i32,
     name: String,
     next_level_stats: Option<NextLevelDefenderTypeResponse>,
+    max_health: i32,
 }
 #[derive(Serialize, Deserialize)]
 
@@ -401,6 +402,7 @@ fn get_defender_types(
                     cost: defender_type.cost,
                     name: defender_type.name,
                     next_level_stats: None,
+                    max_health: defender_type.max_health,
                 }
             } else {
                 let next_level = defender_type.level + 1;
@@ -425,6 +427,7 @@ fn get_defender_types(
                             cost: 0,
                             name: "".to_string(),
                             prop_id: 0,
+                            max_health: 0,
                         },
                         BlockType {
                             id: 0,
@@ -459,6 +462,7 @@ fn get_defender_types(
                         cost: next_level_stats.0.cost,
                         name: next_level_stats.0.name,
                     }),
+                    max_health: defender_type.max_health,
                 }
             }
         })

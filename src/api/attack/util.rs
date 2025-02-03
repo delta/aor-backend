@@ -629,6 +629,7 @@ pub fn get_defenders(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender.level,
+            max_health: defender.max_health,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -667,10 +668,12 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
                     x: map_space.x_coordinate,
                     y: map_space.y_coordinate,
                 },
+                level: building.level,
                 width: building.width,
-                name: building.name,
                 range: prop.range,
                 frequency: prop.frequency,
+                block_id: block_type.id,
+                name: building.name,
             },
         )
         .collect();
@@ -708,6 +711,7 @@ pub fn get_hut_defender(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender_type.level,
+            max_health: defender_type.max_health,
         });
         log::info!("hut_defenders {:?}", i);
     }

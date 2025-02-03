@@ -310,6 +310,7 @@ pub struct DefenderType {
     pub cost: i32,
     pub name: String,
     pub prop_id: i32,
+    pub max_health: i32,
 }
 
 #[derive(Queryable, Clone, Debug, Serialize)]

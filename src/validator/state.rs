@@ -1,10 +1,10 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
+use crate::validator::util::BulletSpawnResponse;
 use crate::{
     api::attack::socket::{BuildingResponse, DefenderResponse},
     validator::util::{
@@ -12,7 +12,14 @@ use crate::{
         MineDetails, SourceDestXY,
     },
 };
-
+use crate::{
+    constants::{
+        BOMB_DAMAGE_MULTIPLIER, BULLET_COLLISION_TIME, DAMAGE_PER_BULLET_LEVEL_1,
+        DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LEVEL, LIVES,
+        PERCENTANGE_ARTIFACTS_OBTAINABLE,
+    },
+    schema::defender_type::damage,
+};
 use serde::{Deserialize, Serialize};
 
 use super::util::{select_side_hut_defender, BombType, HutDefenderDetails};
@@ -33,6 +40,20 @@ pub struct State {
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
     pub in_validation: InValidation,
+    pub sentries: Vec<Sentry>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Sentry {
+    pub id: i32,
+    pub building_data: BuildingDetails,
+    pub is_sentry_activated: bool,
+    pub current_collided_bullet_id: i32,
+    pub sentry_start_time: SystemTime,
+    pub current_bullet_shot_id: i32,
+    pub current_bullet_shot_time: SystemTime,
+    pub bullets_shot: Vec<BulletSpawnResponse>,
+    pub shoot_bullet: bool,
 }
 
 impl State {
@@ -89,7 +110,28 @@ impl State {
                 message: "".to_string(),
                 is_invalidated: false,
             },
+            sentries: Vec::new(),
         }
+    }
+
+    pub fn get_sentries(&mut self) {
+        let mut sentries = Vec::new();
+        for building in self.buildings.iter() {
+            if building.name == "Sentry" {
+                sentries.push(Sentry {
+                    id: building.id,
+                    is_sentry_activated: false,
+                    current_collided_bullet_id: 0,
+                    sentry_start_time: SystemTime::now(),
+                    current_bullet_shot_id: 0,
+                    current_bullet_shot_time: SystemTime::now(),
+                    shoot_bullet: false,
+                    building_data: building.clone(),
+                    bullets_shot: Vec::new(),
+                });
+            }
+        }
+        self.sentries = sentries;
     }
 
     pub fn self_destruct(&mut self) {
@@ -117,7 +159,9 @@ impl State {
         };
     }
     pub fn place_attacker(&mut self, attacker: Attacker) {
+        let attacker_position = attacker.attacker_pos;
         self.attacker = Some(attacker);
+        self.activate_sentry(attacker_position);
         // println!("defnders: {:?}",self.defenders);
     }
 
@@ -250,6 +294,7 @@ impl State {
             }
             // }
 
+            self.activate_sentry(new_pos);
             // coord_temp = coord;
         }
 
@@ -634,6 +679,121 @@ impl State {
         self.bombs.total_count -= 1;
 
         buildings_damaged
+    }
+
+    pub fn activate_sentry(&mut self, new_pos: Coords) {
+        for sentry in self.sentries.iter_mut() {
+            let mut current_sentry_data: BuildingDetails = BuildingDetails {
+                id: 0,
+                current_hp: 0,
+                total_hp: 0,
+                artifacts_obtained: 0,
+                tile: Coords { x: 0, y: 0 },
+                width: 0,
+                name: "".to_string(),
+                range: 0,
+                frequency: 0,
+                block_id: 0,
+                level: 0,
+            };
+            for building in self.buildings.iter() {
+                if building.id == sentry.building_data.id {
+                    current_sentry_data = building.clone();
+                }
+            }
+            if current_sentry_data.current_hp > 0 {
+                let prev_state = sentry.is_sentry_activated;
+                sentry.is_sentry_activated = (sentry.building_data.tile.x - new_pos.x).abs()
+                    + (sentry.building_data.tile.y - new_pos.y).abs()
+                    <= sentry.building_data.range;
+                let new_state = sentry.is_sentry_activated;
+                if prev_state != new_state && new_state == true {
+                    log::info!("sentry activated");
+                    sentry.sentry_start_time = SystemTime::now();
+                } else if prev_state != new_state && new_state == false {
+                    log::info!("sentry deactivated");
+                    sentry.current_bullet_shot_time = SystemTime::now() - Duration::new(2, 0);
+                }
+            } else {
+                sentry.is_sentry_activated = false;
+            }
+        }
+    }
+
+    pub fn cause_bullet_damage(&mut self) {
+        let attacker = self.attacker.as_mut().unwrap();
+        if attacker.attacker_health <= 0 {
+            for sentry in self.sentries.iter_mut() {
+                for bullet in sentry.bullets_shot.iter_mut() {
+                    bullet.has_collided = true;
+                }
+            }
+        } else {
+            for sentry in self.sentries.iter_mut() {
+                for bullet in sentry.bullets_shot.iter_mut() {
+                    if SystemTime::now()
+                        .duration_since(bullet.shot_time)
+                        .unwrap()
+                        .as_millis() as i32
+                        >= BULLET_COLLISION_TIME && !bullet.has_collided
+                    {
+                        self.attacker.as_mut().unwrap().attacker_health -= bullet.damage;
+                        log::info!(
+                            "ATTACKER HEALTH : {}, bullet_id {}",
+                            self.attacker.as_mut().unwrap().attacker_health,
+                            bullet.bullet_id
+                        );
+                        bullet.has_collided = true;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn shoot_bullets(&mut self) -> Vec<BulletSpawnResponse> {
+        let mut bullet_damage: i32;
+        let mut shoot_bullet_res_array: Vec<BulletSpawnResponse> = Vec::new();
+        for sentry in self.sentries.iter_mut() {
+            let sentry_frequency = sentry.building_data.frequency;
+            if sentry.is_sentry_activated
+                && SystemTime::now()
+                    .duration_since(sentry.current_bullet_shot_time)
+                    .unwrap()
+                    .as_millis()
+                    >= 1000 / (sentry_frequency as u128)
+            {
+                sentry.current_bullet_shot_id += 1;
+                sentry.current_bullet_shot_time = SystemTime::now();
+                log::info!(
+                    "sentry id: {}, bullet id: {}",
+                    sentry.id,
+                    sentry.current_bullet_shot_id
+                );
+                if sentry.building_data.level == 3 {
+                    bullet_damage = DAMAGE_PER_BULLET_LEVEL_3;
+                } else if sentry.building_data.level == 2 {
+                    bullet_damage = DAMAGE_PER_BULLET_LEVEL_2;
+                } else {
+                    bullet_damage = DAMAGE_PER_BULLET_LEVEL_1;
+                }
+                let bullet_response = BulletSpawnResponse {
+                    bullet_id: sentry.current_bullet_shot_id,
+                    shot_time: sentry.current_bullet_shot_time,
+                    sentry_id: sentry.id,
+                    damage: bullet_damage,
+                    has_collided: false,
+                    target_id: 0,
+                };
+                log::info!(
+                    "bullet {} from sentry {}",
+                    sentry.current_bullet_shot_id,
+                    sentry.id
+                );
+                shoot_bullet_res_array.push(bullet_response.clone());
+                sentry.bullets_shot.push(bullet_response);
+            }
+        }
+        shoot_bullet_res_array
     }
 
     pub fn defender_movement_one_tick(
