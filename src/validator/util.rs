@@ -15,7 +15,6 @@ pub struct SourceDestXY {
 }
 
 #[derive(Serialize, Clone, Copy, Deserialize, Debug)]
-#[derive(Serialize, Clone, Copy, Deserialize, Debug)]
 pub struct Bomb {
     pub id: i32,
     pub blast_radius: i32,
@@ -24,7 +23,6 @@ pub struct Bomb {
     pub is_dropped: bool,
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug)]
 #[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct Attacker {
     pub id: i32,
@@ -43,10 +41,8 @@ pub struct IsTriggered {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DefenderDetails {
     pub mapSpaceId: i32,
-    pub map_id: i32,
     pub name: String,
     pub radius: i32,
     pub speed: i32,
@@ -58,6 +54,9 @@ pub struct DefenderDetails {
     pub path_in_current_frame: Vec<Coords>,
     pub block_id: i32,
     pub level: i32,
+    pub frequency: i32,
+    pub last_attack : u128,
+    pub range : i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -77,7 +76,7 @@ pub struct MineDetails {
     pub damage: i32,
 }
 
-#[derive(Serialize, Clone, Deserialize)]
+#[derive(Serialize, Clone, Deserialize,Debug)]
 pub struct BombType {
     pub id: i32,
     pub radius: i32,
@@ -97,11 +96,6 @@ pub struct BuildingDetails {
     pub name: String,
     pub range: i32,
     pub frequency: i32,
-    pub block_id: i32,
-    pub name: String,
-    pub range: i32,
-    pub frequency: i32,
-    pub block_id: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -156,6 +150,8 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         is_sync: false,
         is_game_over: true,
         message: Some(message),
+        bullet_hits: None,
+        revealed_mines: None,
     }
 }
 

@@ -1,16 +1,9 @@
-use self::util::{get_valid_road_paths, AttackResponse, GameLog, ResultResponse};
-use super::auth::session::AuthUser;
-use super::defense::shortest_path::run_shortest_paths;
-use super::defense::util::{
-    AttackBaseResponse, DefenseResponse, MineTypeResponseWithoutBlockId, SimulationBaseResponse,
+use crate::api::attack::rating::new_rating;
+use crate::api::auth::TokenClaims;
+use crate::api::defense::util::{
+    fetch_map_layout, get_map_details_for_attack, get_map_details_for_simulation,
+    AttackBaseResponse, DefenseResponse, SimulationBaseResponse,
 };
-use super::user::util::fetch_user;
-use super::{error, PgPool, RedisPool};
-use crate::api::attack::socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse};
-use crate::api::util::HistoryboardQuery;
-use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
-use crate::models::{AttackerType, User};
-use crate::validator::state::State;
 use crate::api::error::AuthError;
 use crate::api::game::util::UserDetail;
 use crate::api::inventory::util::{get_bank_map_space_id, get_block_id_of_bank, get_user_map_id};
@@ -27,18 +20,19 @@ use crate::models::{
     User,
 };
 use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
-use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
-use crate::validator::util::{Coords, SourceDestXY};
-use actix_rt;
-use actix_web::error::ErrorBadRequest;
-use actix_web::web::{Data, Json};
-use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
-use log;
+use ::serde::{Deserialize, Serialize};
+use anyhow::Result;
+use chrono;
+use diesel::prelude::*;
+use diesel::PgConnection;
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use rand::seq::IteratorRandom;
+use redis::Commands;
 use std::collections::{HashMap, HashSet};
-use std::time;
+use std::env;
 
 use super::socket::BuildingResponse;
 
@@ -166,179 +160,330 @@ pub fn add_game(
         emps_used: &0,
         is_game_over: &false,
         date: &chrono::Local::now().date_naive(),
->>>>>>> 3114afe (refactor: block type migration update. (#96))
     };
 
-    log::info!(
-        "Opponent:{} found for Attacker:{}",
-        opponent_id,
-        attacker_id
-    );
+    let inserted_game: Game = diesel::insert_into(game::table)
+        .values(&new_game)
+        .get_result(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    //Fetch base details and shortest paths data
-    let (map_id, opponent_base) = web::block(move || {
-        Ok(util::get_opponent_base_details_for_attack(
-            opponent_id,
-            &mut conn,
-            attacker_id,
-        )?) as anyhow::Result<(i32, DefenseResponse)>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    log::info!("Base details of Opponent:{} fetched", opponent_id);
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let obtainable_artifacts = web::block(move || {
-        Ok(util::artifacts_obtainable_from_base(map_id, &mut conn)?) as anyhow::Result<i32>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    log::info!(
-        "Artifacts obtainable from opponent: {} base is {}",
-        opponent_id,
-        obtainable_artifacts
-    );
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let user_details =
-        web::block(move || Ok(fetch_user(&mut conn, opponent_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
-
-    log::info!("User details fetched for Opponent:{}", opponent_id);
-
-    //Create game
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let game_id = web::block(move || {
-        Ok(util::add_game(attacker_id, opponent_id, map_id, &mut conn)?) as anyhow::Result<i32>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    log::info!(
-        "Game:{} created for Attacker:{} and Opponent:{}",
-        game_id,
-        attacker_id,
-        opponent_id
-    );
-
-    //Generate attack token to validate the /attack/start
-    let attack_token = util::encode_attack_token(attacker_id, opponent_id, game_id)
-        .map_err(|err| error::handle_error(err.into()))?;
-    let response: AttackResponse = AttackResponse {
-        user: user_details,
-        max_bombs: MAX_BOMBS_PER_ATTACK,
-        base: AttackBaseResponse {
-            map_spaces: opponent_base.map_spaces,
-            defender_types: opponent_base.defender_types,
-            blocks: opponent_base.blocks,
-            mine_types: opponent_base
-                .mine_types
-                .iter()
-                .map(|mine_type| MineTypeResponseWithoutBlockId {
-                    id: mine_type.id,
-                    name: mine_type.name.clone(),
-                    damage: mine_type.damage,
-                    cost: mine_type.cost,
-                    level: mine_type.level,
-                    radius: mine_type.radius,
-                })
-                .collect(),
-        },
-        shortest_paths: None,
-        obtainable_artifacts,
-        attack_token,
-        attacker_types: opponent_base.attacker_types,
-        bomb_types: opponent_base.bomb_types,
-        game_id,
-    };
-
-    log::info!(
-        "Attack response generated for Attacker:{} and Opponent:{}",
-        attacker_id,
-        opponent_id
-    );
-    Ok(Json(response))
+    Ok(inserted_game.id)
 }
 
-async fn socket_handler(
-    pool: web::Data<PgPool>,
-    redis_pool: Data<RedisPool>,
-    req: HttpRequest,
-    body: web::Payload,
-) -> Result<HttpResponse, Error> {
-    let query_params = req.query_string().split('&').collect::<Vec<&str>>();
-    let user_token = query_params[0].split('=').collect::<Vec<&str>>()[1];
-    let attack_token = query_params[1].split('=').collect::<Vec<&str>>()[1];
+pub fn fetch_attack_history(
+    user_id: i32,
+    page: i64,
+    limit: i64,
+    conn: &mut PgConnection,
+) -> Result<HistoryboardResponse> {
+    use crate::schema::{game, levels_fixture, map_layout};
+    let joined_table = game::table
+        .filter(game::attack_id.eq(user_id))
+        .inner_join(map_layout::table.inner_join(levels_fixture::table))
+        .inner_join(user::table.on(game::defend_id.eq(user::id)));
 
-    let attacker_id =
-        util::decode_user_token(user_token).map_err(|err| error::handle_error(err.into()))?;
-    let attack_token_data =
-        util::decode_attack_token(attack_token).map_err(|err| error::handle_error(err.into()))?;
-    let game_id = attack_token_data.game_id;
+    let total_entries: i64 = joined_table
+        .count()
+        .get_result(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
+    let off_set: i64 = (page - 1) * limit;
+    let last_page: i64 = (total_entries as f64 / limit as f64).ceil() as i64;
 
-    log::info!(
-        "Attacker:{} is trying to start an attack with game:{}",
-        attacker_id,
-        game_id
-    );
+    let games_result: Result<Vec<HistoryboardEntry>> = joined_table
+        .offset(off_set)
+        .limit(limit)
+        .load::<(Game, (MapLayout, LevelsFixture), User)>(conn)?
+        .into_iter()
+        .map(|(game, (_, levels_fixture), user)| {
+            let is_replay_available = api::util::can_show_replay(user_id, &game, &levels_fixture);
+            Ok(HistoryboardEntry {
+                opponent_user_name: user.username.to_string(),
+                is_attack: true,
+                damage_percent: game.damage_done,
+                artifacts_taken: game.artifacts_collected,
+                trophies_taken: game.attack_score,
+                match_id: game.id,
+                replay_availability: is_replay_available,
+                avatar_id: user.avatar_id,
+            })
+        })
+        .collect();
+    let games = games_result?;
+    Ok(HistoryboardResponse { games, last_page })
+}
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+pub fn fetch_top_attacks(user_id: i32, conn: &mut PgConnection) -> Result<GameHistoryResponse> {
+    use crate::schema::{game, levels_fixture, map_layout};
 
-    if attacker_id != attack_token_data.attacker_id {
-        log::info!(
-            "Attacker:{} is not authorised to start an attack with game:{}",
-            attacker_id,
-            game_id
-        );
-        return Err(ErrorBadRequest("User not authorised"));
+    let joined_table = game::table
+        .inner_join(map_layout::table.inner_join(levels_fixture::table))
+        .inner_join(user::table.on(game::defend_id.eq(user::id)));
+    let games_result: Result<Vec<GameHistoryEntry>> = joined_table
+        .order_by(game::attack_score.desc())
+        .limit(10)
+        .load::<(Game, (MapLayout, LevelsFixture), User)>(conn)?
+        .into_iter()
+        .map(|(game, (_, levels_fixture), defender)| {
+            let is_replay_available = api::util::can_show_replay(user_id, &game, &levels_fixture);
+            let attacker = fetch_user(conn, game.attack_id)?.ok_or(AuthError::UserNotFound)?;
+            Ok(GameHistoryEntry {
+                game,
+                attacker: UserDetail {
+                    user_id: attacker.id,
+                    username: attacker.username,
+                    trophies: attacker.trophies,
+                    avatar_id: attacker.avatar_id,
+                },
+                defender: UserDetail {
+                    user_id: defender.id,
+                    username: defender.username,
+                    trophies: defender.trophies,
+                    avatar_id: defender.avatar_id,
+                },
+                is_replay_available,
+            })
+        })
+        .collect();
+    let games = games_result?;
+    Ok(GameHistoryResponse { games })
+}
+
+pub fn get_attacker_types(conn: &mut PgConnection) -> Result<HashMap<i32, AttackerType>> {
+    use crate::schema::attacker_type::dsl::*;
+    Ok(attacker_type
+        .load::<AttackerType>(conn)
+        .map_err(|err| DieselError {
+            table: "attacker_type",
+            function: function!(),
+            error: err,
+        })?
+        .iter()
+        .map(|attacker| {
+            (
+                attacker.id,
+                AttackerType {
+                    id: attacker.id,
+                    name: attacker.name.clone(),
+                    max_health: attacker.max_health,
+                    speed: attacker.speed,
+                    amt_of_emps: attacker.amt_of_emps,
+                    level: attacker.level,
+                    cost: attacker.cost,
+                    prop_id: attacker.prop_id,
+                },
+            )
+        })
+        .collect::<HashMap<i32, AttackerType>>())
+}
+
+#[derive(Serialize)]
+pub struct ShortestPathResponse {
+    pub source: Coords,
+    pub dest: Coords,
+    pub next_hop: Coords,
+}
+
+#[derive(Serialize)]
+pub struct AttackResponse {
+    pub user: Option<User>,
+    pub base: AttackBaseResponse,
+    pub max_bombs: i32,
+    pub attacker_types: Vec<AttackerType>,
+    pub bomb_types: Vec<EmpType>,
+    pub shortest_paths: Option<Vec<ShortestPathResponse>>,
+    pub obtainable_artifacts: i32,
+    pub attack_token: String,
+    pub game_id: i32,
+}
+
+pub fn get_random_opponent_id(
+    attacker_id: i32,
+    conn: &mut PgConnection,
+    mut redis_conn: RedisConn,
+) -> Result<Option<i32>> {
+    let sorted_users: Vec<(i32, i32)> = user::table
+        .filter(user::is_pragyan.eq(false))
+        .order_by(user::trophies.asc())
+        .select((user::id, user::trophies))
+        .load::<(i32, i32)>(conn)?;
+
+    if let Some(attacker_index) = sorted_users.iter().position(|(id, _)| *id == attacker_id) {
+        let less_or_equal_trophies = sorted_users
+            .iter()
+            .take(attacker_index)
+            .filter(|(id, _)| *id != attacker_id)
+            .rev()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>();
+        let more_or_equal_trophies = sorted_users
+            .iter()
+            .skip(attacker_index + 1)
+            .filter(|(id, _)| *id != attacker_id)
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        // While the opponent id is not present in redis, keep finding a new opponent
+        let mut attempts: i32 = MATCH_MAKING_ATTEMPTS;
+        let mut random_opponent = if let Ok(opponent) =
+            get_random_opponent(&less_or_equal_trophies, &more_or_equal_trophies)
+        {
+            opponent
+        } else {
+            return Err(anyhow::anyhow!("Failed to find an opponent"));
+        };
+
+        loop {
+            if let Ok(Some(_)) = get_game_id_from_redis(random_opponent, &mut redis_conn, false) {
+                random_opponent =
+                    match get_random_opponent(&less_or_equal_trophies, &more_or_equal_trophies) {
+                        Ok(opponent) => opponent,
+                        Err(_) => return Err(anyhow::anyhow!("Failed to find an opponent")),
+                    };
+            } else if let Ok(check) = can_attack_happen(conn, random_opponent, false) {
+                if !check {
+                    random_opponent =
+                        match get_random_opponent(&less_or_equal_trophies, &more_or_equal_trophies)
+                        {
+                            Ok(opponent) => opponent,
+                            Err(_) => {
+                                return Err(anyhow::anyhow!("Failed to find another opponent"))
+                            }
+                        };
+                } else {
+                    return Ok(Some(random_opponent));
+                }
+            } else {
+                return Err(anyhow::anyhow!("Cannot check if attack can happen now"));
+            }
+
+            attempts += 1;
+            if attempts > 10 {
+                return Err(anyhow::anyhow!(
+                    "Failed to find an opponent despite many attempts"
+                ));
+            }
+        }
+    } else {
+        Err(anyhow::anyhow!("Attacker id not found"))
     }
+}
 
-    let defender_id = attack_token_data.defender_id;
-    if attacker_id == defender_id {
-        log::info!("Attacker:{} is trying to attack himself", attacker_id);
-        return Err(ErrorBadRequest("Can't attack yourself"));
-    }
-
-    let mut redis_conn = redis_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-
-    if let Ok(Some(_)) = util::get_game_id_from_redis(attacker_id, &mut redis_conn, true) {
-        log::info!("Attacker:{} has an ongoing game", attacker_id);
-        return Err(ErrorBadRequest("Attacker has an ongoing game"));
-    }
-
-    if let Ok(Some(_)) = util::get_game_id_from_redis(defender_id, &mut redis_conn, false) {
-        log::info!("Defender:{} has an ongoing game", defender_id);
-        return Err(ErrorBadRequest("Defender has an ongoing game"));
-    }
-
-<<<<<<< HEAD
-    if util::check_and_remove_incomplete_game(&attacker_id, &defender_id, &game_id, &mut conn)
-        .is_err()
+pub fn get_random_opponent(
+    less_or_equal_trophies: &[(i32, i32)],
+    more_or_equal_trophies: &[(i32, i32)],
+) -> Result<i32> {
+    if let Some(random_opponent) = less_or_equal_trophies
+        .iter()
+        .chain(more_or_equal_trophies.iter())
+        .map(|&(id, _)| id)
+        .choose(&mut rand::thread_rng())
     {
-        log::info!(
-            "Failed to remove incomplete games for Attacker:{} and Defender:{}",
-            attacker_id,
-            defender_id
-        );
+        Ok(random_opponent)
+    } else {
+        Err(anyhow::anyhow!("Failed to find an opponent"))
     }
-=======
-    let joined_table = map_spaces::table
-        .filter(map_spaces::map_id.eq(map_id))
-        .inner_join(block_type::table.inner_join(mine_type::table))
-        .inner_join(prop::table.on(mine_type::prop_id.eq(prop::id)));
->>>>>>> 3114afe (refactor: block type migration update. (#96))
+}
 
-    log::info!(
-        "Game:{} is valid for Attacker:{} and Defender:{}",
+pub fn get_opponent_base_details_for_attack(
+    defender_id: i32,
+    conn: &mut PgConnection,
+    attacker_id: i32,
+) -> Result<(i32, DefenseResponse)> {
+    let map = fetch_map_layout(conn, &defender_id)?;
+    let map_id = map.id;
+
+    let response = get_map_details_for_attack(conn, map, attacker_id)?;
+
+    Ok((map_id, response))
+}
+
+pub fn get_opponent_base_details_for_simulation(
+    defender_id: i32,
+    conn: &mut PgConnection,
+) -> Result<SimulationBaseResponse> {
+    let map = fetch_map_layout(conn, &defender_id)?;
+
+    let response = get_map_details_for_simulation(conn, map)?;
+
+    Ok(response)
+}
+
+pub fn add_game_id_to_redis(
+    attacker_id: i32,
+    defender_id: i32,
+    game_id: i32,
+    mut redis_conn: RedisConn,
+) -> Result<()> {
+    redis_conn
+        .set_ex(
+            format!("Attacker:{}", attacker_id),
+            game_id,
+            GAME_AGE_IN_MINUTES * 60,
+        )
+        .map_err(|err| anyhow::anyhow!("Failed to set attacker key: {}", err))?;
+
+    redis_conn
+        .set_ex(
+            format!("Defender:{}", defender_id),
+            game_id,
+            GAME_AGE_IN_MINUTES * 60,
+        )
+        .map_err(|err| anyhow::anyhow!("Failed to set defender key: {}", err))?;
+
+    Ok(())
+}
+
+pub fn get_game_id_from_redis(
+    user_id: i32,
+    redis_conn: &mut RedisConn,
+    is_attacker: bool,
+) -> Result<Option<i32>> {
+    if is_attacker {
+        let game_id: Option<i32> = redis_conn
+            .get(format!("Attacker:{}", user_id))
+            .map_err(|err| anyhow::anyhow!("Failed to get key: {}", err))?;
+        Ok(game_id)
+    } else {
+        let game_id: Option<i32> = redis_conn
+            .get(format!("Defender:{}", user_id))
+            .map_err(|err| anyhow::anyhow!("Failed to get key: {}", err))?;
+        Ok(game_id)
+    }
+}
+
+pub fn delete_game_id_from_redis(
+    attacker_id: i32,
+    defender_id: i32,
+    redis_conn: &mut RedisConn,
+) -> Result<()> {
+    redis_conn
+        .del(format!("Attacker:{}", attacker_id))
+        .map_err(|err| anyhow::anyhow!("Failed to delete attacker key: {}", err))?;
+    redis_conn
+        .del(format!("Defender:{}", defender_id))
+        .map_err(|err| anyhow::anyhow!("Failed to delete defender key: {}", err))?;
+
+    Ok(())
+}
+
+pub fn encode_attack_token(attacker_id: i32, defender_id: i32, game_id: i32) -> Result<String> {
+    let jwt_secret = env::var("COOKIE_KEY").expect("COOKIE_KEY must be set!");
+    let now = chrono::Local::now();
+    let iat = now.timestamp() as usize;
+    let jwt_max_age: i64 = ATTACK_TOKEN_AGE_IN_MINUTES * 60;
+    let token_expiring_time = now + chrono::Duration::seconds(jwt_max_age);
+    let exp = (token_expiring_time).timestamp() as usize;
+    let token: AttackToken = AttackToken {
         game_id,
         attacker_id,
         defender_id,
@@ -484,6 +629,9 @@ pub fn get_defenders(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender.level,
+            frequency: prop.frequency,
+            last_attack: 0,
+            range: prop.range+10,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -503,33 +651,7 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
         .filter(map_spaces::map_id.eq(map_id))
         .filter(building_type::id.ne(ROAD_ID));
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let defender_base_details = web::block(move || {
-        Ok(util::get_opponent_base_details_for_simulation(
-            defender_id,
-            &mut conn,
-        )?) as anyhow::Result<SimulationBaseResponse>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    if attacker_user_details.is_none() || defender_user_details.is_none() {
-        return Err(ErrorBadRequest("User details not found"));
-    }
-
-    let redis_conn = redis_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-
-    if util::add_game_id_to_redis(attacker_id, defender_id, game_id, redis_conn).is_err() {
-        println!("Cannot add game:{} to redis", game_id);
-        return Err(ErrorBadRequest("Internal Server Error"));
-    }
-
-    let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
     let buildings: Vec<BuildingDetails> = joined_table
-        .load::<(MapSpaces, (BlockType, BuildingType, Prop))>(conn)
         .load::<(MapSpaces, (BlockType, BuildingType, Prop))>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
@@ -589,6 +711,9 @@ pub fn get_hut_defender(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender_type.level,
+            frequency: 0,
+            last_attack: 0,
+            range: 0,
         });
         log::info!("hut_defenders {:?}", i);
     }
@@ -723,200 +848,145 @@ pub fn terminate_game(
     let artifacts_collected = game_log.r.a;
     let game_id = game_log.g;
     log::info!(
-        "Socket connection established for Game:{}, Attacker:{} and Defender:{}",
+        "Terminating game for game:{} and attacker:{} and opponent:{}",
         game_id,
         attacker_id,
         defender_id
     );
 
-    let mut session_clone1 = session.clone();
-    let mut session_clone2 = session.clone();
+    let (attack_score, defense_score) = if damage_done < WIN_THRESHOLD {
+        (damage_done - 100, 100 - damage_done)
+    } else {
+        (damage_done, -damage_done)
+    };
 
-    actix_rt::spawn(async move {
-        let mut game_state = State::new(
-            attacker_id,
-            defender_id,
-            defenders,
-            hut_defenders,
-            mines,
-            buildings,
-        );
-        game_state.set_total_hp_buildings();
+    let attacker_details = user::table
+        .filter(user::id.eq(attacker_id))
+        .first::<User>(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
 
-        let game_logs = &mut game_log.clone();
+    let defender_details = user::table
+        .filter(user::id.eq(defender_id))
+        .first::<User>(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
 
-        let mut conn = pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))
-            .unwrap();
+    let attack_score = attack_score as f32 / 100_f32;
+    let defence_score = defense_score as f32 / 100_f32;
 
-        let mut redis_conn = redis_pool
-            .clone()
-            .get()
-            .map_err(|err| error::handle_error(err.into()))
-            .unwrap();
+    let new_trophies = new_rating(
+        attacker_details.trophies,
+        defender_details.trophies,
+        attack_score,
+        defence_score,
+    );
 
-        let shortest_path = &shortest_paths.clone();
-        let roads = &roads.clone();
-        let bomb_types = &bomb_types.clone();
-        let attacker_type = &attacker_type.clone();
+    //Add bonus trophies (just call the function)
 
+    game_log.r.oa = attacker_details.trophies;
+    game_log.r.od = defender_details.trophies;
+    game_log.r.na = new_trophies.0;
+    game_log.r.nd = new_trophies.1;
+
+    diesel::update(game::table.find(game_id))
+        .set((
+            game::damage_done.eq(damage_done),
+            game::is_game_over.eq(true),
+            game::emps_used.eq(bombs_used),
+            game::attack_score.eq(new_trophies.0 - attacker_details.trophies),
+            game::defend_score.eq(new_trophies.1 - defender_details.trophies),
+            game::artifacts_collected.eq(artifacts_collected),
+        ))
+        .execute(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
+
+    let (attacker_wins, defender_wins) = if damage_done < WIN_THRESHOLD {
+        (0, 1)
+    } else {
+        (1, 0)
+    };
+
+    diesel::update(user::table.find(&game_log.a.id))
+        .set((
+            user::artifacts.eq(user::artifacts + artifacts_collected),
+            user::trophies.eq(user::trophies + new_trophies.0 - attacker_details.trophies),
+            user::attacks_won.eq(user::attacks_won + attacker_wins),
+        ))
+        .execute(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
+
+    if deduct_artifacts_from_building(damaged_buildings.to_vec(), conn).is_err() {
         log::info!(
-            "Game:{} is ready to be played for Attacker:{} and Defender:{}",
+            "Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}",
             game_id,
             attacker_id,
             defender_id
         );
+    }
+    diesel::update(user::table.find(&game_log.d.id))
+        .set((
+            user::artifacts.eq(user::artifacts - artifacts_collected),
+            user::trophies.eq(user::trophies + new_trophies.1 - defender_details.trophies),
+            user::defenses_won.eq(user::defenses_won + defender_wins),
+        ))
+        .execute(conn)
+        .map_err(|err| DieselError {
+            table: "game",
+            function: function!(),
+            error: err,
+        })?;
 
-        while let Some(Ok(msg)) = msg_stream.next().await {
-            match msg {
-                Message::Ping(bytes) => {
-                    if session_clone1.pong(&bytes).await.is_err() {
-                        return;
-                    }
-                }
-                Message::Text(s) => {
-                    if let Ok(socket_request) = serde_json::from_str::<SocketRequest>(&s) {
-                        let response_result = game_handler(
-                            attacker_type,
-                            socket_request,
-                            &mut game_state,
-                            shortest_path,
-                            roads,
-                            bomb_types,
-                            game_logs,
-                        );
-                        match response_result {
-                            Some(Ok(response)) => {
-                                if let Ok(response_json) = serde_json::to_string(&response) {
-                                    // println!("Response Json ---- {}", response_json);
-                                    if response.result_type == ResultType::GameOver {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                        if (session_clone1.clone().close(None).await).is_err() {
-                                            log::info!("Error closing the socket connection for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                                        }
-                                        if util::terminate_game(
-                                            game_logs,
-                                            &mut conn,
-                                            &damaged_buildings,
-                                            &mut redis_conn,
-                                        )
-                                        .is_err()
-                                        {
-                                            log::info!("Error terminating the game 1 for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                                        }
-                                    } else if response.result_type == ResultType::MinesExploded {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::DefendersDamaged {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::BulletHit {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::UAV {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::DefendersTriggered
-                                    {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::SpawnHutDefender {
-                                        // game_state.hut.hut_defenders_count -= 1;
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::BuildingsDamaged {
-                                        damaged_buildings
-                                            .extend(response.damaged_buildings.unwrap());
-                                        // if util::deduct_artifacts_from_building(
-                                        //     response.damaged_buildings.unwrap(),
-                                        //     &mut conn,
-                                        // )
-                                        // .is_err()
-                                        // {
-                                        //     log::info!("Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                                        // }
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::PlacedAttacker {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::Nothing
-                                        && session_clone1.text(response_json).await.is_err()
-                                    {
-                                        return;
-                                    }
-                                } else {
-                                    log::info!("Error serializing JSON for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                                    if session_clone1.text("Error serializing JSON").await.is_err()
-                                    {
-                                        return;
-                                    }
-                                }
-                            }
-                            Some(Err(err)) => {
-                                log::info!("Error: {:?} while handling for game:{} and attacker:{} and opponent:{}", err, game_id, attacker_id, defender_id);
-                            }
-                            None => {
-                                // Handle the case where game_handler returned None (e.g., ActionType::PlaceAttacker)
-                                // Add appropriate logic here based on the requirements.
-                                log::info!("All fine for now");
-                            }
-                        }
-                    } else {
-                        log::info!(
-                            "Error parsing JSON for game:{} and attacker:{} and opponent:{}",
-                            game_id,
-                            attacker_id,
-                            defender_id
-                        );
+    let attacker_map_id = get_user_map_id(attacker_id, conn)?;
+    let attacker_bank_block_type_id = get_block_id_of_bank(conn, &attacker_id)?;
+    let attacker_bank_map_space_id =
+        get_bank_map_space_id(conn, &attacker_map_id, &attacker_bank_block_type_id)?;
 
-                        if session_clone1.text("Error parsing JSON").await.is_err() {
-                            return;
-                        }
-                    }
-                }
-                Message::Close(_s) => {
-                    if util::terminate_game(
-                        game_logs,
-                        &mut conn,
-                        &damaged_buildings,
-                        &mut redis_conn,
-                    )
-                    .is_err()
-                    {
-                        log::info!("Error terminating the game 2 for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                    }
-                    break;
-                }
-                _ => {
-                    log::info!(
-                        "Unknown message type for game:{} and attacker:{} and opponent:{}",
-                        game_id,
-                        attacker_id,
-                        defender_id
-                    );
-                }
-            }
-        }
-    });
+    diesel::update(artifact::table.find(attacker_bank_map_space_id))
+        .set(artifact::count.eq(artifact::count + artifacts_collected))
+        .execute(conn)
+        .map_err(|err| DieselError {
+            table: "artifact",
+            function: function!(),
+            error: err,
+        })?;
 
-    actix_rt::spawn(async move {
-        let timeout_duration = time::Duration::from_secs((GAME_AGE_IN_MINUTES as u64) * 60);
-        let last_activity = time::Instant::now();
+    // if let Ok(sim_log) = serde_json::to_string(&game_log) {
+    //     let new_simulation_log = NewSimulationLog {
+    //         game_id: &game_id,
+    //         log_text: &sim_log,
+    //     };
 
+    //     println!("Inserting into similation log, game id: {}", game_id);
+    //     diesel::insert_into(simulation_log::table)
+    //         .values(new_simulation_log)
+    //         .on_conflict_do_nothing()
+    //         .execute(conn)
+    //         .map_err(|err| DieselError {
+    //             table: "simulation_log",
+    //             function: function!(),
+    //             error: err,
+    //         })?;
+    //     println!("Done Inserting into similation log, game id: {}", game_id);
+    // }
+
+    if delete_game_id_from_redis(game_log.a.id, game_log.d.id, redis_conn).is_err() {
         log::info!(
-            "Timer started for Game:{}, Attacker:{} and Defender:{}",
+            "Can't remove game:{} and attacker:{} and opponent:{} from redis",
             game_id,
             attacker_id,
             defender_id

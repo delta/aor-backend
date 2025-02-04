@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::attack::{
-        socket::{ActionType, BuildingResponse,BulletHit, ResultType, SocketRequest, SocketResponse},
-        util::{Direction, EventResponse, GameLog},
+        socket::{ActionType, BuildingResponse,ResultType, SocketRequest, SocketResponse},
+        util::{EventResponse, GameLog},
     },
     models::AttackerType,
     validator::util::{Coords, SourceDestXY},
@@ -61,7 +61,7 @@ pub fn game_handler(
 
             // Process only new frames
             let ranged_attack_result =
-                _game_state.defender_ranged_attack(socket_request.frame_number);
+                _game_state.defender_ranged_attack(socket_request.frame_number, socket_request.current_position.unwrap());
             _game_state.last_processed_frame = socket_request.frame_number;
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
@@ -129,6 +129,9 @@ pub fn game_handler(
                     _game_state.in_validation.message.clone(),
                 )));
             }
+            for defender in _game_state.defenders.iter_mut() {
+                defender.target_id = None;
+            }
 
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
@@ -140,8 +143,6 @@ pub fn game_handler(
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_buildings: None,
-                hut_triggered: false,
-                hut_defenders: None,
                 hut_triggered: false,
                 hut_defenders: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
@@ -201,7 +202,6 @@ pub fn game_handler(
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
                 // let attacker_delta_clone = attacker_delta.clone();
-
                 let _attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
@@ -301,7 +301,7 @@ pub fn game_handler(
                 let response = SocketResponse {
                     frame_number: socket_request.frame_number,
                     result_type,
-                    is_alive: Some(is_attacker_alive),
+                    is_alive: Some(true),
                     attacker_health: Some(defender_damaged_result.clone().attacker_health),
                     exploded_mines: None,
                     // triggered_defenders: Some(defender_damaged_result.clone().defender_response),
