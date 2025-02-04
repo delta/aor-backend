@@ -2,31 +2,35 @@ use std::{collections::HashMap, env, fs, io::Read};
 
 use actix_web::{
     error::ErrorBadRequest,
-    web::{self, Data, Json, Path},
-    Responder, Result,
+    web::{self, Data, Json, Path, Payload, Query},
+    HttpRequest, HttpResponse, Responder, Result,
 };
+use awc::http::Error;
+use serde::{Deserialize, Serialize};
 use util::{get_challenge_maps, is_challenge_possible};
 
-use crate::{
-    api::{
-        attack::util::{add_game, encode_attack_token},
-        defense::util::AdminSaveData,
-    },
-    constants::MOD_USER_BASE_PATH,
-};
+use crate::{api::defense::util::AdminSaveData, constants::MOD_USER_BASE_PATH};
 
 use super::{auth::session::AuthUser, error, PgPool, RedisPool};
 
 pub mod util;
 
+#[derive(Deserialize, Serialize)]
 pub struct ChallengeInitBody {
     challenge_id: i32,
     user_id: i32,
     map_id: i32,
 }
 
+pub struct ChallengeSocketQuery {
+    pub challenge_id: i32,
+    pub user_id: i32,
+    pub map_id: i32,
+}
+
 pub fn routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/{id}").route(web::get().to(challenge_maps)))
+        .service(web::resource("/init").route(web::post().to(init_challenge)))
         .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
 
@@ -98,4 +102,46 @@ async fn init_challenge(
         .clone();
 
     Ok(Json(map_data))
+}
+
+async fn challenge_socket_handler(
+    query_params: Query<ChallengeSocketQuery>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+    body: Payload,
+    req: HttpRequest,
+) -> Result<HttpResponse> {
+    //challenge base data
+    let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+    log::info!("Json path: {}", json_path.display());
+    let mut json_data_str = String::new();
+    if json_path.exists() {
+        let mut file = fs::File::open(json_path.clone())?;
+        file.read_to_string(&mut json_data_str)?;
+    }
+
+    let json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
+        HashMap::new()
+    } else {
+        serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+    };
+
+    let default_user_rec = HashMap::new();
+    let map_data = json_data
+        .get(&query_params.user_id)
+        .unwrap_or(&default_user_rec);
+    let map_data = map_data
+        .get(&query_params.map_id)
+        .unwrap_or(&AdminSaveData {
+            map_id: query_params.map_id,
+            building: Vec::new(),
+            defenders: Vec::new(),
+            mine_type: Vec::new(),
+            road: Vec::new(),
+        })
+        .clone();
+
+    let (response, session, mut msg_stream) = actix_ws::handle(&req, body)?;
+
+    Ok(response)
 }
