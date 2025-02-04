@@ -1,6 +1,7 @@
 /// CRUD functions
 use super::MapSpacesEntry;
 use crate::api::auth::LoginResponse;
+use crate::api::challenges::util::{get_challenge_type, ChallengeTypeResponse};
 use crate::api::error::AuthError;
 use crate::api::game::util::UserDetail;
 use crate::api::user::util::fetch_user;
@@ -92,6 +93,7 @@ pub struct DefenseBaseResponse {
     pub blocks: Vec<BuildingTypeResponse>,
     pub defender_types: Vec<DefenderTypeResponse>,
     pub mine_types: Vec<MineTypeResponse>,
+    pub challenge_type: Option<ChallengeTypeResponse>,
 }
 
 #[derive(Serialize)]
@@ -529,6 +531,7 @@ pub fn get_details_from_map_layout(
     } else {
         None
     };
+    let challenge_type = get_challenge_type(conn)?;
 
     Ok(DefenseBaseResponse {
         map_spaces,
@@ -536,6 +539,7 @@ pub fn get_details_from_map_layout(
         mine_types,
         defender_types,
         user: user_response,
+        challenge_type,
     })
 }
 
