@@ -11,6 +11,7 @@ use crate::api::util::HistoryboardQuery;
 use crate::constants::MOD_USER_BASE_PATH;
 use crate::models::*;
 use actix_web::error::{ErrorBadRequest, ErrorNotFound};
+use actix_web::web::Query;
 use actix_web::web::{self, Data, Json};
 use actix_web::{Responder, Result};
 use serde::{Deserialize, Serialize};
@@ -373,7 +374,7 @@ async fn get_user_base_details(pool: Data<PgPool>, user: AuthUser) -> Result<imp
 }
 
 async fn get_admin_base(
-    base_req: Json<AdminBaseRequest>,
+    base_req: Query<AdminBaseRequest>,
     pool: Data<PgPool>,
     user: AuthUser,
 ) -> Result<impl Responder> {
