@@ -1,23 +1,26 @@
-use std::{
-    collections::{HashMap, HashSet},
-    env, fs,
-    io::Read,
-};
-
 use actix_web::{
     error::ErrorBadRequest,
     web::{self, Data, Json, Path, Payload, Query},
     HttpRequest, HttpResponse, Responder, Result,
 };
-use awc::http::{header::map, Error};
+use actix_ws::Message;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    io::Read,
+    time,
+};
 use util::{get_challenge_maps, is_challenge_possible};
 
 use crate::{
     api::{
         attack::{
-            socket::BuildingResponse,
-            util::{get_attacker_types, get_bomb_types, GameLog, ResultResponse},
+            socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse},
+            util::{
+                get_attacker_types, get_bomb_types, get_hut_defender_types, GameLog, ResultResponse,
+            },
         },
         defense::{
             shortest_path::{self, run_shortest_paths_challenges},
@@ -29,10 +32,11 @@ use crate::{
         },
         user::util::fetch_user,
     },
-    constants::MOD_USER_BASE_PATH,
-    models::{AttackerType, User},
-    validator::util::{
-        BombType, BuildingDetails, Coords, DefenderDetails, MineDetails, SourceDestXY,
+    constants::{GAME_AGE_IN_MINUTES, MOD_USER_BASE_PATH},
+    validator::{
+        game_handler,
+        state::State,
+        util::{BuildingDetails, Coords, DefenderDetails, MineDetails},
     },
 };
 
@@ -194,7 +198,22 @@ async fn challenge_socket_handler(
         })
         .collect();
 
-    //let hut_defenders = None;
+    let mut hut_defenders: HashMap<i32, DefenderDetails> = HashMap::new();
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let hut_defender_types = web::block(move || get_hut_defender_types(&mut conn))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    for building in &map_data.building {
+        if building.name == "Defender_Hut" {
+            let hut_defender = hut_defender_types
+                .iter()
+                .find(|defender_type| defender_type.level == building.level)
+                .unwrap()
+                .clone();
+            hut_defenders.insert(building.map_space_id, hut_defender);
+        }
+    }
 
     let mines: Vec<MineDetails> = map_data
         .mine_type
@@ -237,29 +256,24 @@ async fn challenge_socket_handler(
         .collect();
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let bomb_types =
-        web::block(move || Ok(get_bomb_types(&mut conn)?) as anyhow::Result<Vec<BombType>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
+    let bomb_types = web::block(move || get_bomb_types(&mut conn))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let attacker_type = web::block(move || {
-        Ok(get_attacker_types(&mut conn)?) as anyhow::Result<HashMap<i32, AttackerType>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let attacker_type = web::block(move || get_attacker_types(&mut conn))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let defender_user_details =
-        web::block(move || Ok(fetch_user(&mut conn, mod_user_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
+    let defender_user_details = web::block(move || fetch_user(&mut conn, mod_user_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let attacker_user_details =
-        web::block(move || Ok(fetch_user(&mut conn, attacker_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
+    let attacker_user_details = web::block(move || fetch_user(&mut conn, attacker_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
 
     let map_spaces_response_with_artifacts_sim: Vec<MapSpacesResponseWithArifacts> = map_data
         .building
@@ -366,11 +380,248 @@ async fn challenge_socket_handler(
 
     log::info!(
         "Challenge:{} is ready for player:{}",
-        query_params.challenge_id,
+        mod_user_id,
         attacker_id
     );
 
     let (response, session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    log::info!(
+        "Socket connection established for Challenge:{} and Player:{}",
+        mod_user_id,
+        attacker_id,
+    );
+
+    let mut session_clone1 = session.clone();
+    let mut session_clone2 = session.clone();
+
+    actix_rt::spawn(async move {
+        let mut game_state = State::new(
+            attacker_id,
+            mod_user_id,
+            defenders,
+            hut_defenders,
+            mines,
+            buildings,
+        );
+        game_state.set_total_hp_buildings();
+
+        let game_logs = &mut game_log.clone();
+
+        let mut conn = pool
+            .get()
+            .map_err(|err| error::handle_error(err.into()))
+            .unwrap();
+
+        // let mut redis_conn = redis_pool
+        //     .clone()
+        //     .get()
+        //     .map_err(|err| error::handle_error(err.into()))
+        //     .unwrap();
+
+        let shortest_path = &shortest_paths.clone();
+        let roads = &roads.clone();
+        let bomb_types = &bomb_types.clone();
+        let attacker_type = &attacker_type.clone();
+
+        log::info!(
+            "Challenge:{} is ready to be played for Player:{}",
+            mod_user_id,
+            attacker_id,
+        );
+
+        while let Some(Ok(msg)) = msg_stream.next().await {
+            match msg {
+                Message::Ping(bytes) => {
+                    if session_clone1.pong(&bytes).await.is_err() {
+                        return;
+                    }
+                }
+                Message::Text(s) => {
+                    if let Ok(socket_request) = serde_json::from_str::<SocketRequest>(&s) {
+                        let response_result = game_handler(
+                            attacker_type,
+                            socket_request,
+                            &mut game_state,
+                            shortest_path,
+                            roads,
+                            bomb_types,
+                            game_logs,
+                        );
+                        match response_result {
+                            Some(Ok(response)) => {
+                                if let Ok(response_json) = serde_json::to_string(&response) {
+                                    // println!("Response Json ---- {}", response_json);
+                                    if response.result_type == ResultType::GameOver {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                        if (session_clone1.clone().close(None).await).is_err() {
+                                            log::info!("Error closing the socket connection for Challenge:{} and Player:{}", mod_user_id, attacker_id);
+                                        }
+                                        // if util::terminate_game(
+                                        //     game_logs,
+                                        //     &mut conn,
+                                        //     &damaged_buildings,
+                                        //     &mut redis_conn,
+                                        // )
+                                        // .is_err()
+                                        // {
+                                        //     log::info!("Error terminating the game 1 for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
+                                        // }
+                                    } else if response.result_type == ResultType::MinesExploded {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    } else if response.result_type == ResultType::DefendersDamaged
+                                        || response.result_type == ResultType::DefendersTriggered
+                                        || response.result_type == ResultType::SpawnHutDefender
+                                    {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    }
+                                    // else if response.result_type == ResultType::DefendersTriggered
+                                    // {
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // } else if response.result_type == ResultType::SpawnHutDefender {
+                                    //     // game_state.hut.hut_defenders_count -= 1;
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // }
+                                    else if response.result_type == ResultType::BuildingsDamaged {
+                                        damaged_buildings
+                                            .extend(response.damaged_buildings.unwrap());
+                                        // if util::deduct_artifacts_from_building(
+                                        //     response.damaged_buildings.unwrap(),
+                                        //     &mut conn,
+                                        // )
+                                        // .is_err()
+                                        // {
+                                        //     log::info!("Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
+                                        // }
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    } else if response.result_type == ResultType::PlacedAttacker {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    } else if response.result_type == ResultType::Nothing
+                                        && session_clone1.text(response_json).await.is_err()
+                                    {
+                                        return;
+                                    }
+                                } else {
+                                    log::info!(
+                                        "Error serializing JSON for Challenge:{} and Player:{}",
+                                        mod_user_id,
+                                        attacker_id
+                                    );
+                                    if session_clone1.text("Error serializing JSON").await.is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                            }
+                            Some(Err(err)) => {
+                                log::info!(
+                                    "Error: {:?} while handling for Challenge:{} and Player{}",
+                                    err,
+                                    mod_user_id,
+                                    attacker_id,
+                                );
+                            }
+                            None => {
+                                // Handle the case where game_handler returned None (e.g., ActionType::PlaceAttacker)
+                                // Add appropriate logic here based on the requirements.
+                                log::info!("All fine for now");
+                            }
+                        }
+                    } else {
+                        log::info!(
+                            "Error parsing JSON for Challenge:{} and Player{}",
+                            mod_user_id,
+                            attacker_id,
+                        );
+
+                        if session_clone1.text("Error parsing JSON").await.is_err() {
+                            return;
+                        }
+                    }
+                }
+                Message::Close(_s) => {
+                    // if util::terminate_game(
+                    //     game_logs,
+                    //     &mut conn,
+                    //     &damaged_buildings,
+                    //     &mut redis_conn,
+                    // )
+                    // .is_err()
+                    // {
+                    //     log::info!("Error terminating the game 2 for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
+                    // }
+                    break;
+                }
+                _ => {
+                    log::info!(
+                        "Unknown message type for Challenge:{} and Player:{}",
+                        mod_user_id,
+                        attacker_id,
+                    );
+                }
+            }
+        }
+    });
+
+    actix_rt::spawn(async move {
+        let timeout_duration = time::Duration::from_secs((GAME_AGE_IN_MINUTES as u64) * 60);
+        let last_activity = time::Instant::now();
+
+        log::info!(
+            "Timer started for Challenge:{}, Player:{}",
+            mod_user_id,
+            attacker_id,
+        );
+
+        loop {
+            actix_rt::time::sleep(time::Duration::from_secs(1)).await;
+
+            if time::Instant::now() - last_activity > timeout_duration {
+                log::info!(
+                    "Challenge:{} is timed out for Player:{}",
+                    mod_user_id,
+                    attacker_id,
+                );
+
+                let response_json = serde_json::to_string(&SocketResponse {
+                    frame_number: 0,
+                    result_type: ResultType::GameOver,
+                    is_alive: None,
+                    attacker_health: None,
+                    exploded_mines: None,
+                    defender_damaged: None,
+                    hut_triggered: false,
+                    hut_defenders: None,
+                    damaged_buildings: None,
+                    total_damage_percentage: None,
+                    is_sync: false,
+                    is_game_over: true,
+                    message: Some("Connection timed out".to_string()),
+                })
+                .unwrap();
+                if session_clone2.text(response_json).await.is_err() {
+                    return;
+                }
+
+                break;
+            }
+        }
+    });
+
+    log::info!("End of Challenge:{}, Player:{}", mod_user_id, attacker_id,);
 
     Ok(response)
 }

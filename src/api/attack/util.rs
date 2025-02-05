@@ -20,8 +20,8 @@ use crate::models::{
 };
 use crate::schema::{block_type, building_type, defender_type, map_layout, map_spaces, prop, user};
 use crate::util::function;
-use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
+use crate::validator::util::{Coords, HutDefenderDetails};
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use chrono;
@@ -765,6 +765,40 @@ pub fn get_hut_defender(
     }
     log::info!("{:?}", hut_defenders_res);
     Ok(hut_defenders_res)
+}
+
+pub fn get_hut_defender_types(conn: &mut PgConnection) -> Result<Vec<DefenderDetails>> {
+    let joined_table = block_type::table
+        .inner_join(defender_type::table)
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+        .filter(defender_type::name.eq("Hut_Defender"));
+    let hut_defenders = joined_table
+        .load::<(BlockType, DefenderType, Prop)>(conn)
+        .map_err(|err| DieselError {
+            table: "defender_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter();
+    let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
+    for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
+        hut_defender_array.push(DefenderDetails {
+            mapSpaceId: (i + 1) as i32,
+            name: defender_type.name.clone(),
+            radius: prop.range,
+            speed: defender_type.speed,
+            damage: defender_type.damage,
+            defender_pos: Coords { x: 0, y: 0 },
+            is_alive: true,
+            damage_dealt: false,
+            target_id: None,
+            path_in_current_frame: Vec::new(),
+            block_id: block_type.id,
+            level: defender_type.level,
+        });
+        log::info!("hut_defenders {:?}", i);
+    }
+    Ok(hut_defender_array)
 }
 
 pub fn get_bomb_types(conn: &mut PgConnection) -> Result<Vec<BombType>> {
