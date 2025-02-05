@@ -1,15 +1,40 @@
-use std::{collections::HashMap, env, fs, io::Read};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    io::Read,
+};
 
 use actix_web::{
     error::ErrorBadRequest,
     web::{self, Data, Json, Path, Payload, Query},
     HttpRequest, HttpResponse, Responder, Result,
 };
-use awc::http::Error;
+use awc::http::{header::map, Error};
 use serde::{Deserialize, Serialize};
 use util::{get_challenge_maps, is_challenge_possible};
 
-use crate::{api::defense::util::AdminSaveData, constants::MOD_USER_BASE_PATH};
+use crate::{
+    api::{
+        attack::{
+            socket::BuildingResponse,
+            util::{get_attacker_types, get_bomb_types, GameLog, ResultResponse},
+        },
+        defense::{
+            shortest_path::{self, run_shortest_paths_challenges},
+            util::{
+                fetch_attacker_types, fetch_emp_types, AdminSaveData, BuildingTypeResponse,
+                DefenderTypeResponse, MapSpacesResponseWithArifacts, MineTypeResponse,
+                SimulationBaseResponse,
+            },
+        },
+        user::util::fetch_user,
+    },
+    constants::MOD_USER_BASE_PATH,
+    models::{AttackerType, User},
+    validator::util::{
+        BombType, BuildingDetails, Coords, DefenderDetails, MineDetails, SourceDestXY,
+    },
+};
 
 use super::{auth::session::AuthUser, error, PgPool, RedisPool};
 
@@ -112,6 +137,9 @@ async fn challenge_socket_handler(
     req: HttpRequest,
 ) -> Result<HttpResponse> {
     //challenge base data
+    let attacker_id = user.0;
+    let mod_user_id = query_params.user_id;
+
     let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
     log::info!("Json path: {}", json_path.display());
     let mut json_data_str = String::new();
@@ -140,6 +168,207 @@ async fn challenge_socket_handler(
             road: Vec::new(),
         })
         .clone();
+
+    let shortest_paths =
+        run_shortest_paths_challenges(&map_data.road).expect("Error getting shortest paths");
+
+    let defenders: Vec<DefenderDetails> = map_data
+        .defenders
+        .iter()
+        .map(|defender| DefenderDetails {
+            block_id: defender.block_id,
+            mapSpaceId: defender.map_space_id,
+            name: defender.name.clone(),
+            radius: defender.radius,
+            speed: defender.speed,
+            damage: defender.damage,
+            defender_pos: Coords {
+                x: defender.pos_x,
+                y: defender.pos_y,
+            },
+            is_alive: true,
+            damage_dealt: false,
+            target_id: None,
+            path_in_current_frame: Vec::new(),
+            level: defender.level,
+        })
+        .collect();
+
+    //let hut_defenders = None;
+
+    let mines: Vec<MineDetails> = map_data
+        .mine_type
+        .iter()
+        .map(|mine_save| MineDetails {
+            damage: mine_save.damage,
+            id: mine_save.id,
+            position: Coords {
+                x: mine_save.pos_x,
+                y: mine_save.pos_y,
+            },
+            radius: mine_save.radius,
+        })
+        .collect();
+
+    let buildings: Vec<BuildingDetails> = map_data
+        .building
+        .iter()
+        .map(|building| BuildingDetails {
+            artifacts_obtained: 0,
+            block_id: building.block_id,
+            map_space_id: building.map_space_id,
+            current_hp: building.hp,
+            total_hp: building.hp,
+            tile: Coords {
+                x: building.pos_x,
+                y: building.pos_y,
+            },
+            width: building.width_in_tiles,
+            name: building.name.clone(),
+            range: building.range,
+            frequency: building.frequency,
+        })
+        .collect();
+
+    let roads: HashSet<(i32, i32)> = map_data
+        .road
+        .iter()
+        .map(|road_save| (road_save.pos_x, road_save.pos_y))
+        .collect();
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let bomb_types =
+        web::block(move || Ok(get_bomb_types(&mut conn)?) as anyhow::Result<Vec<BombType>>)
+            .await?
+            .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let attacker_type = web::block(move || {
+        Ok(get_attacker_types(&mut conn)?) as anyhow::Result<HashMap<i32, AttackerType>>
+    })
+    .await?
+    .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let defender_user_details =
+        web::block(move || Ok(fetch_user(&mut conn, mod_user_id)?) as anyhow::Result<Option<User>>)
+            .await?
+            .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let attacker_user_details =
+        web::block(move || Ok(fetch_user(&mut conn, attacker_id)?) as anyhow::Result<Option<User>>)
+            .await?
+            .map_err(|err| error::handle_error(err.into()))?;
+
+    let map_spaces_response_with_artifacts_sim: Vec<MapSpacesResponseWithArifacts> = map_data
+        .building
+        .iter()
+        .map(|building| MapSpacesResponseWithArifacts {
+            artifacts: Some(building.artifacts),
+            id: building.map_space_id,
+            x_coordinate: building.pos_x,
+            y_coordinate: building.pos_y,
+            block_type_id: building.block_id,
+        })
+        .collect();
+
+    let building_type_response_sim: Vec<BuildingTypeResponse> = map_data
+        .building
+        .iter()
+        .map(|building| BuildingTypeResponse {
+            id: building.id,
+            block_id: building.block_id,
+            name: building.name.clone(),
+            width: building.width_in_tiles,
+            height: building.length_in_tiles,
+            level: building.level,
+            capacity: building.capacity,
+            cost: building.cost,
+            hp: building.hp,
+            range: building.range,
+            frequency: building.frequency,
+        })
+        .collect();
+
+    let defender_type_response_sim: Vec<DefenderTypeResponse> = map_data
+        .defenders
+        .iter()
+        .map(|defender| DefenderTypeResponse {
+            id: defender.id,
+            radius: defender.radius,
+            speed: defender.speed,
+            damage: defender.damage,
+            block_id: defender.block_id,
+            level: defender.level,
+            cost: defender.cost,
+            name: defender.name.clone(),
+        })
+        .collect();
+
+    let mine_type_response_sim: Vec<MineTypeResponse> = map_data
+        .mine_type
+        .iter()
+        .map(|mine| MineTypeResponse {
+            id: mine.id,
+            radius: mine.radius,
+            damage: mine.damage,
+            block_id: mine.block_id,
+            level: mine.level,
+            cost: mine.cost,
+            name: mine.name.clone(),
+        })
+        .collect();
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let attacker_types_sim = web::block(move || fetch_attacker_types(&mut conn, &attacker_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let bomb_types_sim = web::block(move || fetch_emp_types(&mut conn, &attacker_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let defender_base_details = SimulationBaseResponse {
+        m: map_data.map_id,
+        ms: map_spaces_response_with_artifacts_sim,
+        b: building_type_response_sim,
+        d: defender_type_response_sim,
+        mt: mine_type_response_sim,
+        at: attacker_types_sim,
+        bt: bomb_types_sim,
+    };
+
+    if attacker_user_details.is_none() {
+        return Err(ErrorBadRequest("Attacker Does not exist"));
+    }
+
+    let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
+
+    let game_log = GameLog {
+        g: -1,
+        a: attacker_user_details.unwrap(),
+        d: defender_user_details.unwrap(),
+        b: defender_base_details,
+        e: Vec::new(),
+        r: ResultResponse {
+            d: 0,
+            a: 0,
+            b: 0,
+            au: 0,
+            na: 0,
+            nd: 0,
+            oa: 0,
+            od: 0,
+        },
+    };
+
+    log::info!(
+        "Challenge:{} is ready for player:{}",
+        query_params.challenge_id,
+        attacker_id
+    );
 
     let (response, session, mut msg_stream) = actix_ws::handle(&req, body)?;
 

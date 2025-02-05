@@ -10,7 +10,7 @@ use crate::api::util::{HistoryboardEntry, HistoryboardResponse};
 use crate::api::{self};
 use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, ROAD_ID};
 use crate::models::*;
-use crate::schema::{available_emps, map_layout, map_spaces, prop};
+use crate::schema::{available_emps, emp_type, map_layout, map_spaces, prop};
 use crate::util::function;
 use crate::{api::util::GameHistoryResponse, error::DieselError};
 use anyhow::{Ok, Result};
@@ -1057,6 +1057,23 @@ pub fn fetch_attacker_types(conn: &mut PgConnection, user_id: &i32) -> Result<Ve
         .collect();
 
     Ok(results)
+}
+
+pub fn fetch_emp_types(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<EmpType>> {
+    let bomb_types = emp_type::table
+        .inner_join(available_blocks::table)
+        .filter(available_blocks::user_id.eq(user_id))
+        .load::<(EmpType, AvailableBlocks)>(conn)
+        .map_err(|err| DieselError {
+            table: "emp_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+        .map(|(emp_type, _)| emp_type)
+        .collect();
+
+    Ok(bomb_types)
 }
 
 pub fn add_user_default_base(
