@@ -14,6 +14,7 @@ use actix_web::error::{ErrorBadRequest, ErrorNotFound};
 use actix_web::web::Query;
 use actix_web::web::{self, Data, Json};
 use actix_web::{Responder, Result};
+use diesel::PgConnection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -41,6 +42,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/batch_transfer").route(web::post().to(post_batch_transfer_artifacts)))
     .service(web::resource("/save").route(web::put().to(confirm_base_details)))
     .service(web::resource("/save_admin").route(web::put().to(save_admin_base)))
+    .service(web::resource("/delete_admin/{map_id}").route(web::delete().to(delete_admin_base)))
     .service(web::resource("/game/{id}").route(web::get().to(get_game_base_details)))
     .service(web::resource("/history").route(web::get().to(defense_history)))
     .service(web::resource("/{defender_id}").route(web::get().to(get_other_base_details)))
@@ -623,6 +625,49 @@ async fn save_admin_base(
         file.write_all(updated_json_str.as_bytes())?;
     }
     Ok("Saved Admin")
+}
+
+async fn delete_admin_base(
+    map_id: web::Path<i32>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let defender_id = user.0;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let is_mod = web::block(move || fetch_user(&mut conn, defender_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+        .unwrap()
+        .is_mod;
+
+    if is_mod {
+        let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+        log::info!("Json path: {}", json_path.display());
+        let mut json_data_str = String::new();
+        if json_path.exists() {
+            let mut file = fs::File::open(json_path.clone())?;
+            file.read_to_string(&mut json_data_str)?;
+        }
+
+        let mut json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
+            HashMap::new()
+        } else {
+            serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+        };
+        let user_record = json_data.get_mut(&defender_id);
+        if let Some(user_record) = user_record {
+            user_record.remove(&map_id);
+        }
+
+        let updated_json_str = serde_json::to_string_pretty(&json_data)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(json_path)?;
+        file.write_all(updated_json_str.as_bytes())?;
+    }
+    Ok("Deleted")
 }
 
 async fn defense_history(
