@@ -382,3 +382,12 @@ pub struct ChallengeResponse {
     pub map_id: i32,
     pub score: i32,
 }
+
+#[derive(Insertable)]
+#[diesel(table_name = challenges_responses)]
+pub struct NewChallengeResponse<'a> {
+    pub attacker_id: &'a i32,
+    pub challenge_id: &'a i32,
+    pub map_id: &'a i32,
+    pub score: &'a i32,
+}

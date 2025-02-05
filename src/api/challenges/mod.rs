@@ -12,7 +12,7 @@ use std::{
     io::Read,
     time,
 };
-use util::{get_challenge_maps, is_challenge_possible};
+use util::{get_challenge_maps, is_challenge_possible, terminate_challenge};
 
 use crate::{
     api::{
@@ -407,6 +407,7 @@ async fn challenge_socket_handler(
             nd: 0,
             oa: 0,
             od: 0,
+            sc: 0,
         },
     };
 
@@ -434,6 +435,7 @@ async fn challenge_socket_handler(
             hut_defenders,
             mines,
             buildings,
+            None,
         );
         game_state.set_total_hp_buildings();
 
@@ -490,16 +492,20 @@ async fn challenge_socket_handler(
                                         if (session_clone1.clone().close(None).await).is_err() {
                                             log::info!("Error closing the socket connection for Challenge:{} and Player:{}", mod_user_id, attacker_id);
                                         }
-                                        // if util::terminate_game(
-                                        //     game_logs,
-                                        //     &mut conn,
-                                        //     &damaged_buildings,
-                                        //     &mut redis_conn,
-                                        // )
-                                        // .is_err()
-                                        // {
-                                        //     log::info!("Error terminating the game 1 for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                                        // }
+                                        if terminate_challenge(
+                                            &mut conn,
+                                            game_logs,
+                                            query_params.map_id,
+                                            query_params.challenge_id,
+                                        )
+                                        .is_err()
+                                        {
+                                            log::info!(
+                                                "Error terminating challenge for Challenge:{} and Player:{}",
+                                                query_params.challenge_id,
+                                                attacker_id
+                                            );
+                                        }
                                     } else if response.result_type == ResultType::MinesExploded {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
@@ -585,16 +591,20 @@ async fn challenge_socket_handler(
                     }
                 }
                 Message::Close(_s) => {
-                    // if util::terminate_game(
-                    //     game_logs,
-                    //     &mut conn,
-                    //     &damaged_buildings,
-                    //     &mut redis_conn,
-                    // )
-                    // .is_err()
-                    // {
-                    //     log::info!("Error terminating the game 2 for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
-                    // }
+                    if terminate_challenge(
+                        &mut conn,
+                        game_logs,
+                        query_params.map_id,
+                        query_params.challenge_id,
+                    )
+                    .is_err()
+                    {
+                        log::info!(
+                            "Error terminating challenge for Challenge:{} and Player:{}",
+                            query_params.challenge_id,
+                            attacker_id
+                        );
+                    }
                     break;
                 }
                 _ => {

@@ -4,10 +4,11 @@ use diesel::prelude::*;
 use diesel::PgConnection;
 use serde::Serialize;
 
-use crate::api::defense::util::AdminSaveData;
+use crate::api::attack::util::GameLog;
 use crate::error::DieselError;
 use crate::models::ChallengeMap;
 use crate::models::ChallengeResponse;
+use crate::models::NewChallengeResponse;
 use crate::schema::challenge_maps;
 use crate::schema::challenges_responses;
 use crate::util::function;
@@ -94,4 +95,32 @@ pub fn is_challenge_possible(
     let is_possible = challenge_response.is_none();
 
     Ok(is_possible)
+}
+
+pub fn terminate_challenge(
+    conn: &mut PgConnection,
+    game_log: &mut GameLog,
+    map_id: i32,
+    challenge_id: i32,
+) -> Result<()> {
+    let attacker_id = game_log.a.id;
+    let score = game_log.r.sc;
+
+    let new_challenge_resp = NewChallengeResponse {
+        attacker_id: &attacker_id,
+        challenge_id: &challenge_id,
+        map_id: &map_id,
+        score: &score,
+    };
+
+    let inserted_response: ChallengeResponse = diesel::insert_into(challenges_responses::table)
+        .values(&new_challenge_resp)
+        .get_result(conn)
+        .map_err(|err| DieselError {
+            table: "challenge_responses",
+            function: function!(),
+            error: err,
+        })?;
+
+    Ok(())
 }
