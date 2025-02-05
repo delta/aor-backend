@@ -32,7 +32,8 @@ use crate::{
         },
         user::util::fetch_user,
     },
-    constants::{GAME_AGE_IN_MINUTES, MOD_USER_BASE_PATH},
+    constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK, MOD_USER_BASE_PATH},
+    models::{AttackerType, EmpType},
     validator::{
         game_handler,
         state::State,
@@ -58,9 +59,17 @@ pub struct ChallengeSocketQuery {
     pub map_id: i32,
 }
 
+#[derive(Serialize)]
+pub struct ChallengeInitResponse {
+    pub map_data: AdminSaveData,
+    pub attacker_types: Vec<AttackerType>,
+    pub bomb_types: Vec<EmpType>,
+    pub max_bombs: i32,
+}
+
 pub fn routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::resource("/{id}").route(web::get().to(challenge_maps)))
-        .service(web::resource("/init").route(web::post().to(init_challenge)))
+    cfg.service(web::resource("/init").route(web::post().to(init_challenge)))
+        .service(web::resource("/{id}").route(web::get().to(challenge_maps)))
         .service(web::resource("/start").route(web::get().to(challenge_socket_handler)))
         .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
@@ -132,7 +141,28 @@ async fn init_challenge(
         })
         .clone();
 
-    Ok(Json(map_data))
+    let mut conn = pg_pool
+        .get()
+        .map_err(|err| error::handle_error(err.into()))?;
+    let attacker_types = web::block(move || fetch_attacker_types(&mut conn, &attacker_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut conn = pg_pool
+        .get()
+        .map_err(|err| error::handle_error(err.into()))?;
+    let bomb_types = web::block(move || fetch_emp_types(&mut conn, &attacker_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let resp = ChallengeInitResponse {
+        attacker_types,
+        map_data,
+        bomb_types,
+        max_bombs: MAX_BOMBS_PER_ATTACK,
+    };
+
+    Ok(Json(resp))
 }
 
 async fn challenge_socket_handler(
