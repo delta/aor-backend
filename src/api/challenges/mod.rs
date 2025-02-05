@@ -51,6 +51,7 @@ pub struct ChallengeInitBody {
     map_id: i32,
 }
 
+#[derive(Deserialize)]
 pub struct ChallengeSocketQuery {
     pub challenge_id: i32,
     pub user_id: i32,
@@ -60,6 +61,7 @@ pub struct ChallengeSocketQuery {
 pub fn routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/{id}").route(web::get().to(challenge_maps)))
         .service(web::resource("/init").route(web::post().to(init_challenge)))
+        .service(web::resource("/start").route(web::get().to(challenge_socket_handler)))
         .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
 
