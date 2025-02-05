@@ -1,4 +1,4 @@
-use crate::api::defense::util::add_user_default_base;
+use crate::api::defense::util::{add_user_default_base};
 use crate::api::error;
 use crate::error::DieselError;
 use crate::models::*;

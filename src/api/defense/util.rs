@@ -7,17 +7,19 @@ use crate::api::user::util::fetch_user;
 use crate::api::util::GameHistoryEntry;
 use crate::api::util::{HistoryboardEntry, HistoryboardResponse};
 use crate::api::{self};
-use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, ROAD_ID};
+use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, MAP_SIZE, ROAD_ID};
 use crate::models::*;
 use crate::schema::{available_emps, map_layout, map_spaces, prop};
 use crate::util::function;
+use crate::validator::util::Coords;
 use crate::{api::util::GameHistoryResponse, error::DieselError};
 use anyhow::{Ok, Result};
 use diesel::dsl::exists;
 use diesel::{prelude::*, select};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::cmp;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize, Clone)]
 pub struct MapSpacesResponseWithArifacts {
@@ -128,6 +130,18 @@ pub struct DefenseResponse {
 #[derive(Deserialize, Serialize)]
 pub struct DefenceHistoryResponse {
     pub games: Vec<Game>,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct MapSpaceEdgeY {
+    pub map_space_id: i32,
+    pub y: i32,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct MapSpaceEdgeX {
+    pub map_space_id: i32,
+    pub x: i32,
 }
 
 pub fn check_valid_map_id(
@@ -953,6 +967,631 @@ pub fn fetch_attacker_types(conn: &mut PgConnection, user_id: &i32) -> Result<Ve
         .collect();
 
     Ok(results)
+}
+
+pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapSpaces>> {
+    conn.transaction(|conn| {
+        use crate::schema::{
+            artifact, block_type, building_type, defender_type, map_layout,
+            map_spaces, mine_type, user,
+        };
+
+        let map_layout_id = map_layout::table
+            .inner_join(user::table)
+            .filter(user::id.eq(user_id))
+            .select(map_layout::id)
+            .first(conn)
+            .map_err(|err| DieselError {
+                table: "map_layout",
+                function: function!(),
+                error: err,
+            })?;
+
+        let mut artifact_map: HashMap<(i32, i32), i32> = HashMap::new();
+        let mut new_map_spaces: Vec<NewMapSpaces> = Vec::new(); 
+
+        // creating random base logic goes here
+        let blocks_list: Vec<BlockType> = block_type::table
+            .load::<BlockType>(conn)
+            .map_err(|err| DieselError {
+                table: "block_type",
+                function: function!(),
+                error: err,
+            })?
+            .into_iter()
+            .map(|block_type| BlockType {
+                id: block_type.id,
+                mine_type: block_type.mine_type,
+                defender_type: block_type.defender_type,
+                category: block_type.category,
+                building_type: block_type.building_type,
+            })
+            .collect();
+
+        let buildings_list: Vec<BlockType> = blocks_list
+            .clone()
+            .into_iter()
+            .filter(|block_type| block_type.category == BlockCategory::Building)
+            .collect();
+
+        let mines_list: Vec<BlockType> = blocks_list
+            .clone()
+            .into_iter()
+            .filter(|block_type| block_type.category == BlockCategory::Mine)
+            .collect();
+
+        let defenders_list: Vec<BlockType> = blocks_list
+            .clone()
+            .into_iter()
+            .filter(|block_type| block_type.category == BlockCategory::Defender)
+            .collect();
+
+        let mut occupied_spaces: HashSet<(i32, i32)> = HashSet::new();
+        let mut occupied_adjacent_spaces: HashSet<(i32, i32)> = HashSet::new();
+
+        let buildings_type_list: Vec<BuildingType> = building_type::table
+            .load::<BuildingType>(conn)
+            .map_err(|err| DieselError {
+                table: "building_type",
+                function: function!(),
+                error: err,
+            })?
+            .into_iter()
+            .map(|building_type| BuildingType {
+                id: building_type.id,
+                name: building_type.name,
+                width: building_type.width,
+                height: building_type.height,
+                capacity: building_type.capacity,
+                level: building_type.level,
+                cost: building_type.cost,
+                hp: building_type.hp,
+                prop_id: building_type.prop_id,
+            })
+            .collect();
+
+        let mines_type_list: Vec<MineType> = mine_type::table
+            .load::<MineType>(conn)
+            .map_err(|err| DieselError {
+                table: "building_type",
+                function: function!(),
+                error: err,
+            })?
+            .into_iter()
+            .map(|mine_type| MineType {
+                id: mine_type.id,
+                damage: mine_type.damage,
+                level: mine_type.level,
+                cost: mine_type.cost,
+                name: mine_type.name,
+                prop_id: mine_type.prop_id,
+            })
+            .collect();
+
+        let defenders_type_list: Vec<DefenderType> = defender_type::table
+            .load::<DefenderType>(conn)
+            .map_err(|err| DieselError {
+                table: "building_type",
+                function: function!(),
+                error: err,
+            })?
+            .into_iter()
+            .map(|defender_type| DefenderType {
+                id: defender_type.id,
+                damage: defender_type.damage,
+                level: defender_type.level,
+                cost: defender_type.cost,
+                name: defender_type.name,
+                prop_id: defender_type.prop_id,
+                speed: defender_type.speed,
+            })
+            .collect();
+
+        for (index, building) in buildings_list.iter().enumerate() {
+            let building_type = buildings_type_list
+                .iter()
+                .find(|building_type| building_type.id == building.building_type)
+                .expect("Building type not found!");
+            let mut building_count = 1;
+            if building_type.name == "Sentry" || building_type.name == "Defender_Hut" {
+                building_count = 2;
+            }
+            for _ in 0..building_count {
+                if building_type.level == 1 {
+                    log::info!("building: {}", building.building_type);
+                    let mut rand_x_coordinate;
+                    let mut rand_y_coordinate;
+                    if building.building_type == 0 {
+                        continue;
+                    }
+                    let width = buildings_type_list
+                        .iter()
+                        .find(|building_type| building_type.id == building.building_type)
+                        .map(|bt| bt.width)
+                        .expect("Building type not found!");
+                    loop {
+                        rand_x_coordinate =
+                            rand::thread_rng().gen_range(1..=MAP_SIZE - width as usize - 2) as i32;
+                        rand_y_coordinate =
+                            rand::thread_rng().gen_range(1..=MAP_SIZE - width as usize - 2) as i32;
+
+                        let mut overlaps = false;
+
+                        for x in rand_x_coordinate..rand_x_coordinate + width {
+                            for y in rand_y_coordinate..rand_y_coordinate + width {
+                                if occupied_adjacent_spaces.contains(&(x, y)) {
+                                    overlaps = true;
+                                    break;
+                                }
+                            }
+                            if overlaps {
+                                break;
+                            }
+                        }
+
+                        if !overlaps {
+                            for x in rand_x_coordinate..rand_x_coordinate + width {
+                                for y in rand_y_coordinate..rand_y_coordinate + width {
+                                    if !(x < 0
+                                        || x >= MAP_SIZE as i32
+                                        || y < 0
+                                        || y >= MAP_SIZE as i32)
+                                    {
+                                        occupied_spaces.insert((x, y));
+                                    }
+                                }
+                            }
+                            for x in rand_x_coordinate - 3..rand_x_coordinate + width + 3 {
+                                for y in rand_y_coordinate - 3..rand_y_coordinate + width + 3 {
+                                    if !(x < 0
+                                        || x >= MAP_SIZE as i32
+                                        || y < 0
+                                        || y >= MAP_SIZE as i32)
+                                    {
+                                        occupied_adjacent_spaces.insert((x, y));
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: rand_x_coordinate,
+                        y_coordinate: rand_y_coordinate,
+                        block_type_id: building.id,
+                    });
+                    artifact_map.insert((0, 0), 1);
+                    log::info!(
+                        "new map space: position: {}, {}, block type id: {}",
+                        rand_x_coordinate,
+                        rand_y_coordinate,
+                        building.id
+                    );
+                }
+            }
+            // if index == 3 {
+            //     break;
+            // }
+        }
+
+        let map_center = Coords {
+            x: MAP_SIZE as i32 / 2,
+            y: MAP_SIZE as i32 / 2,
+        };
+
+        let mut road_spaces = Vec::new();
+        let building_map_spaces = new_map_spaces.clone();
+
+        let closest_to_map_center_building: NewMapSpaces = new_map_spaces
+            .iter()
+            .min_by_key(|building| {
+                manhattan_distance(
+                    building.x_coordinate,
+                    map_center.x,
+                    building.y_coordinate,
+                    map_center.y,
+                )
+            })
+            .expect("Building type not found!")
+            .clone();
+
+        let mut disconnected_buildings: Vec<NewMapSpaces> = new_map_spaces
+            .clone()
+            .into_iter()
+            .filter(|building| {
+                building.x_coordinate != closest_to_map_center_building.x_coordinate
+                    && building.y_coordinate != closest_to_map_center_building.y_coordinate
+            })
+            .map(|building| building.clone())
+            .collect();
+
+        let width_of_central_building = get_width(
+            &closest_to_map_center_building,
+            &blocks_list,
+            &buildings_type_list,
+        );
+
+        // for x in closest_to_map_center_building.x_coordinate - 1
+        //     ..=closest_to_map_center_building.x_coordinate + width_of_central_building
+        // {
+        //     new_map_spaces.push(NewMapSpaces {
+        //         map_id: map_layout.id,
+        //         x_coordinate: x,
+        //         y_coordinate: closest_to_map_center_building.y_coordinate
+        //             + width_of_central_building,
+        //         block_type_id: ROAD_ID,
+        //     });
+        //     road_spaces.push(NewMapSpaces {
+        //         map_id: map_layout.id,
+        //         x_coordinate: x,
+        //         y_coordinate: closest_to_map_center_building.y_coordinate
+        //             + width_of_central_building,
+        //         block_type_id: ROAD_ID,
+        //     });
+        // }
+
+        let mut current_tile = Coords {
+            x: closest_to_map_center_building.x_coordinate + width_of_central_building,
+            y: closest_to_map_center_building.y_coordinate + width_of_central_building,
+        };
+
+        // let mut available_y_map_spaces: Vec<MapSpaceEdgeY> = new_map_spaces
+        //     .iter()
+        //     .enumerate()
+        //     .filter(|(index, map_space)| {
+        //         map_space.x_coordinate != closest_to_map_center_building.x_coordinate
+        //             && map_space.y_coordinate != closest_to_map_center_building.y_coordinate
+        //     })
+        //     .flat_map(|(index, map_space)| {
+        //         vec![
+        //             MapSpaceEdgeY {
+        //                 map_space_id: index as i32,
+        //                 y: map_space.y_coordinate - 1,
+        //             },
+        //             MapSpaceEdgeY {
+        //                 map_space_id: index as i32,
+        //                 y: map_space.y_coordinate + get_width(map_space, &blocks_list, &buildings_type_list),
+        //             },
+        //         ]
+        //     })
+        //     .collect();
+
+        // let mut available_x_map_spaces: Vec<MapSpaceEdgeX> = new_map_spaces
+        //     .iter()
+        //     .enumerate()
+        //     .filter(|(index, map_space)| {
+        //         map_space.x_coordinate != closest_to_map_center_building.x_coordinate
+        //             && map_space.y_coordinate != closest_to_map_center_building.y_coordinate
+        //     })
+        //     .flat_map(|(index, map_space)| {
+        //         vec![
+        //             MapSpaceEdgeX {
+        //                 map_space_id: index as i32,
+        //                 x: map_space.x_coordinate - 1,
+        //             },
+        //             MapSpaceEdgeX {
+        //                 map_space_id: index as i32,
+        //                 x: map_space.x_coordinate + get_width(map_space, &blocks_list, &buildings_type_list),
+        //             },
+        //         ]
+        //     })
+        //     .collect();
+
+        // if let Some(index) = new_map_spaces.iter().position(|map_space|
+        //     map_space.x_coordinate == closest_to_map_center_building.x_coordinate &&
+        //     map_space.y_coordinate == closest_to_map_center_building.y_coordinate
+        // ) {
+        //     available_x_map_spaces.retain(|&tile| tile.map_space_id != index as i32);
+        //     available_y_map_spaces.retain(|&tile| tile.map_space_id != index as i32);
+        // }
+
+        let mut currently_connected_building = closest_to_map_center_building.clone();
+
+        while !disconnected_buildings.is_empty() {
+            let next_building = disconnected_buildings
+                .iter()
+                .min_by_key(|building| {
+                    manhattan_distance(
+                        building.x_coordinate,
+                        currently_connected_building.x_coordinate,
+                        building.y_coordinate,
+                        currently_connected_building.y_coordinate,
+                    )
+                })
+                .unwrap()
+                .clone();
+            log::info!(
+                "current building : {:?}, next building: {:?}",
+                currently_connected_building,
+                next_building
+            );
+            let mut start = cmp::min(
+                currently_connected_building.x_coordinate - 1,
+                next_building.x_coordinate - 1,
+            );
+            let mut end = cmp::max(
+                currently_connected_building.x_coordinate - 1,
+                next_building.x_coordinate - 1,
+            );
+            current_tile = Coords {
+                x: currently_connected_building.x_coordinate - 1,
+                y: currently_connected_building.y_coordinate - 1,
+            };
+
+            for x in start..=end {
+                if !find_overlap_with_map_spaces(
+                    new_map_spaces.clone(),
+                    blocks_list.clone(),
+                    buildings_type_list.clone(),
+                    Coords {
+                        x,
+                        y: current_tile.y,
+                    },
+                ) {
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: x,
+                        y_coordinate: current_tile.y,
+                        block_type_id: ROAD_ID,
+                    });
+                    road_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: x,
+                        y_coordinate: current_tile.y,
+                        block_type_id: ROAD_ID,
+                    });
+                }
+            }
+            current_tile = Coords {
+                x: next_building.x_coordinate - 1,
+                y: current_tile.y,
+            };
+            start = cmp::min(
+                currently_connected_building.y_coordinate - 1,
+                next_building.y_coordinate - 1,
+            );
+            end = cmp::max(
+                currently_connected_building.y_coordinate - 1,
+                next_building.y_coordinate - 1,
+            );
+            for y in start..=end {
+                if !find_overlap_with_map_spaces(
+                    new_map_spaces.clone(),
+                    blocks_list.clone(),
+                    buildings_type_list.clone(),
+                    Coords {
+                        x: current_tile.x,
+                        y,
+                    },
+                ) {
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: current_tile.x,
+                        y_coordinate: y,
+                        block_type_id: ROAD_ID,
+                    });
+                    road_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: current_tile.x,
+                        y_coordinate: y,
+                        block_type_id: ROAD_ID,
+                    });
+                }
+            }
+            disconnected_buildings.retain(|building| {
+                building.x_coordinate != next_building.x_coordinate
+                    || building.y_coordinate != next_building.y_coordinate
+            });
+            currently_connected_building = next_building.clone();
+        }
+
+        for building in building_map_spaces.iter() {
+            let width = get_width(building, &blocks_list, &buildings_type_list);
+            for x in building.x_coordinate - 1..=building.x_coordinate + width {
+                if !find_overlap_with_map_spaces(
+                    new_map_spaces.clone(),
+                    blocks_list.clone(),
+                    buildings_type_list.clone(),
+                    Coords {
+                        x,
+                        y: building.y_coordinate - 1,
+                    },
+                ) || !find_overlap_with_map_spaces(
+                    new_map_spaces.clone(),
+                    blocks_list.clone(),
+                    buildings_type_list.clone(),
+                    Coords {
+                        x: x,
+                        y: building.y_coordinate + width,
+                    },
+                ) {
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: x,
+                        y_coordinate: building.y_coordinate - 1,
+                        block_type_id: ROAD_ID,
+                    });
+                    road_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: x,
+                        y_coordinate: building.y_coordinate - 1,
+                        block_type_id: ROAD_ID,
+                    });
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: x,
+                        y_coordinate: building.y_coordinate + width,
+                        block_type_id: ROAD_ID,
+                    });
+                    road_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: x,
+                        y_coordinate: building.y_coordinate + width,
+                        block_type_id: ROAD_ID,
+                    });
+                }
+            }
+            for y in building.y_coordinate - 1..=building.y_coordinate + width {
+                if !find_overlap_with_map_spaces(
+                    new_map_spaces.clone(),
+                    blocks_list.clone(),
+                    buildings_type_list.clone(),
+                    Coords {
+                        x: building.x_coordinate - 1,
+                        y,
+                    },
+                ) || !find_overlap_with_map_spaces(
+                    new_map_spaces.clone(),
+                    blocks_list.clone(),
+                    buildings_type_list.clone(),
+                    Coords {
+                        x: building.x_coordinate + width,
+                        y,
+                    },
+                ) {
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: building.x_coordinate - 1,
+                        y_coordinate: y,
+                        block_type_id: ROAD_ID,
+                    });
+                    road_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: building.x_coordinate - 1,
+                        y_coordinate: y,
+                        block_type_id: ROAD_ID,
+                    });
+                    new_map_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: building.x_coordinate + width,
+                        y_coordinate: y,
+                        block_type_id: ROAD_ID,
+                    });
+                    road_spaces.push(NewMapSpaces {
+                        map_id: map_layout_id,
+                        x_coordinate: building.x_coordinate + width,
+                        y_coordinate: y,
+                        block_type_id: ROAD_ID,
+                    });
+                }
+            }
+        }
+
+        // insert the new map spaces
+        diesel::insert_into(map_spaces::table)
+            .values(new_map_spaces)
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "map_spaces",
+                function: function!(),
+                error: err,
+            })?;
+
+        // get the map spaces from the map spaces table
+        let result: Vec<MapSpaces> = map_spaces::table
+            .filter(map_spaces::map_id.eq(map_layout_id))
+            .load::<MapSpaces>(conn)
+            .map_err(|err| DieselError {
+                table: "map_spaces",
+                function: function!(),
+                error: err,
+            })?;
+
+        // store the new artifact entries into a vector
+        let artifact_entries: Vec<NewArtifact> = result
+            .iter()
+            .filter_map(|m| {
+                if artifact_map.contains_key(&(m.x_coordinate, m.y_coordinate)) {
+                    Some(NewArtifact {
+                        map_space_id: m.id,
+                        count: artifact_map[&(m.x_coordinate, m.y_coordinate)],
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // insert the new artifact entries into the artifact table
+        diesel::insert_into(artifact::table)
+            .values(artifact_entries)
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "artifact",
+                function: function!(),
+                error: err,
+            })?;
+
+        Ok(result)
+    })
+}
+
+pub fn find_closest_unconnected_building(
+    buildings: Vec<NewMapSpaces>,
+    current_building: Coords,
+) -> Option<NewMapSpaces> {
+    let mut closest_building: Option<NewMapSpaces> = None;
+    let mut closest_distance = std::i32::MAX;
+    for building in buildings {
+        let distance = manhattan_distance(
+            current_building.x,
+            building.x_coordinate,
+            current_building.y,
+            building.y_coordinate,
+        );
+        if distance < closest_distance {
+            closest_distance = distance;
+            closest_building = Some(building);
+        }
+    }
+    closest_building
+}
+
+pub fn manhattan_distance(x1: i32, x2: i32, y1: i32, y2: i32) -> i32 {
+    (x1 - x2).abs() + (y1 - y2).abs()
+}
+
+pub fn find_overlap_with_map_spaces(
+    map_spaces: Vec<NewMapSpaces>,
+    blocks_list: Vec<BlockType>,
+    buildings_type_list: Vec<BuildingType>,
+    current_tile: Coords,
+) -> bool {
+    for building in map_spaces {
+        let width = get_width(&building, &blocks_list, &buildings_type_list);
+        let building_matrix: HashSet<Coords> = (building.y_coordinate
+            ..building.y_coordinate + width)
+            .flat_map(|y| {
+                (building.x_coordinate..building.x_coordinate + width).map(move |x| Coords { x, y })
+            })
+            .collect();
+        if building_matrix.contains(&current_tile) {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn get_width(
+    building: &NewMapSpaces,
+    blocks_list: &Vec<BlockType>,
+    buildings_type_list: &Vec<BuildingType>,
+) -> i32 {
+    let block_type_id = building.block_type_id;
+    let building_type_id = blocks_list
+        .iter()
+        .find(|block_type| block_type.id == block_type_id)
+        .map(|bt| bt.building_type)
+        .expect("Block type not found!");
+    let width = buildings_type_list
+        .iter()
+        .find(|building_type| building_type.id == building_type_id)
+        .map(|bt| bt.width)
+        .expect("Building type not found!");
+    width
 }
 
 pub fn add_user_default_base(

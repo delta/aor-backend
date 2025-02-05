@@ -219,7 +219,7 @@ pub struct MapSpaces {
     pub block_type_id: i32,
 }
 
-#[derive(Deserialize, Insertable)]
+#[derive(Deserialize, Insertable, PartialEq, Clone, Copy, Debug, Eq, Hash)]
 #[diesel(table_name = map_spaces)]
 pub struct NewMapSpaces {
     pub map_id: i32,

@@ -32,6 +32,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/game/{id}").route(web::get().to(get_game_base_details)))
     .service(web::resource("/history").route(web::get().to(defense_history)))
     .service(web::resource("/{defender_id}").route(web::get().to(get_other_base_details)))
+    .service(web::resource("/randomize").route(web::get().to(get_random_base)))
     .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
 
@@ -538,6 +539,16 @@ async fn get_top_defenses(pool: web::Data<PgPool>, user: AuthUser) -> Result<imp
     let response = web::block(move || {
         let mut conn = pool.get()?;
         util::fetch_top_defenses(user_id, &mut conn)
+    })
+    .await?
+    .map_err(|err| error::handle_error(err.into()))?;
+    Ok(web::Json(response))
+}
+
+async fn get_random_base(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl Responder> {
+    let response = web::block(move || {
+        let mut conn = pool.get()?;
+        util::randomize_base(&mut conn, &user.0)
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
