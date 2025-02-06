@@ -250,6 +250,7 @@ pub struct Challenge {
     pub challenge_type: Option<ChallengeType>,
     pub score: i32,
     pub maze: MazeChallenge,
+    pub challenge_completed: bool,
 }
 
 pub fn send_terminate_game_message(frame_number: i32, message: String) -> SocketResponse {
