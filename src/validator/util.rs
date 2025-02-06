@@ -237,6 +237,7 @@ pub struct Sentry {
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub enum ChallengeType {
     Maze,
+    FallGuys,
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
@@ -246,11 +247,23 @@ pub struct MazeChallenge {
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
+pub struct FallGuys {
+    pub hut_range_increment: i32,
+    pub hut_frequency_increment: i32,
+    pub sentry_range_increment: i32,
+    pub sentry_frequency_increment: i32,
+    pub last_intensity_update_tick: i32,
+    pub update_intensity_interval: i32,
+    pub end_tile: Coords,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub struct Challenge {
     pub challenge_type: Option<ChallengeType>,
     pub score: i32,
-    pub maze: MazeChallenge,
     pub challenge_completed: bool,
+    pub maze: Option<MazeChallenge>,
+    pub fall_guys: Option<FallGuys>,
 }
 
 pub fn send_terminate_game_message(frame_number: i32, message: String) -> SocketResponse {
