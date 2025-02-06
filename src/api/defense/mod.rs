@@ -25,6 +25,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
             .route(web::put().to(set_base_details))
             .route(web::get().to(get_user_base_details)),
     )
+    .service(web::resource("/randomize").route(web::get().to(get_random_base)))
     .service(web::resource("/top").route(web::get().to(get_top_defenses)))
     .service(web::resource("/transfer").route(web::post().to(post_transfer_artifacts)))
     .service(web::resource("/batch_transfer").route(web::post().to(post_batch_transfer_artifacts)))
@@ -32,7 +33,6 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/game/{id}").route(web::get().to(get_game_base_details)))
     .service(web::resource("/history").route(web::get().to(defense_history)))
     .service(web::resource("/{defender_id}").route(web::get().to(get_other_base_details)))
-    .service(web::resource("/randomize").route(web::get().to(get_random_base)))
     .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
 
@@ -547,8 +547,12 @@ async fn get_top_defenses(pool: web::Data<PgPool>, user: AuthUser) -> Result<imp
 
 async fn get_random_base(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl Responder> {
     let response = web::block(move || {
+        let user_id = user.0;
         let mut conn = pool.get()?;
-        util::randomize_base(&mut conn, &user.0)
+        util::randomize_base(&mut conn, &user.0);
+        let user = fetch_user(&mut conn, user_id)?;
+        let map = util::fetch_map_layout(&mut conn, &user_id)?;
+        util::get_details_from_map_layout(&mut conn, map, user)
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;

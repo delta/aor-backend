@@ -8,7 +8,7 @@ use crate::api::util::GameHistoryEntry;
 use crate::api::util::{HistoryboardEntry, HistoryboardResponse};
 use crate::api::{self};
 use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, MAP_SIZE, ROAD_ID};
-use crate::models::*;
+use crate::models::{self, *};
 use crate::schema::{available_emps, map_layout, map_spaces, prop};
 use crate::util::function;
 use crate::validator::util::Coords;
@@ -857,7 +857,11 @@ pub fn fetch_defender_types(
         .filter(map_layout::player.eq(user_id))
         .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
         .filter(block_type::category.eq(BlockCategory::Defender))
-        .inner_join(defender_type::table.on(block_type::defender_type.assume_not_null().eq(defender_type::id)))
+        .inner_join(
+            defender_type::table.on(block_type::defender_type
+                .assume_not_null()
+                .eq(defender_type::id)),
+        )
         .inner_join(prop::table.on(prop::id.eq(defender_type::prop_id)))
         .load::<(MapSpaces, MapLayout, BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
@@ -972,8 +976,8 @@ pub fn fetch_attacker_types(conn: &mut PgConnection, user_id: &i32) -> Result<Ve
 pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapSpaces>> {
     conn.transaction(|conn| {
         use crate::schema::{
-            artifact, block_type, building_type, defender_type, map_layout,
-            map_spaces, mine_type, user,
+            artifact, block_type, building_type, defender_type, map_layout, map_spaces, mine_type,
+            user,
         };
 
         let map_layout_id = map_layout::table
@@ -987,11 +991,23 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
                 error: err,
             })?;
 
-        let mut artifact_map: HashMap<(i32, i32), i32> = HashMap::new();
-        let mut new_map_spaces: Vec<NewMapSpaces> = Vec::new(); 
+        let old_map_spaces = map_spaces::table
+            .filter(map_spaces::map_id.eq(map_layout_id))
+            .load::<MapSpaces>(conn)
+            .map_err(|err| DieselError {
+                table: "map_spaces",
+                function: function!(),
+                error: err,
+            })?;
+
+        let mut artifact_map: HashMap<i32, i32> = HashMap::new();
+        let mut new_map_spaces: Vec<NewMapSpaces> = Vec::new();
 
         // creating random base logic goes here
-        let blocks_list: Vec<BlockType> = block_type::table
+        let blocks_list: Vec<BlockType> = map_spaces::table
+            .filter(map_spaces::map_id.eq(map_layout_id))
+            .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
+            .select(block_type::all_columns)
             .load::<BlockType>(conn)
             .map_err(|err| DieselError {
                 table: "block_type",
@@ -1013,6 +1029,23 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
             .into_iter()
             .filter(|block_type| block_type.category == BlockCategory::Building)
             .collect();
+
+        let old_artifacts: Vec<models::Artifact> = artifact::table
+            .filter(artifact::map_space_id.eq_any(old_map_spaces.iter().map(|building| building.id)))
+            .load::<models::Artifact>(conn)
+            .map_err(|err| DieselError {
+                table: "artifact",
+                function: function!(),
+                error: err,
+            })?;
+
+        old_artifacts.iter().for_each(|artifact| {
+            let building = old_map_spaces
+                .iter()
+                .find(|building| building.id == artifact.map_space_id)
+                .expect("building not found in old map spaces!");
+            artifact_map.insert(building.block_type_id, artifact.count);
+        });
 
         let mines_list: Vec<BlockType> = blocks_list
             .clone()
@@ -1084,97 +1117,75 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
                 name: defender_type.name,
                 prop_id: defender_type.prop_id,
                 speed: defender_type.speed,
+                max_health: defender_type.max_health,
             })
             .collect();
-
-        for (index, building) in buildings_list.iter().enumerate() {
-            let building_type = buildings_type_list
+        for building in buildings_list.iter() {
+            let mut rand_x_coordinate;
+            let mut rand_y_coordinate;
+            if building.building_type == 0 {
+                continue;
+            }
+            let width = buildings_type_list
                 .iter()
                 .find(|building_type| building_type.id == building.building_type)
+                .map(|bt| bt.width)
                 .expect("Building type not found!");
-            let mut building_count = 1;
-            if building_type.name == "Sentry" || building_type.name == "Defender_Hut" {
-                building_count = 2;
-            }
-            for _ in 0..building_count {
-                if building_type.level == 1 {
-                    log::info!("building: {}", building.building_type);
-                    let mut rand_x_coordinate;
-                    let mut rand_y_coordinate;
-                    if building.building_type == 0 {
-                        continue;
-                    }
-                    let width = buildings_type_list
-                        .iter()
-                        .find(|building_type| building_type.id == building.building_type)
-                        .map(|bt| bt.width)
-                        .expect("Building type not found!");
-                    loop {
-                        rand_x_coordinate =
-                            rand::thread_rng().gen_range(1..=MAP_SIZE - width as usize - 2) as i32;
-                        rand_y_coordinate =
-                            rand::thread_rng().gen_range(1..=MAP_SIZE - width as usize - 2) as i32;
+            loop {
+                rand_x_coordinate =
+                    rand::thread_rng().gen_range(1..=MAP_SIZE - width as usize - 2) as i32;
+                rand_y_coordinate =
+                    rand::thread_rng().gen_range(1..=MAP_SIZE - width as usize - 2) as i32;
 
-                        let mut overlaps = false;
+                let mut overlaps = false;
 
-                        for x in rand_x_coordinate..rand_x_coordinate + width {
-                            for y in rand_y_coordinate..rand_y_coordinate + width {
-                                if occupied_adjacent_spaces.contains(&(x, y)) {
-                                    overlaps = true;
-                                    break;
-                                }
-                            }
-                            if overlaps {
-                                break;
-                            }
-                        }
-
-                        if !overlaps {
-                            for x in rand_x_coordinate..rand_x_coordinate + width {
-                                for y in rand_y_coordinate..rand_y_coordinate + width {
-                                    if !(x < 0
-                                        || x >= MAP_SIZE as i32
-                                        || y < 0
-                                        || y >= MAP_SIZE as i32)
-                                    {
-                                        occupied_spaces.insert((x, y));
-                                    }
-                                }
-                            }
-                            for x in rand_x_coordinate - 3..rand_x_coordinate + width + 3 {
-                                for y in rand_y_coordinate - 3..rand_y_coordinate + width + 3 {
-                                    if !(x < 0
-                                        || x >= MAP_SIZE as i32
-                                        || y < 0
-                                        || y >= MAP_SIZE as i32)
-                                    {
-                                        occupied_adjacent_spaces.insert((x, y));
-                                    }
-                                }
-                            }
+                for x in rand_x_coordinate..rand_x_coordinate + width {
+                    for y in rand_y_coordinate..rand_y_coordinate + width {
+                        if occupied_adjacent_spaces.contains(&(x, y)) {
+                            overlaps = true;
                             break;
                         }
                     }
-                    new_map_spaces.push(NewMapSpaces {
-                        map_id: map_layout_id,
-                        x_coordinate: rand_x_coordinate,
-                        y_coordinate: rand_y_coordinate,
-                        block_type_id: building.id,
-                    });
-                    artifact_map.insert((0, 0), 1);
-                    log::info!(
-                        "new map space: position: {}, {}, block type id: {}",
-                        rand_x_coordinate,
-                        rand_y_coordinate,
-                        building.id
-                    );
+                    if overlaps {
+                        break;
+                    }
+                }
+
+                if !overlaps {
+                    for x in rand_x_coordinate..rand_x_coordinate + width {
+                        for y in rand_y_coordinate..rand_y_coordinate + width {
+                            if !(x < 0
+                                || x >= MAP_SIZE as i32
+                                || y < 0
+                                || y >= MAP_SIZE as i32)
+                            {
+                                occupied_spaces.insert((x, y));
+                            } else {
+                                log::info!("x: {}, y: {}", x, y);
+                            }
+                        }
+                    }
+                    for x in rand_x_coordinate - 1..rand_x_coordinate + width + 1 {
+                        for y in rand_y_coordinate - 1..rand_y_coordinate + width + 1 {
+                            if !(x < 0
+                                || x >= MAP_SIZE as i32
+                                || y < 0
+                                || y >= MAP_SIZE as i32)
+                            {
+                                occupied_adjacent_spaces.insert((x, y));
+                            }
+                        }
+                    }
+                    break;
                 }
             }
-            // if index == 3 {
-            //     break;
-            // }
+            new_map_spaces.push(NewMapSpaces {
+                map_id: map_layout_id,
+                x_coordinate: rand_x_coordinate,
+                y_coordinate: rand_y_coordinate,
+                block_type_id: building.id,
+            });
         }
-
         let map_center = Coords {
             x: MAP_SIZE as i32 / 2,
             y: MAP_SIZE as i32 / 2,
@@ -1212,82 +1223,12 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
             &buildings_type_list,
         );
 
-        // for x in closest_to_map_center_building.x_coordinate - 1
-        //     ..=closest_to_map_center_building.x_coordinate + width_of_central_building
-        // {
-        //     new_map_spaces.push(NewMapSpaces {
-        //         map_id: map_layout.id,
-        //         x_coordinate: x,
-        //         y_coordinate: closest_to_map_center_building.y_coordinate
-        //             + width_of_central_building,
-        //         block_type_id: ROAD_ID,
-        //     });
-        //     road_spaces.push(NewMapSpaces {
-        //         map_id: map_layout.id,
-        //         x_coordinate: x,
-        //         y_coordinate: closest_to_map_center_building.y_coordinate
-        //             + width_of_central_building,
-        //         block_type_id: ROAD_ID,
-        //     });
-        // }
-
         let mut current_tile = Coords {
             x: closest_to_map_center_building.x_coordinate + width_of_central_building,
             y: closest_to_map_center_building.y_coordinate + width_of_central_building,
         };
 
-        // let mut available_y_map_spaces: Vec<MapSpaceEdgeY> = new_map_spaces
-        //     .iter()
-        //     .enumerate()
-        //     .filter(|(index, map_space)| {
-        //         map_space.x_coordinate != closest_to_map_center_building.x_coordinate
-        //             && map_space.y_coordinate != closest_to_map_center_building.y_coordinate
-        //     })
-        //     .flat_map(|(index, map_space)| {
-        //         vec![
-        //             MapSpaceEdgeY {
-        //                 map_space_id: index as i32,
-        //                 y: map_space.y_coordinate - 1,
-        //             },
-        //             MapSpaceEdgeY {
-        //                 map_space_id: index as i32,
-        //                 y: map_space.y_coordinate + get_width(map_space, &blocks_list, &buildings_type_list),
-        //             },
-        //         ]
-        //     })
-        //     .collect();
-
-        // let mut available_x_map_spaces: Vec<MapSpaceEdgeX> = new_map_spaces
-        //     .iter()
-        //     .enumerate()
-        //     .filter(|(index, map_space)| {
-        //         map_space.x_coordinate != closest_to_map_center_building.x_coordinate
-        //             && map_space.y_coordinate != closest_to_map_center_building.y_coordinate
-        //     })
-        //     .flat_map(|(index, map_space)| {
-        //         vec![
-        //             MapSpaceEdgeX {
-        //                 map_space_id: index as i32,
-        //                 x: map_space.x_coordinate - 1,
-        //             },
-        //             MapSpaceEdgeX {
-        //                 map_space_id: index as i32,
-        //                 x: map_space.x_coordinate + get_width(map_space, &blocks_list, &buildings_type_list),
-        //             },
-        //         ]
-        //     })
-        //     .collect();
-
-        // if let Some(index) = new_map_spaces.iter().position(|map_space|
-        //     map_space.x_coordinate == closest_to_map_center_building.x_coordinate &&
-        //     map_space.y_coordinate == closest_to_map_center_building.y_coordinate
-        // ) {
-        //     available_x_map_spaces.retain(|&tile| tile.map_space_id != index as i32);
-        //     available_y_map_spaces.retain(|&tile| tile.map_space_id != index as i32);
-        // }
-
         let mut currently_connected_building = closest_to_map_center_building.clone();
-
         while !disconnected_buildings.is_empty() {
             let next_building = disconnected_buildings
                 .iter()
@@ -1301,11 +1242,6 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
                 })
                 .unwrap()
                 .clone();
-            log::info!(
-                "current building : {:?}, next building: {:?}",
-                currently_connected_building,
-                next_building
-            );
             let mut start = cmp::min(
                 currently_connected_building.x_coordinate - 1,
                 next_building.x_coordinate - 1,
@@ -1385,7 +1321,6 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
             });
             currently_connected_building = next_building.clone();
         }
-
         for building in building_map_spaces.iter() {
             let width = get_width(building, &blocks_list, &buildings_type_list);
             for x in building.x_coordinate - 1..=building.x_coordinate + width {
@@ -1477,6 +1412,50 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
                 }
             }
         }
+        for mine in mines_list.iter() {
+            let random_index = rand::thread_rng().gen_range(1..=road_spaces.len()- 1);
+            road_spaces.remove(random_index);
+            let mine_space = new_map_spaces.remove(random_index);
+            new_map_spaces.push(NewMapSpaces{
+                map_id: map_layout_id,
+                x_coordinate: mine_space.x_coordinate,
+                y_coordinate: mine_space.y_coordinate,
+                block_type_id: mine.id,
+            })
+        }
+        for defender in defenders_list.iter() {
+            let random_index = rand::thread_rng().gen_range(1..=road_spaces.len()- 1);
+            road_spaces.remove(random_index);
+            let defender_space = new_map_spaces.remove(random_index);
+            new_map_spaces.push(NewMapSpaces{
+                map_id: map_layout_id,
+                x_coordinate: defender_space.x_coordinate,
+                y_coordinate: defender_space.y_coordinate,
+                block_type_id: defender.id,
+            })
+        }
+        // remove the old map spaces corresponding to the user.
+        diesel::delete(artifact::table)
+            .filter(artifact::map_space_id.eq_any(
+                map_spaces::table
+                    .filter(map_spaces::map_id.eq(map_layout_id))
+                    .select(map_spaces::id),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "map_spaces",
+                function: function!(),
+                error: err,
+            })?;
+        diesel::delete(map_spaces::table)
+            .filter(map_spaces::map_id.eq(map_layout_id))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "map_spaces",
+                function: function!(),
+                error: err,
+            })?;
+        log::info!("Deleted old map spaces");
 
         // insert the new map spaces
         diesel::insert_into(map_spaces::table)
@@ -1503,10 +1482,10 @@ pub fn randomize_base(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<MapS
         let artifact_entries: Vec<NewArtifact> = result
             .iter()
             .filter_map(|m| {
-                if artifact_map.contains_key(&(m.x_coordinate, m.y_coordinate)) {
+                if artifact_map.contains_key(&m.block_type_id) {
                     Some(NewArtifact {
                         map_space_id: m.id,
-                        count: artifact_map[&(m.x_coordinate, m.y_coordinate)],
+                        count: artifact_map[&m.block_type_id],
                     })
                 } else {
                     None
@@ -1777,3 +1756,5 @@ pub fn add_user_default_base(
         Ok(user)
     })
 }
+
+
