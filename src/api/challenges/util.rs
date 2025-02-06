@@ -25,6 +25,7 @@ pub struct ChallengeMapsResponse {
     pub id: i32,
     pub user_id: i32,
     pub map_id: i32,
+    pub completed: bool,
 }
 
 pub fn get_challenge_type(conn: &mut PgConnection) -> Result<Option<ChallengeTypeResponse>> {
@@ -66,10 +67,25 @@ pub fn get_challenge_maps(
             error: err,
         })?
         .into_iter()
-        .map(|(challenge_map, _)| ChallengeMapsResponse {
-            id: challenge_map.id,
-            user_id: challenge_map.user_id,
-            map_id: challenge_map.map_id,
+        .map(|(challenge_map, _)| {
+            let completed = is_challenge_possible(
+                conn,
+                challenge_map.user_id,
+                challenge_map.map_id,
+                challenge_id,
+            );
+
+            let completed = match completed {
+                core::result::Result::Ok(completed) => completed,
+                Err(_) => false,
+            };
+
+            ChallengeMapsResponse {
+                id: challenge_map.id,
+                user_id: challenge_map.user_id,
+                map_id: challenge_map.map_id,
+                completed,
+            }
         })
         .collect();
 
