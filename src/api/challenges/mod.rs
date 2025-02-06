@@ -69,8 +69,8 @@ pub struct ChallengeInitResponse {
 
 pub fn routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/init").route(web::post().to(init_challenge)))
-        .service(web::resource("/{id}").route(web::get().to(challenge_maps)))
         .service(web::resource("/start").route(web::get().to(challenge_socket_handler)))
+        .service(web::resource("/{id}").route(web::get().to(challenge_maps)))
         .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
 
