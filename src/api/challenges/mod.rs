@@ -258,6 +258,7 @@ async fn challenge_socket_handler(
                 y: mine_save.pos_y,
             },
             radius: mine_save.radius,
+            name: mine_save.name.clone(),
         })
         .collect();
 

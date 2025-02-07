@@ -15,8 +15,8 @@ pub fn attacker_movement_challenge_handle(
             match challenge_type {
                 ChallengeType::Maze => {
                     if let Some(maze) = challenge.maze.as_mut() {
-                        for building in &game_state.buildings {
-                            if building.name == "Coin" {
+                        for mine in &game_state.mines {
+                            if mine.name == "coin" {
                                 challenge.score += 1;
                             }
                         }

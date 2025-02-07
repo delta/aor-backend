@@ -105,6 +105,7 @@ pub struct MineDetails {
     pub position: Coords,
     pub radius: i32,
     pub damage: i32,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

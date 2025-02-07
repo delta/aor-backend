@@ -554,6 +554,7 @@ pub fn get_mines(conn: &mut PgConnection, map_id: i32) -> Result<Vec<MineDetails
                 x: map_space.x_coordinate,
                 y: map_space.y_coordinate,
             },
+            name: mine_type.name,
         })
         .collect();
 
