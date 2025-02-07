@@ -13,7 +13,8 @@ use std::{
     time,
 };
 use util::{
-    get_challenge_maps, get_challenge_type_enum, is_challenge_possible, terminate_challenge,
+    get_challenge_maps, get_challenge_type_enum, get_leaderboard, is_challenge_possible,
+    terminate_challenge,
 };
 
 use crate::{
@@ -75,6 +76,10 @@ pub struct ChallengeInitResponse {
 pub fn routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/init").route(web::post().to(init_challenge)))
         .service(web::resource("/start").route(web::get().to(challenge_socket_handler)))
+        .service(
+            web::resource("/leaderboard/{challenge_id}")
+                .route(web::get().to(challenge_leaderboard)),
+        )
         .service(web::resource("/{id}").route(web::get().to(challenge_maps)))
         .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
@@ -712,4 +717,19 @@ async fn challenge_socket_handler(
     log::info!("End of Challenge:{}, Player:{}", mod_user_id, attacker_id,);
 
     Ok(response)
+}
+
+async fn challenge_leaderboard(
+    challenge_id: Path<i32>,
+    pg_pool: Data<PgPool>,
+) -> Result<impl Responder> {
+    let challenge_id = challenge_id.into_inner();
+    let mut conn = pg_pool
+        .get()
+        .map_err(|err| error::handle_error(err.into()))?;
+    let leader_board = web::block(move || get_leaderboard(&mut conn, challenge_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    Ok(Json(leader_board))
 }

@@ -165,3 +165,19 @@ pub fn get_challenge_type_enum(
 
     Ok(challege_type)
 }
+
+pub fn get_leaderboard(
+    conn: &mut PgConnection,
+    challenge_id: i32,
+) -> Result<Vec<ChallengeResponse>> {
+    let resp = challenges_responses::table
+        .filter(challenges_responses::challenge_id.eq(challenge_id))
+        .order(challenges_responses::score.desc())
+        .load::<ChallengeResponse>(conn)
+        .map_err(|err| DieselError {
+            table: "challenges_responses",
+            function: function!(),
+            error: err,
+        })?;
+    Ok(resp)
+}
