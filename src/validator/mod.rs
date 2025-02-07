@@ -268,8 +268,10 @@ pub fn game_handler(
                     ResultType::BuildingsDamaged
                 };
 
-                let challenge = if _game_state.challenge.is_some() {
-                    Some(ChallengeResponse { score: 0 })
+                let challenge = if let Some(challenge_state) = _game_state.challenge {
+                    Some(ChallengeResponse {
+                        score: challenge_state.score,
+                    })
                 } else {
                     None
                 };
