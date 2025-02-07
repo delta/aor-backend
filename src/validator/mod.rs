@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::attack::{
-        socket::{ActionType, BaseItemsDamageResponse, ResultType, SocketRequest, SocketResponse},
+        socket::{
+            ActionType, BaseItemsDamageResponse, BuildingResponse, ChallengeResponse, ResultType,
+            SocketRequest, SocketResponse,
+        },
         util::{EventResponse, GameLog},
     },
     constants::COMPANION_BOT_RANGE,
@@ -116,6 +119,7 @@ pub fn game_handler(
                     "Place Attacker, set attacker and bomb response",
                 )),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::PlaceCompanion => {
@@ -264,6 +268,11 @@ pub fn game_handler(
                     ResultType::BuildingsDamaged
                 };
 
+                let challenge = if _game_state.challenge.is_some() {
+                    Some(ChallengeResponse { score: 0 })
+                } else {
+                    None
+                };
                 let buildings_damaged =
                     if let Some(building_damaged) = &companion_res.building_damaged {
                         vec![building_damaged.clone()]
@@ -300,6 +309,7 @@ pub fn game_handler(
                     shoot_bullets: Some(shoot_bullets),
                     message: Some(String::from("Movement Response")),
                     companion: Some(companion_res),
+                    challenge,
                 };
                 return Some(Ok(response));
             }
@@ -356,6 +366,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Is Mine Response")),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::PlaceBombs => {
@@ -442,6 +453,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Place Bomb Response")),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::Idle => {
@@ -466,6 +478,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Idle Response")),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::Terminate => {
@@ -490,6 +503,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Game over")),
                 companion: None,
+                challenge: None,
             };
             return Some(Ok(socket_response));
         }
@@ -518,7 +532,7 @@ pub fn game_handler(
                 is_game_over: false,
                 shoot_bullets: None,
                 message: Some(String::from("Self Destructed")),
-                companion: None,
+                comapnion,
             };
 
             return Some(Ok(socket_response));

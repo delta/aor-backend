@@ -12,6 +12,7 @@ use crate::models::NewChallengeResponse;
 use crate::schema::challenge_maps;
 use crate::schema::challenges_responses;
 use crate::util::function;
+use crate::validator::util::ChallengeType;
 use crate::{models::Challenge, schema::challenges};
 
 #[derive(Serialize)]
@@ -139,4 +140,28 @@ pub fn terminate_challenge(
         })?;
 
     Ok(())
+}
+
+pub fn get_challenge_type_enum(
+    conn: &mut PgConnection,
+    challenge_id: i32,
+) -> Result<Option<ChallengeType>> {
+    let resp: Challenge = challenges::table
+        .filter(challenges::id.eq(challenge_id))
+        .first::<Challenge>(conn)
+        .map_err(|err| DieselError {
+            table: "challenges",
+            function: function!(),
+            error: err,
+        })?;
+
+    let challege_type = if resp.name == "Maze" {
+        Some(ChallengeType::Maze)
+    } else if resp.name == "FallGuys" {
+        Some(ChallengeType::FallGuys)
+    } else {
+        None
+    };
+
+    Ok(challege_type)
 }

@@ -284,6 +284,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         shoot_bullets: None,
         message: Some(message),
         companion: None,
+        challenge: None,
     }
 }
 

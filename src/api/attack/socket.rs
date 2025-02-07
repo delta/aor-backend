@@ -40,6 +40,11 @@ pub struct SocketResponse {
     pub message: Option<String>,
     pub shoot_bullets: Option<Vec<BulletSpawnResponse>>,
     pub companion: Option<CompanionResult>,
+    pub challenge: Option<ChallengeResponse>,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChallengeResponse {
+    pub score: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

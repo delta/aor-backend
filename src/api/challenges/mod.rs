@@ -12,7 +12,9 @@ use std::{
     io::Read,
     time,
 };
-use util::{get_challenge_maps, is_challenge_possible, terminate_challenge};
+use util::{
+    get_challenge_maps, get_challenge_type_enum, is_challenge_possible, terminate_challenge,
+};
 
 use crate::{
     api::{
@@ -37,7 +39,10 @@ use crate::{
     validator::{
         game_handler,
         state::State,
-        util::{BuildingDetails, Coords, DefenderDetails, MineDetails},
+        util::{
+            BuildingDetails, Challenge, ChallengeType, Coords, DefenderDetails, FallGuys,
+            MazeChallenge, MineDetails,
+        },
     },
 };
 
@@ -175,6 +180,7 @@ async fn challenge_socket_handler(
     //challenge base data
     let attacker_id = user.0;
     let mod_user_id = query_params.user_id;
+    let challenge_id = query_params.challenge_id;
 
     let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
     log::info!("Json path: {}", json_path.display());
@@ -377,6 +383,44 @@ async fn challenge_socket_handler(
         .await?
         .map_err(|err| error::handle_error(err.into()))?;
 
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let challenge_type = web::block(move || get_challenge_type_enum(&mut conn, challenge_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    log::info!("Challenge Type: {:?}", challenge_type);
+
+    let maze = if challenge_type.as_ref().unwrap() == &ChallengeType::Maze {
+        Some(MazeChallenge {
+            coins: 0,
+            end_tile: Coords { x: 0, y: 0 },
+        })
+    } else {
+        None
+    };
+
+    let fall_guys = if challenge_type.as_ref().unwrap() == &ChallengeType::FallGuys {
+        Some(FallGuys {
+            end_tile: Coords { x: 0, y: 0 },
+            hut_frequency_increment: 1000,
+            hut_range_increment: 1,
+            sentry_frequency_increment: 1,
+            sentry_range_increment: 1,
+            last_intensity_update_tick: 0,
+            update_intensity_interval: 10,
+        })
+    } else {
+        None
+    };
+
+    let challenge = Challenge {
+        challenge_completed: false,
+        challenge_type,
+        score: 0,
+        maze,
+        fall_guys,
+    };
+
     let defender_base_details = SimulationBaseResponse {
         m: map_data.map_id,
         ms: map_spaces_response_with_artifacts_sim,
@@ -436,7 +480,7 @@ async fn challenge_socket_handler(
             hut_defenders,
             mines,
             buildings,
-            None,
+            Some(challenge),
         );
         game_state.set_total_hp_buildings();
 
@@ -653,6 +697,7 @@ async fn challenge_socket_handler(
                     is_sync: false,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
+                    challenge: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {
