@@ -48,6 +48,17 @@ pub fn attacker_movement_challenge_handle(
                             }
                             fall_guys.last_intensity_update_tick = game_state.frame_no;
                         }
+
+                        let attacker_pos = game_state.attacker.as_ref().unwrap().attacker_pos;
+                        if attacker_pos.x == fall_guys.end_tile.x
+                            && attacker_pos.y == fall_guys.end_tile.y
+                        {
+                            challenge.challenge_completed = true;
+                            game_state.in_validation = InValidation {
+                                is_invalidated: true,
+                                message: "Fall Guys challenge completed".to_string(),
+                            }
+                        }
                     }
                 }
             }
