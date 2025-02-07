@@ -1,3 +1,5 @@
+use crate::api::game;
+
 use super::{
     state::State,
     util::{Attacker, ChallengeType, InValidation},
@@ -15,10 +17,20 @@ pub fn attacker_movement_challenge_handle(
             match challenge_type {
                 ChallengeType::Maze => {
                     if let Some(maze) = challenge.maze.as_mut() {
-                        for building in &game_state.buildings {
-                            if building.name == "coin" {
+                        let attacker = game_state.attacker.as_ref().unwrap();
+                        let mut collided: i32 = -1;
+                        for (i, building) in game_state.buildings.iter().enumerate() {
+                            if building.name == "coin"
+                                && attacker.attacker_pos.x == building.tile.x
+                                && attacker.attacker_pos.y == building.tile.y
+                            {
                                 challenge.score += 1;
+                                collided = i as i32;
+                                break;
                             }
+                        }
+                        if collided != -1 {
+                            game_state.buildings.remove(collided as usize);
                         }
                         if attacker_current.attacker_pos.x == maze.end_tile.x
                             && attacker_current.attacker_pos.y == maze.end_tile.y
