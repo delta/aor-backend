@@ -339,7 +339,7 @@ pub struct NewBlockType<'a> {
     pub category_id: &'a i32,
 }
 
-#[derive(Queryable, Clone, Debug, Serialize)]
+#[derive(Queryable, Clone, Debug, Serialize, Deserialize)]
 pub struct AttackerType {
     pub id: i32,
     pub max_health: i32,

@@ -29,8 +29,8 @@ use crate::{
             shortest_path::{self, run_shortest_paths_challenges},
             util::{
                 fetch_attacker_types, fetch_emp_types, AdminSaveData, BuildingTypeResponse,
-                DefenderTypeResponse, MapSpacesResponseWithArifacts, MineTypeResponse,
-                SimulationBaseResponse,
+                ChallengeData, DefenderTypeResponse, MapSpacesResponseWithArifacts,
+                MineTypeResponse, SimulationBaseResponse,
             },
         },
         user::util::fetch_user,
@@ -41,8 +41,8 @@ use crate::{
         game_handler,
         state::State,
         util::{
-            BuildingDetails, Challenge, ChallengeType, Coords, DefenderDetails, FallGuys,
-            MazeChallenge, MineDetails,
+            Bomb, BombType, BuildingDetails, Challenge, ChallengeType, Coords, DefenderDetails,
+            FallGuys, MazeChallenge, MineDetails,
         },
     },
 };
@@ -148,6 +148,26 @@ async fn init_challenge(
             defenders: Vec::new(),
             mine_type: Vec::new(),
             road: Vec::new(),
+            challenge: ChallengeData {
+                start_tile: Coords { x: 0, y: 0 },
+                end_tile: Coords { x: 0, y: 0 },
+                attacker_type: AttackerType {
+                    id: -1,
+                    max_health: 0,
+                    speed: 0,
+                    amt_of_emps: 0,
+                    level: -1,
+                    cost: 0,
+                    name: "".to_string(),
+                    prop_id: 0,
+                },
+                bomb_type: BombType {
+                    damage: 0,
+                    id: -1,
+                    radius: -1,
+                    total_count: -1,
+                },
+            },
         })
         .clone();
 
@@ -213,6 +233,26 @@ async fn challenge_socket_handler(
             defenders: Vec::new(),
             mine_type: Vec::new(),
             road: Vec::new(),
+            challenge: ChallengeData {
+                start_tile: Coords { x: 0, y: 0 },
+                end_tile: Coords { x: 0, y: 0 },
+                attacker_type: AttackerType {
+                    id: -1,
+                    max_health: 0,
+                    speed: 0,
+                    amt_of_emps: 0,
+                    level: -1,
+                    cost: 0,
+                    name: "".to_string(),
+                    prop_id: 0,
+                },
+                bomb_type: BombType {
+                    damage: 0,
+                    id: -1,
+                    radius: -1,
+                    total_count: -1,
+                },
+            },
         })
         .clone();
 
@@ -299,15 +339,23 @@ async fn challenge_socket_handler(
         .map(|road_save| (road_save.pos_x, road_save.pos_y))
         .collect();
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let bomb_types = web::block(move || get_bomb_types(&mut conn))
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+    // let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    // let bomb_types = web::block(move || get_bomb_types(&mut conn))
+    //     .await?
+    //     .map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let attacker_type = web::block(move || get_attacker_types(&mut conn))
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+    // let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    // let attacker_type = web::block(move || get_attacker_types(&mut conn))
+    //     .await?
+    //     .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut attacker_type = HashMap::new();
+    let map_attacker_type = map_data.challenge.attacker_type.clone();
+    attacker_type.insert(0, map_attacker_type);
+
+    let mut bomb_types = Vec::new();
+    let map_bomb_type = map_data.challenge.bomb_type.clone();
+    bomb_types.push(map_bomb_type);
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let defender_user_details = web::block(move || fetch_user(&mut conn, mod_user_id))

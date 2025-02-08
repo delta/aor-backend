@@ -48,8 +48,8 @@ pub fn game_handler(
                 is_bomb: false,
             };
 
-            if let Some(attacker_id) = socket_request.attacker_id {
-                let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
+            if let Some(challege) = _game_state.challenge {
+                let attacker = attacker_type.get(&0).unwrap().clone();
                 _game_state.place_attacker(Attacker {
                     id: attacker.id,
                     // path_in_current_frame: Vec::new(),
@@ -60,21 +60,43 @@ pub fn game_handler(
                     trigger_defender: false,
                     bomb_count: attacker.amt_of_emps,
                 });
+                let bomb_type = _bomb_types
+                    .iter()
+                    .find(|bomb| bomb.id == 0)
+                    .unwrap()
+                    .clone();
+                _game_state.set_bombs(bomb_type, 10);
+                event_response.attacker_id = Some(0);
+                event_response.coords = socket_request.current_position.unwrap();
+                event_response.bomb_id = Some(0);
+            } else {
+                if let Some(attacker_id) = socket_request.attacker_id {
+                    let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
+                    _game_state.place_attacker(Attacker {
+                        id: attacker.id,
+                        // path_in_current_frame: Vec::new(),
+                        attacker_pos: socket_request.current_position.unwrap(),
+                        attacker_health: attacker.max_health,
+                        attacker_speed: attacker.speed,
+                        bombs: Vec::new(),
+                        trigger_defender: false,
+                        bomb_count: attacker.amt_of_emps,
+                    });
 
-                for bomb_type in _bomb_types {
-                    if let Some(bomb_id) = socket_request.bomb_id {
-                        if bomb_type.id == bomb_id {
-                            _game_state.set_bombs(bomb_type.clone(), attacker.amt_of_emps);
+                    for bomb_type in _bomb_types {
+                        if let Some(bomb_id) = socket_request.bomb_id {
+                            if bomb_type.id == bomb_id {
+                                _game_state.set_bombs(bomb_type.clone(), attacker.amt_of_emps);
+                            }
                         }
                     }
+
+                    event_response.attacker_id = Some(attacker_id);
+                    event_response.coords = socket_request.current_position.unwrap();
                 }
-
-                event_response.attacker_id = Some(attacker_id);
-                event_response.coords = socket_request.current_position.unwrap();
+                // _game_state.set_mines(mine_positions);
+                event_response.bomb_id = socket_request.bomb_id;
             }
-
-            // _game_state.set_mines(mine_positions);
-            event_response.bomb_id = socket_request.bomb_id;
 
             _game_log.e.push(event_response);
             _game_log.r.au += 1;
@@ -179,7 +201,11 @@ pub fn game_handler(
 
         ActionType::MoveAttacker => {
             if let Some(attacker_id) = socket_request.attacker_id {
-                let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
+                let attacker: AttackerType = if let Some(challenge) = _game_state.challenge {
+                    attacker_type.get(&0).unwrap().clone()
+                } else {
+                    attacker_type.get(&attacker_id).unwrap().clone()
+                };
                 // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
                 // let attacker_delta_clone = attacker_delta.clone();
 

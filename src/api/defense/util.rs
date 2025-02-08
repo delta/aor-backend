@@ -12,6 +12,7 @@ use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, RO
 use crate::models::*;
 use crate::schema::{available_emps, emp_type, map_layout, map_spaces, prop};
 use crate::util::function;
+use crate::validator::util::{BombType, Coords};
 use crate::{api::util::GameHistoryResponse, error::DieselError};
 use anyhow::{Ok, Result};
 use awc::http::header::map;
@@ -212,6 +213,16 @@ pub struct AdminSaveData {
     pub defenders: Vec<DefenderSave>,
     pub mine_type: Vec<MineSave>,
     pub road: Vec<RoadSave>,
+    pub challenge: ChallengeData,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChallengeData {
+    pub start_tile: Coords,
+    pub end_tile: Coords,
+    pub attacker_type: AttackerType,
+    pub bomb_type: BombType,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]

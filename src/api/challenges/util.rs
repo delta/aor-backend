@@ -13,6 +13,7 @@ use crate::schema::challenge_maps;
 use crate::schema::challenges_responses;
 use crate::util::function;
 use crate::validator::util::ChallengeType;
+use crate::validator::util::Coords;
 use crate::{models::Challenge, schema::challenges};
 
 #[derive(Serialize)]

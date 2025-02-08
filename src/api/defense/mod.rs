@@ -10,6 +10,8 @@ use crate::api::error;
 use crate::api::util::HistoryboardQuery;
 use crate::constants::MOD_USER_BASE_PATH;
 use crate::models::*;
+use crate::validator::util::BombType;
+use crate::validator::util::Coords;
 use actix_web::error::{ErrorBadRequest, ErrorNotFound};
 use actix_web::web::Query;
 use actix_web::web::{self, Data, Json};
@@ -25,6 +27,7 @@ use std::io::Read;
 use std::io::Write;
 use util::AdminBaseRequest;
 use util::AdminSaveData;
+use util::ChallengeData;
 
 pub mod shortest_path;
 pub mod util;
@@ -416,6 +419,26 @@ async fn get_admin_base(
             defenders: Vec::new(),
             mine_type: Vec::new(),
             road: Vec::new(),
+            challenge: ChallengeData {
+                start_tile: Coords { x: 0, y: 0 },
+                end_tile: Coords { x: 0, y: 0 },
+                attacker_type: AttackerType {
+                    id: -1,
+                    max_health: 0,
+                    speed: 0,
+                    amt_of_emps: 0,
+                    level: -1,
+                    cost: 0,
+                    name: "".to_string(),
+                    prop_id: 0,
+                },
+                bomb_type: BombType {
+                    damage: 0,
+                    id: -1,
+                    radius: -1,
+                    total_count: -1,
+                },
+            },
         })
         .clone();
     Ok(Json(map_data))
