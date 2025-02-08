@@ -221,8 +221,9 @@ pub struct AdminSaveData {
 pub struct ChallengeData {
     pub start_tile: Coords,
     pub end_tile: Coords,
-    pub attacker_type: AttackerType,
-    pub bomb_type: BombType,
+    pub attacker_health: i32,
+    pub bomb_damage: i32,
+    pub bomb_radius: i32,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]

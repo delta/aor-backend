@@ -151,22 +151,9 @@ async fn init_challenge(
             challenge: ChallengeData {
                 start_tile: Coords { x: 0, y: 0 },
                 end_tile: Coords { x: 0, y: 0 },
-                attacker_type: AttackerType {
-                    id: -1,
-                    max_health: 0,
-                    speed: 0,
-                    amt_of_emps: 0,
-                    level: -1,
-                    cost: 0,
-                    name: "".to_string(),
-                    prop_id: 0,
-                },
-                bomb_type: BombType {
-                    damage: 0,
-                    id: -1,
-                    radius: -1,
-                    total_count: -1,
-                },
+                attacker_health: 0,
+                bomb_damage: 0,
+                bomb_radius: 0,
             },
         })
         .clone();
@@ -236,22 +223,9 @@ async fn challenge_socket_handler(
             challenge: ChallengeData {
                 start_tile: Coords { x: 0, y: 0 },
                 end_tile: Coords { x: 0, y: 0 },
-                attacker_type: AttackerType {
-                    id: -1,
-                    max_health: 0,
-                    speed: 0,
-                    amt_of_emps: 0,
-                    level: -1,
-                    cost: 0,
-                    name: "".to_string(),
-                    prop_id: 0,
-                },
-                bomb_type: BombType {
-                    damage: 0,
-                    id: -1,
-                    radius: -1,
-                    total_count: -1,
-                },
+                attacker_health: 0,
+                bomb_damage: 0,
+                bomb_radius: 0,
             },
         })
         .clone();
@@ -350,12 +324,30 @@ async fn challenge_socket_handler(
     //     .map_err(|err| error::handle_error(err.into()))?;
 
     let mut attacker_type = HashMap::new();
-    let map_attacker_type = map_data.challenge.attacker_type.clone();
-    attacker_type.insert(0, map_attacker_type);
+    let attacker_health = map_data.challenge.attacker_health;
+    attacker_type.insert(
+        0,
+        AttackerType {
+            amt_of_emps: 10,
+            id: 0,
+            max_health: attacker_health,
+            speed: 4,
+            level: 1,
+            cost: 0,
+            name: "ChallengeAttacker".to_string(),
+            prop_id: -1,
+        },
+    );
 
     let mut bomb_types = Vec::new();
-    let map_bomb_type = map_data.challenge.bomb_type.clone();
-    bomb_types.push(map_bomb_type);
+    let bomb_damage = map_data.challenge.bomb_damage;
+    let bomb_radius = map_data.challenge.bomb_radius;
+    bomb_types.push(BombType {
+        damage: bomb_damage,
+        id: 0,
+        radius: bomb_radius,
+        total_count: 10,
+    });
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let defender_user_details = web::block(move || fetch_user(&mut conn, mod_user_id))

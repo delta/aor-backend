@@ -422,22 +422,9 @@ async fn get_admin_base(
             challenge: ChallengeData {
                 start_tile: Coords { x: 0, y: 0 },
                 end_tile: Coords { x: 0, y: 0 },
-                attacker_type: AttackerType {
-                    id: -1,
-                    max_health: 0,
-                    speed: 0,
-                    amt_of_emps: 0,
-                    level: -1,
-                    cost: 0,
-                    name: "".to_string(),
-                    prop_id: 0,
-                },
-                bomb_type: BombType {
-                    damage: 0,
-                    id: -1,
-                    radius: -1,
-                    total_count: -1,
-                },
+                attacker_health: 0,
+                bomb_damage: 0,
+                bomb_radius: 0,
             },
         })
         .clone();

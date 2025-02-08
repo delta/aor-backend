@@ -48,7 +48,7 @@ pub fn game_handler(
                 is_bomb: false,
             };
 
-            if let Some(challege) = _game_state.challenge {
+            if let Some(challenge) = _game_state.challenge {
                 let attacker = attacker_type.get(&0).unwrap().clone();
                 _game_state.place_attacker(Attacker {
                     id: attacker.id,
