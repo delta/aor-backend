@@ -254,6 +254,14 @@ pub struct FallGuys {
     pub sentry_frequency_increment: i32,
     pub last_intensity_update_tick: i32,
     pub update_intensity_interval: i32,
+    pub multipliers: FallGuysMultipliers,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
+pub struct FallGuysMultipliers {
+    pub treasury_level_1: i32,
+    pub treasury_level_2: i32,
+    pub treasury_level_3: i32,
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]

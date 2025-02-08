@@ -2,7 +2,7 @@ use crate::api::game;
 
 use super::{
     state::State,
-    util::{Attacker, ChallengeType, InValidation},
+    util::{Attacker, BuildingDetails, Challenge, ChallengeType, FallGuys, InValidation},
 };
 use std::collections::HashSet;
 pub mod util;
@@ -26,6 +26,7 @@ pub fn attacker_movement_challenge_handle(
                             {
                                 challenge.score += 1;
                                 collided = i as i32;
+                                maze.coins += 1;
                                 break;
                             }
                         }
@@ -62,6 +63,7 @@ pub fn attacker_movement_challenge_handle(
                         }
 
                         let attacker_pos = game_state.attacker.as_ref().unwrap().attacker_pos;
+
                         if attacker_pos.x == challenge.end_tile.x
                             && attacker_pos.y == challenge.end_tile.y
                         {
@@ -71,6 +73,39 @@ pub fn attacker_movement_challenge_handle(
                                 message: "Fall Guys challenge completed".to_string(),
                             }
                         }
+
+                        if attacker_pos.x == challenge.start_tile.x
+                            && attacker_pos.y == challenge.start_tile.y
+                            && challenge.score > 10
+                        {
+                            challenge.challenge_completed = true;
+                            game_state.in_validation = InValidation {
+                                is_invalidated: true,
+                                message: "Fall Guys challenge completed".to_string(),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn bomb_blast_fallguys_handle(
+    challenge: &mut Option<Challenge>,
+    damage_buildings: i32,
+    building: &BuildingDetails,
+) {
+    if let Some(challenge) = challenge {
+        if let Some(challenge_type) = challenge.challenge_type {
+            if challenge_type == ChallengeType::FallGuys {
+                if let Some(ref mut fallguys) = challenge.fall_guys {
+                    if building.name == "Treasury1" {
+                        challenge.score += damage_buildings * fallguys.multipliers.treasury_level_1;
+                    } else if building.name == "Treasury2" {
+                        challenge.score += damage_buildings * fallguys.multipliers.treasury_level_2;
+                    } else if building.name == "Treasury3" {
+                        challenge.score += damage_buildings * fallguys.multipliers.treasury_level_3;
                     }
                 }
             }

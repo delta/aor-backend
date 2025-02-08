@@ -43,7 +43,7 @@ use crate::{
         state::State,
         util::{
             Bomb, BombType, BuildingDetails, Challenge, ChallengeType, Coords, DefenderDetails,
-            FallGuys, MazeChallenge, MineDetails,
+            FallGuys, FallGuysMultipliers, MazeChallenge, MineDetails,
         },
     },
 };
@@ -450,6 +450,11 @@ async fn challenge_socket_handler(
             sentry_range_increment: 1,
             last_intensity_update_tick: 0,
             update_intensity_interval: 10,
+            multipliers: FallGuysMultipliers {
+                treasury_level_1: 1,
+                treasury_level_2: 2,
+                treasury_level_3: 3,
+            },
         })
     } else {
         None
