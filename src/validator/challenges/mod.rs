@@ -32,8 +32,8 @@ pub fn attacker_movement_challenge_handle(
                         if collided != -1 {
                             game_state.buildings.remove(collided as usize);
                         }
-                        if attacker_current.attacker_pos.x == maze.end_tile.x
-                            && attacker_current.attacker_pos.y == maze.end_tile.y
+                        if attacker_current.attacker_pos.x == challenge.end_tile.x
+                            && attacker_current.attacker_pos.y == challenge.end_tile.y
                         {
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
@@ -62,8 +62,8 @@ pub fn attacker_movement_challenge_handle(
                         }
 
                         let attacker_pos = game_state.attacker.as_ref().unwrap().attacker_pos;
-                        if attacker_pos.x == fall_guys.end_tile.x
-                            && attacker_pos.y == fall_guys.end_tile.y
+                        if attacker_pos.x == challenge.end_tile.x
+                            && attacker_pos.y == challenge.end_tile.y
                         {
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {

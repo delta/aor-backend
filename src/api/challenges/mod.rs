@@ -4,6 +4,7 @@ use actix_web::{
     HttpRequest, HttpResponse, Responder, Result,
 };
 use actix_ws::Message;
+use awc::http::header::map;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -436,17 +437,13 @@ async fn challenge_socket_handler(
     log::info!("Challenge Type: {:?}", challenge_type);
 
     let maze = if challenge_type.as_ref().unwrap() == &ChallengeType::Maze {
-        Some(MazeChallenge {
-            coins: 0,
-            end_tile: Coords { x: 0, y: 0 },
-        })
+        Some(MazeChallenge { coins: 0 })
     } else {
         None
     };
 
     let fall_guys = if challenge_type.as_ref().unwrap() == &ChallengeType::FallGuys {
         Some(FallGuys {
-            end_tile: Coords { x: 0, y: 0 },
             hut_frequency_increment: 1000,
             hut_range_increment: 1,
             sentry_frequency_increment: 1,
@@ -462,6 +459,8 @@ async fn challenge_socket_handler(
         challenge_completed: false,
         challenge_type,
         score: 0,
+        start_tile: map_data.challenge.start_tile.clone(),
+        end_tile: map_data.challenge.end_tile.clone(),
         maze,
         fall_guys,
     };

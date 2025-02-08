@@ -244,7 +244,6 @@ pub enum ChallengeType {
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub struct MazeChallenge {
     pub coins: i32,
-    pub end_tile: Coords,
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
@@ -255,7 +254,6 @@ pub struct FallGuys {
     pub sentry_frequency_increment: i32,
     pub last_intensity_update_tick: i32,
     pub update_intensity_interval: i32,
-    pub end_tile: Coords,
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
@@ -263,6 +261,8 @@ pub struct Challenge {
     pub challenge_type: Option<ChallengeType>,
     pub score: i32,
     pub challenge_completed: bool,
+    pub start_tile: Coords,
+    pub end_tile: Coords,
     pub maze: Option<MazeChallenge>,
     pub fall_guys: Option<FallGuys>,
 }
