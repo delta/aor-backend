@@ -56,6 +56,7 @@ pub fn game_handler(
                     revealed_mines: None,
                     hut_defenders: None,
                     hut_triggered: false,
+                    shoot_bullets: None,
                 }));
             }
 
@@ -79,6 +80,7 @@ pub fn game_handler(
                 revealed_mines: None,
                 hut_defenders: None,
                 hut_triggered: false,
+                shoot_bullets: None,
             }));
         }
         ActionType::PlaceAttacker => {
@@ -176,6 +178,7 @@ pub fn game_handler(
                     revealed_mines: Some(revealed_mines.clone()),
                     hut_defenders: None,
                     hut_triggered: false,
+                    shoot_bullets: None,
                 }));
             } else {
                 return Some(Ok(SocketResponse {
@@ -194,6 +197,7 @@ pub fn game_handler(
                     revealed_mines: None,
                     hut_defenders: None,
                     hut_triggered: false,
+                    shoot_bullets: None,
                 }));
             }
         }
@@ -294,6 +298,7 @@ pub fn game_handler(
                         // },
                     )
                     .unwrap();
+                log::info!("Spawn result: {:?}", spawn_result);
 
                 let hut_triggered = !spawn_result.is_empty();
 

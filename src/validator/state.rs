@@ -5,7 +5,11 @@ use std::{
 };
 
 use crate::validator::util::BulletSpawnResponse;
-use crate::constants::{BOMB_DAMAGE_MULTIPLIER, LEVEL, LIVES, PERCENTANGE_ARTIFACTS_OBTAINABLE};
+use crate::constants::{
+    BOMB_DAMAGE_MULTIPLIER, BULLET_COLLISION_TIME, DAMAGE_PER_BULLET_LEVEL_1,
+    DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LEVEL, LIVES,
+    PERCENTANGE_ARTIFACTS_OBTAINABLE,
+};
 use crate::{
     api::attack::socket::{BuildingResponse,BulletHit, DefenderResponse},
     validator::util::{
@@ -13,11 +17,6 @@ use crate::{
         MineDetails, SourceDestXY,
     },
 };
-use crate::constants::{
-        BOMB_DAMAGE_MULTIPLIER, BULLET_COLLISION_TIME, DAMAGE_PER_BULLET_LEVEL_1,
-        DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LEVEL, LIVES,
-        PERCENTANGE_ARTIFACTS_OBTAINABLE,
-    };
 use serde::{Deserialize, Serialize};
 
 use super::util::{select_side_hut_defender, BombType, HutDefenderDetails};
@@ -64,7 +63,6 @@ impl State {
         attacker_user_id: i32,
         defender_user_id: i32,
         defenders: Vec<DefenderDetails>,
-        hut_defenders: HashMap<i32, DefenderDetails>,
         hut_defenders: HashMap<i32, DefenderDetails>,
         mines: Vec<MineDetails>,
         buildings: Vec<BuildingDetails>,
@@ -119,6 +117,7 @@ impl State {
             revealed_checkpoints: Vec::new(),
             revealed_mines: Vec::new(),
             last_processed_frame: -1,
+            sentries: Vec::new(),
         }
     }
 
@@ -149,6 +148,25 @@ impl State {
         }
 
         None
+    }
+    pub fn get_sentries(&mut self) {
+        let mut sentries = Vec::new();
+        for building in self.buildings.iter() {
+            if building.name == "Sentry" {
+                sentries.push(Sentry {
+                    id: building.map_space_id,
+                    is_sentry_activated: false,
+                    current_collided_bullet_id: 0,
+                    sentry_start_time: SystemTime::now(),
+                    current_bullet_shot_id: 0,
+                    current_bullet_shot_time: SystemTime::now(),
+                    shoot_bullet: false,
+                    building_data: building.clone(),
+                    bullets_shot: Vec::new(),
+                });
+            }
+        }
+        self.sentries = sentries;
     }
 
     pub fn self_destruct(&mut self) {
@@ -304,7 +322,7 @@ impl State {
             {
                 // println!(
                 //     "defender triggered when attacker was at ---- x:{}, y:{} and defender id: {}",
-                //     new_pos.x, new_pos.y, defender.mapSpaceId
+                //     new_pos.x, new_pos.y, defender.map_space_id
                 // );
                 defender.target_id = Some(0.0);
                 attacker.trigger_defender = true;
@@ -730,11 +748,11 @@ impl State {
                     "Defender pos {} {} and id {}",
                     defender.defender_pos.x,
                     defender.defender_pos.y,
-                    defender.mapSpaceId
+                    defender.map_space_id
                 );
 
                 defenders_damaged.push(DefenderResponse {
-                    mapSpaceId: defender.mapSpaceId,
+                    map_space_id: defender.map_space_id,
                     position: defender.defender_pos,
                     damage: defender.damage,
                 });
@@ -761,7 +779,7 @@ impl State {
         }
     }
     pub fn defender_ranged_attack(&mut self, frame_number: i32, coords: Coords) -> DefenderReturnType {
-        log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
+        // log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
 
         if frame_number <= self.last_processed_frame {
             return DefenderReturnType {
@@ -777,10 +795,10 @@ impl State {
         let mut bullet_hits: Vec<BulletHit> = Vec::new();
         let mut attackers: Vec<u32> = Vec::new();
         let attacker_pos = coords;
-        log::info!(
-            "Attacker position is ({:?})",
-            attacker_pos
-        );
+        // log::info!(
+        //     "Attacker position is ({:?})",
+        //     attacker_pos
+        // );
         // if attacker.attacker_health == 0 {
         //     log::info!("Attacker health is 0, returning early");
         //     return DefenderReturnType {
@@ -793,13 +811,13 @@ impl State {
 
         for defender in self.defenders.iter_mut() {
             if !defender.is_alive {
-                // log::info!("Defender {} is not alive, skipping", defender.mapSpaceId);
+                // log::info!("Defender {} is not alive, skipping", defender.map_space_id);
                 continue;
             }
             if defender.range == 0 {
                 continue;
             }
-            log::info!("Defender range is {}", defender.range);
+            // log::info!("Defender range is {}", defender.range);
 
             let start = SystemTime::now();
             let now = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
@@ -807,7 +825,7 @@ impl State {
 
             if defender.last_attack == 0 {
                 defender.last_attack = now.as_millis();
-                log::info!("Initializing defender {} last_attack to {}", defender.mapSpaceId, defender.last_attack);
+                // log::info!("Initializing defender {} last_attack to {}", defender.map_space_id, defender.last_attack);
             }
 
             let time_elapsed = now.as_millis() >= defender.last_attack as u128 + time_interval;
@@ -819,13 +837,13 @@ impl State {
                     + (defender.defender_pos.y - attacker_pos.y).pow(2))
                     as f32)
                     .sqrt();
-                log::info!("Distance between defender {} , with position {:?}, and attacker: {}", defender.mapSpaceId,defender.defender_pos, distance);
+                // log::info!("Distance between defender {} , with position {:?}, and attacker: {}", defender.map_space_id,defender.defender_pos, distance);
 
                 if distance <= defender.range as f32 {
-                    log::info!("Defender {} is within range of attacker", defender.mapSpaceId);
+                    // log::info!("Defender {} is within range of attacker", defender.map_space_id);
                     if defender.defender_pos.x == attacker_pos.x
                         || defender.defender_pos.y == attacker_pos.y
-                    {    attackers.push(defender.mapSpaceId.try_into().unwrap());
+                    {    attackers.push(defender.map_space_id.try_into().unwrap());
                         // Check if there are any buildings between the defender and the attacker
                         let mut blocked = false;
                         if defender.defender_pos.x == attacker_pos.x {
@@ -837,7 +855,7 @@ impl State {
                                     && building.tile.y < max_y
                                 {
                                     blocked = true;
-                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.mapSpaceId, building.tile.x, building.tile.y);
+                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.map_space_id, building.tile.x, building.tile.y);
                                     break;
                                 }
                             }
@@ -850,47 +868,47 @@ impl State {
                                     && building.tile.x < max_x
                                 {
                                     blocked = true;
-                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.mapSpaceId, building.tile.x, building.tile.y);
+                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.map_space_id, building.tile.x, building.tile.y);
                                     break;
                                 }
                             }
                         }
 
                         if !blocked {
-                            log::info!("Defender {} successfully attacks attacker", defender.mapSpaceId);
-                            log::info!("Positions of attacker and defender are: ({}, {}), ({}, {})", attacker_pos.x, attacker_pos.y, defender.defender_pos.x, defender.defender_pos.y);
+                            // log::info!("Defender {} successfully attacks attacker", defender.map_space_id);
+                            // log::info!("Positions of attacker and defender are: ({}, {}), ({}, {})", attacker_pos.x, attacker_pos.y, defender.defender_pos.x, defender.defender_pos.y);
                             attacker.attacker_health =
                                 attacker.attacker_health.saturating_sub(defender.damage);
                             defenders_damaged.push(DefenderResponse {
-                                mapSpaceId: defender.mapSpaceId,
+                                map_space_id: defender.map_space_id,
                                 position: defender.defender_pos,
                                 damage: defender.damage,
                             });
                             bullet_hits.push(BulletHit {
-                                defender_id: defender.mapSpaceId,
+                                defender_id: defender.map_space_id,
                                 target_id: attacker.id,
                                 damage: defender.damage,
                                 position: defender.defender_pos,
                             });
                         } else {
-                            // log::info!("Defender {} attack is blocked", defender.mapSpaceId);
+                            // log::info!("Defender {} attack is blocked", defender.map_space_id);
                         }
                     } else {
-                        log::info!(
-                            "Defender {} is not aligned with attacker. Defender position: ({}, {}), Attacker position: ({}, {})",
-                            defender.mapSpaceId,
-                            defender.defender_pos.x,
-                            defender.defender_pos.y,
-                            attacker.attacker_pos.x,
-                            attacker.attacker_pos.y
-                        );
+                        // log::info!(
+                        //     "Defender {} is not aligned with attacker. Defender position: ({}, {}), Attacker position: ({}, {})",
+                        //     defender.map_space_id,
+                        //     defender.defender_pos.x,
+                        //     defender.defender_pos.y,
+                        //     attacker.attacker_pos.x,
+                        //     attacker.attacker_pos.y
+                        // );
                     }
                 } else {
-                    log::info!("Defender {} is out of range of attacker", defender.mapSpaceId);
-                    log::info!("DeFENDER RNAGE IS {}", defender.range);
-                    // log::info!(
+                    // log::info!("Defender {} is out of range of attacker", defender.map_space_id);
+                    // log::info!("DeFENDER RNAGE IS {}", defender.range);
+                    // // log::info!(
                     //     "Defender {} is not within range of attacker. Defender position: ({}, {}), Attacker position: ({}, {})",
-                    //     defender.mapSpaceId,
+                    //     defender.map_space_id,
                     //     defender.defender_pos.x,
                     //     defender.defender_pos.y,
                     //     attacker.attacker_pos.x,
@@ -898,12 +916,12 @@ impl State {
                     // );
                 }
             } else {
-                // log::info!("Time not elapsed for defender {}. Skipping attack.", defender.mapSpaceId);
+                // log::info!("Time not elapsed for defender {}. Skipping attack.", defender.map_space_id);
             }
         }
 
-        log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
-        log::info!("Defenders who attacked in this frame: {:?}", attackers);
+        // log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
+        // log::info!("Defenders who attacked in this frame: {:?}", attackers);
 
 
         DefenderReturnType {
@@ -1029,65 +1047,5 @@ impl State {
         shoot_bullet_res_array
     }
 
-    pub fn defender_movement_one_tick(
-        &mut self,
-        attacker_position: Coords,
-        shortest_path: &HashMap<SourceDestXY, Coords>,
-    ) -> DefenderReturnType {
-        let attacker = self.attacker.as_mut().unwrap();
-        let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
 
-        for defender in self.defenders.iter_mut() {
-            if !defender.is_alive || defender.target_id.is_none() {
-                continue;
-            }
-
-            let next_hop = shortest_path
-                .get(&SourceDestXY {
-                    source_x: defender.defender_pos.x,
-                    source_y: defender.defender_pos.y,
-                    dest_x: attacker_position.x,
-                    dest_y: attacker_position.y,
-                })
-                .unwrap_or(&defender.defender_pos);
-
-            defender.defender_pos = *next_hop;
-
-            // if defender.name.starts_with("Hut") {
-            if attacker_position.x == defender.defender_pos.x
-                && attacker_position.y == defender.defender_pos.y
-            {
-                log::info!(
-                    "Defender pos {} {} and id {}",
-                    defender.defender_pos.x,
-                    defender.defender_pos.y,
-                    defender.map_space_id
-                );
-
-                defenders_damaged.push(DefenderResponse {
-                    map_space_id: defender.map_space_id,
-                    position: defender.defender_pos,
-                    damage: defender.damage,
-                });
-                defender.is_alive = false;
-                attacker.attacker_health = max(0, attacker.attacker_health - defender.damage);
-            }
-            // }
-        }
-
-        // if attacker is dead, no need to move the defenders
-        // if attacker.attacker_health == 0 {
-        //     return DefenderReturnType {
-        //         attacker_health: attacker.attacker_health,
-        //         defender_response: defenders_damaged,
-        //         state: self.clone(),
-        //     };
-        // }
-
-        DefenderReturnType {
-            attacker_health: attacker.attacker_health,
-            defender_response: defenders_damaged,
-            state: self.clone(),
-        }
-    }
 }

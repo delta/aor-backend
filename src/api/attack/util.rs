@@ -18,7 +18,6 @@ use crate::models::{
     Artifact, AttackerType, BlockCategory, BlockType, BuildingType, DefenderType, EmpType, Game,
     LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop, User,
 };
-use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
 use crate::schema::{block_type, building_type, defender_type, map_layout, map_spaces, prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
@@ -647,6 +646,9 @@ pub fn get_defenders(
             block_id: block_type.id,
             level: defender.level,
             max_health: defender.max_health,
+            frequency: prop.frequency,
+            last_attack: 0,
+            range: prop.range,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -728,6 +730,10 @@ pub fn get_hut_defender(
             block_id: block_type.id,
             level: defender_type.level,
             max_health: defender_type.max_health,
+            frequency: prop.frequency,
+            last_attack: 0,
+            range: prop.range,
+
         });
         log::info!("hut_defenders {:?}", i);
     }

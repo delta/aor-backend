@@ -7,8 +7,11 @@ services:
     restart: unless-stopped
     environment:
       TZ: "Asia/Calcutta"
+      PGPASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
       - db
+    volumes:
+      - ./backup.sh:/usr/local/bin/backup.sh
 
   db:
     image: postgres
