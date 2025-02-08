@@ -78,7 +78,7 @@ pub fn get_challenge_maps(
             );
 
             let completed = match completed {
-                core::result::Result::Ok(completed) => completed,
+                core::result::Result::Ok(completed) => !completed,
                 Err(_) => false,
             };
 
