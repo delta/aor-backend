@@ -47,7 +47,7 @@ pub fn attacker_movement_challenge_handle(
                             challenge.score += score_increment;
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
-                                message: "Maze Challenge Completed".to_string(),
+                                message: "gomma aor mass da".to_string(),
                                 is_invalidated: true,
                             }
                         }
@@ -79,7 +79,7 @@ pub fn attacker_movement_challenge_handle(
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
                                 is_invalidated: true,
-                                message: "Fall Guys challenge completed".to_string(),
+                                message: "gomma aor mass da".to_string(),
                             }
                         }
 
@@ -90,7 +90,7 @@ pub fn attacker_movement_challenge_handle(
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
                                 is_invalidated: true,
-                                message: "Fall Guys challenge completed".to_string(),
+                                message: "gomma aor mass da".to_string(),
                             }
                         }
                     }

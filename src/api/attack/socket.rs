@@ -45,6 +45,7 @@ pub struct SocketResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChallengeResponse {
     pub score: i32,
+    pub invalidation: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
