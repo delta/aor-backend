@@ -31,6 +31,7 @@ async fn get_inventory(user: AuthUser, pool: web::Data<PgPool>) -> Result<impl R
 struct UpgradeStruct {
     pub item_type: String,
     pub item_id: i32,
+    pub map_space_id: Option<i32>,
 }
 
 async fn upgrade(
@@ -43,6 +44,7 @@ async fn upgrade(
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let item_type = &req.item_type;
     let item_id = req.item_id;
+    let map_space_id = req.map_space_id.unwrap_or(-1);
 
     let mut redis_conn = redis_pool
         .get()
@@ -58,7 +60,7 @@ async fn upgrade(
         "attacker" => upgrade_attacker(user_id, &mut conn, item_id)
             .map_err(|err| ErrorBadRequest(err.to_string()))?,
         "building" => {
-            map_space_id_if_valid = upgrade_building(user_id, &mut conn, item_id)
+            map_space_id_if_valid = upgrade_building(user_id, &mut conn, item_id, map_space_id)
                 .map_err(|err| ErrorBadRequest(err.to_string()))?;
         }
         "defender" => upgrade_defender(user_id, &mut conn, item_id, true)

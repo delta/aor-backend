@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::time::SystemTime;
 
 use crate::api::attack::socket::DefenderResponse;
 use crate::api::attack::socket::{BulletHit,ResultType, SocketResponse};
@@ -42,7 +43,7 @@ pub struct IsTriggered {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DefenderDetails {
-    pub mapSpaceId: i32,
+    pub map_space_id: i32,
     pub name: String,
     pub radius: i32,
     pub speed: i32,
@@ -57,6 +58,7 @@ pub struct DefenderDetails {
     pub frequency: i32,
     pub last_attack : u128,
     pub range : i32,
+    pub max_health : i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -96,6 +98,8 @@ pub struct BuildingDetails {
     pub name: String,
     pub range: i32,
     pub frequency: i32,
+    // pub block_id: i32,
+    pub level: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -135,6 +139,16 @@ pub struct ValidatorResponse {
     pub is_sync: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BulletSpawnResponse {
+    pub sentry_id: i32,
+    pub bullet_id: i32,
+    pub damage: i32,
+    pub shot_time: SystemTime,
+    pub target_id: i32,
+    pub has_collided: bool,
+}
+
 pub fn send_terminate_game_message(frame_number: i32, message: String) -> SocketResponse {
     SocketResponse {
         frame_number,
@@ -149,6 +163,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         total_damage_percentage: None,
         is_sync: false,
         is_game_over: true,
+        shoot_bullets: None,
         message: Some(message),
         bullet_hits: None,
         revealed_mines: None,

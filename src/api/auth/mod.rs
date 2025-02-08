@@ -71,13 +71,14 @@ async fn logout(
         .get()
         .map_err(|err| error::handle_error(err.into()))?;
     // delete user id from redis db
-    redis_conn
+    let _: () = redis_conn
         .del(user_id)
         .map_err(|err| error::handle_error(err.into()))?;
 
     // clear the session cookie
     session.clear();
     Ok(HttpResponse::NoContent().finish())
+
 }
 
 async fn login(
@@ -135,7 +136,7 @@ async fn login(
         .map_err(|err| error::handle_error(err.into()))?;
 
     //set device id in redis db
-    redis_conn
+    let _: () = redis_conn
         .set(user.id, device + &expiring_time)
         .map_err(|err| error::handle_error(err.into()))?;
 

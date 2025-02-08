@@ -296,6 +296,16 @@ async fn socket_handler(
     log::info!("hut defender map: {:?}", hut_defenders);
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let hut_defenders: HashMap<i32, DefenderDetails> = web::block(move || {
+        Ok(util::get_hut_defender(&mut conn, defender_id)?)
+            as anyhow::Result<HashMap<i32, DefenderDetails>>
+    })
+    .await?
+    .map_err(|err| error::handle_error(err.into()))?;
+
+    log::info!("hut defender map: {:?}", hut_defenders);
+
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let mines = web::block(move || {
         Ok(util::get_mines(&mut conn, map_id)?) as anyhow::Result<Vec<MineDetails>>
     })
@@ -416,6 +426,7 @@ async fn socket_handler(
             buildings,
         );
         game_state.set_total_hp_buildings();
+        game_state.get_sentries();
 
         let game_logs = &mut game_log.clone();
 
@@ -626,6 +637,7 @@ async fn socket_handler(
                     damaged_buildings: None,
                     total_damage_percentage: None,
                     is_sync: false,
+                    shoot_bullets: None,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
                     bullet_hits: Some(Vec::new()),

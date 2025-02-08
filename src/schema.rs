@@ -4,10 +4,6 @@ pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "block_category"))]
     pub struct BlockCategory;
-
-    #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "item_category"))]
-    pub struct ItemCategory;
 }
 
 diesel::table! {
@@ -40,16 +36,18 @@ diesel::table! {
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::ItemCategory;
-
-    available_blocks (id) {
-        block_type_id -> Nullable<Int4>,
-        user_id -> Int4,
-        attacker_type_id -> Nullable<Int4>,
-        emp_type_id -> Nullable<Int4>,
-        category -> ItemCategory,
+    available_attackers (id) {
         id -> Int4,
+        user_id -> Int4,
+        attacker_type_id -> Int4,
+    }
+}
+
+diesel::table! {
+    available_emps (id) {
+        id -> Int4,
+        user_id -> Int4,
+        emp_type_id -> Int4,
     }
 }
 
@@ -89,6 +87,7 @@ diesel::table! {
         cost -> Int4,
         name -> Varchar,
         prop_id -> Int4,
+        max_health -> Int4,
     }
 }
 
@@ -212,11 +211,11 @@ diesel::table! {
 }
 
 diesel::joinable!(artifact -> map_spaces (map_space_id));
+diesel::joinable!(available_attackers -> user(user_id));
+diesel::joinable!(available_attackers -> attacker_type(attacker_type_id));
+diesel::joinable!(available_emps -> user(user_id));
+diesel::joinable!(available_emps -> emp_type(emp_type_id));
 diesel::joinable!(attacker_type -> prop (prop_id));
-diesel::joinable!(available_blocks -> attacker_type (attacker_type_id));
-diesel::joinable!(available_blocks -> block_type (block_type_id));
-diesel::joinable!(available_blocks -> emp_type (emp_type_id));
-diesel::joinable!(available_blocks -> user (user_id));
 diesel::joinable!(block_type -> building_type (building_type));
 diesel::joinable!(block_type -> defender_type (defender_type));
 diesel::joinable!(block_type -> mine_type (mine_type));
@@ -237,7 +236,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     artifact,
     attack_type,
     attacker_type,
-    available_blocks,
+    available_attackers,
+    available_emps,
     block_type,
     building_type,
     defender_type,

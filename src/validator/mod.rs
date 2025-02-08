@@ -83,7 +83,7 @@ pub fn game_handler(
         }
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
-
+            // let shoot_bullets = _game_state.shoot_bullets();
             let mut event_response = EventResponse {
                 attacker_id: None,
                 bomb_id: None,
@@ -133,12 +133,13 @@ pub fn game_handler(
                 defender.target_id = None;
             }
 
+            let attacker_health = _game_state.attacker.as_ref().map(|attacker| attacker.attacker_health);
+
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::PlacedAttacker,
                 is_alive: Some(true),
-
-                attacker_health: None,
+                attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
@@ -148,6 +149,7 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullets: None,
                 message: Some(String::from(
                     "Place Attacker, set attacker and bomb response",
                 )),
@@ -198,10 +200,15 @@ pub fn game_handler(
 
 
         ActionType::MoveAttacker => {
+            let shoot_bullets = _game_state.shoot_bullets();
+            if _game_state.attacker.is_some() {
+                _game_state.cause_bullet_damage();
+            }
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
                 // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
                 // let attacker_delta_clone = attacker_delta.clone();
+
                 let _attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
@@ -312,6 +319,7 @@ pub fn game_handler(
                     total_damage_percentage: Some(_game_state.damage_percentage),
                     is_sync: false,
                     is_game_over: false,
+                    shoot_bullets: Some(shoot_bullets),
                     message: Some(String::from("Movement Response")),
                     bullet_hits: None,
                     revealed_mines: None,
@@ -320,6 +328,10 @@ pub fn game_handler(
             }
         }
         ActionType::IsMine => {
+            let shoot_bullets = _game_state.shoot_bullets();
+            if _game_state.attacker.is_some() {
+                _game_state.cause_bullet_damage();
+            }
             // is_mine
             let start_pos: Option<Coords> = socket_request.current_position;
             exploded_mines_result = _game_state.mine_blast(start_pos);
@@ -349,12 +361,13 @@ pub fn game_handler(
                 )));
             }
 
+            let attacker_health = _game_state.attacker.as_ref().map(|attacker| attacker.attacker_health);
+
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type,
                 is_alive: Some(is_attacker_alive),
-
-                attacker_health: None,
+                attacker_health,
                 exploded_mines: Some(exploded_mines_result),
                 // triggered_defenders: None,
                 defender_damaged: None,
@@ -364,12 +377,17 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullets: Some(shoot_bullets),
                 message: Some(String::from("Is Mine Response")),
                 bullet_hits: None,
                 revealed_mines: None,
             }));
         }
         ActionType::PlaceBombs => {
+            let shoot_bullets = _game_state.shoot_bullets();
+            if _game_state.attacker.is_some() {
+                _game_state.cause_bullet_damage();
+            }
             // let attacker_delta: Vec<Coords> = socket_request.attacker_path.clone();
             let current_pos = socket_request.current_position.unwrap();
             let bomb_coords = socket_request.bomb_position;
@@ -422,6 +440,7 @@ pub fn game_handler(
                 ResultType::Nothing
             };
 
+
             if _game_state.in_validation.is_invalidated {
                 return Some(Ok(send_terminate_game_message(
                     socket_request.frame_number,
@@ -429,12 +448,13 @@ pub fn game_handler(
                 )));
             }
 
+            let attacker_health = _game_state.attacker.as_ref().map(|attacker| attacker.attacker_health);
+
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type,
                 is_alive: Some(true),
-
-                attacker_health: None,
+                attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
@@ -444,18 +464,23 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullets:  Some(shoot_bullets),
                 message: Some(String::from("Place Bomb Response")),
                 bullet_hits: None,
                 revealed_mines: None,
             }));
         }
         ActionType::Idle => {
+            let shoot_bullets = _game_state.shoot_bullets();
+            if _game_state.attacker.is_some() {
+                _game_state.cause_bullet_damage();
+            }
+            let attacker_health = _game_state.attacker.as_ref().map(|attacker| attacker.attacker_health);
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::Nothing,
                 is_alive: Some(true),
-
-                attacker_health: None,
+                attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
@@ -465,17 +490,19 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullets: Some(shoot_bullets),
                 message: Some(String::from("Idle Response")),
                 bullet_hits: None,
                 revealed_mines: None,
             }));
         }
         ActionType::Terminate => {
+            let attacker_health = _game_state.attacker.as_ref().map(|attacker| attacker.attacker_health);
             let socket_response = SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::GameOver,
                 is_alive: None,
-                attacker_health: None,
+                attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
@@ -485,20 +512,21 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: true,
+                shoot_bullets: None,
                 message: Some(String::from("Game over")),
                 bullet_hits: None,
                 revealed_mines: None,
             };
-
             return Some(Ok(socket_response));
         }
         ActionType::SelfDestruct => {
             _game_state.self_destruct();
+            let attacker_health = _game_state.attacker.as_ref().map(|attacker| attacker.attacker_health);
             let socket_response = SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::Nothing,
                 is_alive: Some(false),
-                attacker_health: None,
+                attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
@@ -508,6 +536,7 @@ pub fn game_handler(
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
                 is_game_over: false,
+                shoot_bullets: None,
                 message: Some(String::from("Self Destructed")),
                 bullet_hits: None,
                 revealed_mines: None,

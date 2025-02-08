@@ -35,3 +35,8 @@ pub const LEVEL: [LevelAttributes; 3] = [
 ];
 
 pub const LIVES: i32 = 3;
+pub const DAMAGE_PER_BULLET_LEVEL_1: i32 = 5;
+pub const DAMAGE_PER_BULLET_LEVEL_2: i32 = 7;
+pub const DAMAGE_PER_BULLET_LEVEL_3: i32 = 10;
+pub const BULLET_COLLISION_TIME: i32 = 2;
+
