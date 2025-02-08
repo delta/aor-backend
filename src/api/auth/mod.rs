@@ -120,12 +120,9 @@ async fn login(
     let name = userinfo.name;
 
     //checking if the user exists in db else creating a new user
-    let user = web::block(move || {
-        let mut conn = pg_pool.get()?;
-        util::get_oauth_user(&mut conn, &email, &name)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pg_pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let user = util::get_oauth_user(&mut conn, &email, &name)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     //generating jwt token
     let (token, expiring_time, device) = util::generate_jwt_token(user.id).unwrap();

@@ -17,12 +17,9 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
 
 async fn get_inventory(user: AuthUser, pool: web::Data<PgPool>) -> Result<impl Responder> {
     let user_id = user.0;
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::get_inventory(user_id, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response =
+        util::get_inventory(user_id, &mut conn).map_err(|err| error::handle_error(err.into()))?;
 
     Ok(web::Json(response))
 }

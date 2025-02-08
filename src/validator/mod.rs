@@ -203,7 +203,7 @@ pub fn game_handler(
 
                 let result_type = if hut_triggered {
                     ResultType::SpawnHutDefender
-                } else if defender_damaged_result.clone().defender_response.len() > 0 {
+                } else if !defender_damaged_result.clone().defender_response.is_empty() {
                     ResultType::DefendersDamaged
                 } else {
                     ResultType::Nothing

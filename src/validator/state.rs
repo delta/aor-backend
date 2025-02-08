@@ -292,7 +292,7 @@ impl State {
             // }
             // coord_temp = coord;
         }
-        self.activate_sentry(attacker_current.attacker_pos.clone());
+        self.activate_sentry(attacker_current.attacker_pos);
 
         self.frame_no += 1;
         attacker.attacker_pos = attacker_current.attacker_pos;
@@ -373,7 +373,7 @@ impl State {
                 if let Some(hut_defender) = select_side_hut_defender(
                     &shadow_tiles,
                     roads,
-                    &hut_building,
+                    hut_building,
                     &self
                         .hut
                         .get(&hut_building.map_space_id)
@@ -410,7 +410,7 @@ impl State {
             }
             // }
         }
-        return Some(response);
+        Some(response)
     }
 
     pub fn place_bombs(
@@ -703,10 +703,10 @@ impl State {
                     + (sentry.building_data.tile.y - new_pos.y).abs()
                     <= sentry.building_data.range;
                 let new_state = sentry.is_sentry_activated;
-                if prev_state != new_state && new_state == true {
+                if prev_state != new_state && new_state {
                     log::info!("sentry activated");
                     sentry.sentry_start_time = SystemTime::now();
-                } else if prev_state != new_state && new_state == false {
+                } else if prev_state != new_state && !new_state {
                     log::info!("sentry deactivated");
                     sentry.current_bullet_shot_time = SystemTime::now() - Duration::new(2, 0);
                 }

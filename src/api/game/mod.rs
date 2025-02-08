@@ -19,12 +19,10 @@ async fn list_leaderboard(
     if page <= 0 || limit <= 0 {
         return Err(ErrorBadRequest("Invalid query params"));
     }
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::get_leaderboard(page, limit, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let response = util::get_leaderboard(page, limit, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }
 async fn get_replay(
@@ -36,21 +34,16 @@ async fn get_replay(
     let game_id = game_id.into_inner();
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let is_replay_allowed =
-        web::block(move || util::fetch_is_replay_allowed(game_id, user_id, &mut conn))
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
+    let is_replay_allowed = util::fetch_is_replay_allowed(game_id, user_id, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     if !is_replay_allowed {
         return Err(ErrorBadRequest("Requested replay is not available"));
     }
 
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_replay(game_id, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response =
+        util::fetch_replay(game_id, &mut conn).map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }
 
@@ -62,12 +55,9 @@ async fn get_game_details(
     let user_id = user.0;
     let game_id = game_id.into_inner();
 
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_game_details(game_id, user_id, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response = util::fetch_game_details(game_id, user_id, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok(web::Json(response))
 }

@@ -44,21 +44,19 @@ async fn register(
             "Username should contain atleast 6 characters",
         ));
     }
-    let duplicates = web::block(move || util::get_duplicate_users(&mut conn, &user))
-        .await?
+    let duplicates = util::get_duplicate_users(&mut conn, &user)
         .map_err(|err| error::handle_error(err.into()))?;
     for duplicate in duplicates {
         if duplicate.username == input_user.username {
             return Err(ErrorConflict("Username already exists"));
         }
     }
-    web::block(move || {
-        let mut conn = pg_pool.get()?;
-        let redis_conn = redis_pool.get()?;
-        util::add_user(&mut conn, redis_conn, &input_user)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+
+    let redis_conn = redis_pool
+        .get()
+        .map_err(|err| error::handle_error(err.into()))?;
+    util::add_user(&mut conn, redis_conn, &input_user)
+        .map_err(|err| error::handle_error(err.into()))?;
     Ok("Successfully Registered")
 }
 
@@ -76,10 +74,10 @@ async fn update_user(
             "Username should contain atleast 5 characters and atmost 15 characters",
         ));
     }
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+
     if let Some(username) = username {
-        let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-        let duplicate = web::block(move || util::get_duplicate_username(&mut conn, &username))
-            .await?
+        let duplicate = util::get_duplicate_username(&mut conn, &username)
             .map_err(|err| error::handle_error(err.into()))?;
         if duplicate.is_some() && duplicate.as_ref().unwrap().id != user_id {
             return Err(ErrorConflict("Username already exists"));
@@ -88,12 +86,9 @@ async fn update_user(
             return Ok("No change in Username");
         }
     }
-    web::block(move || {
-        let mut conn = pool.get()?;
-        util::update_user(&mut conn, user_id, &user_details)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+
+    util::update_user(&mut conn, user_id, &user_details)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok("User updated successfully")
 }
@@ -101,19 +96,16 @@ async fn update_user(
 async fn get_user_stats(user_id: Path<i32>, pool: Data<PgPool>) -> Result<impl Responder> {
     let user_id = user_id.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let user = web::block(move || util::fetch_user(&mut conn, user_id))
-        .await?
+    let user =
+        util::fetch_user(&mut conn, user_id).map_err(|err| error::handle_error(err.into()))?;
+    let attack_game = util::fetch_attack_game(&mut conn, user_id)
         .map_err(|err| error::handle_error(err.into()))?;
+    let defense_game = util::fetch_defense_game(&mut conn, user_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+    let users = util::fetch_all_user(&mut conn).map_err(|err| error::handle_error(err.into()))?;
     if let Some(user) = user {
-        let response = web::block(move || {
-            let mut conn = pool.get()?;
-            let attack_game = util::fetch_attack_game(&mut conn, user_id)?;
-            let defense_game = util::fetch_defense_game(&mut conn, user_id)?;
-            let users = util::fetch_all_user(&mut conn)?;
-            util::make_response(&user, &attack_game, &defense_game, &users)
-        })
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+        let response = util::make_response(&user, &attack_game, &defense_game, &users)
+            .map_err(|err| error::handle_error(err.into()))?;
         Ok(Json(response))
     } else {
         Err(ErrorNotFound("User not found"))
@@ -123,17 +115,14 @@ async fn get_user_stats(user_id: Path<i32>, pool: Data<PgPool>) -> Result<impl R
 async fn view_user_profile(player_id: Path<i32>, pool: Data<PgPool>) -> Result<impl Responder> {
     let user_id = player_id.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let user = web::block(move || util::fetch_user(&mut conn, user_id))
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+    let user =
+        util::fetch_user(&mut conn, user_id).map_err(|err| error::handle_error(err.into()))?;
     if let Some(user) = user {
-        let response = web::block(move || {
-            let mut conn = pool.get()?;
-            let users = util::fetch_all_user(&mut conn)?;
-            util::make_profile_response(&user, &users)
-        })
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+        let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+        let users =
+            util::fetch_all_user(&mut conn).map_err(|err| error::handle_error(err.into()))?;
+        let response = util::make_profile_response(&user, &users)
+            .map_err(|err| error::handle_error(err.into()))?;
         Ok(Json(response))
     } else {
         Err(ErrorNotFound("User not found"))

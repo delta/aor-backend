@@ -2,23 +2,21 @@ use self::util::{get_valid_road_paths, AttackResponse, GameLog, ResultResponse};
 use super::auth::session::AuthUser;
 use super::defense::shortest_path::run_shortest_paths;
 use super::defense::util::{
-    AttackBaseResponse, DefenseResponse, MineTypeResponseWithoutBlockId, SimulationBaseResponse,
+    AttackBaseResponse, MineTypeResponseWithoutBlockId,
 };
 use super::user::util::fetch_user;
 use super::{error, PgPool, RedisPool};
 use crate::api::attack::socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse};
 use crate::api::util::HistoryboardQuery;
 use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
-use crate::models::{AttackerType, User};
 use crate::validator::state::State;
-use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
-use crate::validator::util::{Coords, SourceDestXY};
+use crate::validator::util::DefenderDetails;
 use actix_rt;
 use actix_web::error::ErrorBadRequest;
 use actix_web::web::{Data, Json};
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
 use log;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time;
 
 use crate::validator::game_handler;
@@ -63,20 +61,8 @@ async fn init_attack(
 
     log::info!("Attacker:{} has no ongoing game", attacker_id);
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let redis_conn = redis_pool
-        .get()
+    let random_opponent_id = util::get_random_opponent_id(attacker_id, &mut conn, redis_conn)
         .map_err(|err| error::handle_error(err.into()))?;
-
-    let random_opponent_id = web::block(move || {
-        Ok(util::get_random_opponent_id(
-            attacker_id,
-            &mut conn,
-            redis_conn,
-        )?) as anyhow::Result<Option<i32>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
 
     let opponent_id = if let Some(id) = random_opponent_id {
         id
@@ -91,28 +77,15 @@ async fn init_attack(
         attacker_id
     );
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
     //Fetch base details and shortest paths data
-    let (map_id, opponent_base) = web::block(move || {
-        Ok(util::get_opponent_base_details_for_attack(
-            opponent_id,
-            &mut conn,
-            attacker_id,
-        )?) as anyhow::Result<(i32, DefenseResponse)>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let (map_id, opponent_base) =
+        (util::get_opponent_base_details_for_attack(opponent_id, &mut conn, attacker_id))
+            .map_err(|err| error::handle_error(err.into()))?;
 
     log::info!("Base details of Opponent:{} fetched", opponent_id);
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let obtainable_artifacts = web::block(move || {
-        Ok(util::artifacts_obtainable_from_base(map_id, &mut conn)?) as anyhow::Result<i32>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let obtainable_artifacts = util::artifacts_obtainable_from_base(map_id, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     log::info!(
         "Artifacts obtainable from opponent: {} base is {}",
@@ -120,22 +93,14 @@ async fn init_attack(
         obtainable_artifacts
     );
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
     let user_details =
-        web::block(move || Ok(fetch_user(&mut conn, opponent_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
+        fetch_user(&mut conn, opponent_id).map_err(|err| error::handle_error(err.into()))?;
 
     log::info!("User details fetched for Opponent:{}", opponent_id);
 
     //Create game
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let game_id = web::block(move || {
-        Ok(util::add_game(attacker_id, opponent_id, map_id, &mut conn)?) as anyhow::Result<i32>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let game_id = (util::add_game(attacker_id, opponent_id, map_id, &mut conn))
+        .map_err(|err| error::handle_error(err.into()))?;
 
     log::info!(
         "Game:{} created for Attacker:{} and Opponent:{}",
@@ -254,14 +219,9 @@ async fn socket_handler(
     );
 
     //Fetch map_id of the defender
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
 
-    let map = web::block(move || {
-        let map = util::get_map_id(&defender_id, &mut conn)?;
-        Ok(map) as anyhow::Result<Option<i32>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let map =
+        util::get_map_id(&defender_id, &mut conn).map_err(|err| error::handle_error(err.into()))?;
 
     let map_id = if let Some(map) = map {
         map
@@ -269,98 +229,46 @@ async fn socket_handler(
         return Err(ErrorBadRequest("Invalid base"));
     };
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let shortest_paths =
+        run_shortest_paths(&mut conn, map_id).map_err(|err| error::handle_error(err.into()))?;
 
-    let shortest_paths = web::block(move || {
-        Ok(run_shortest_paths(&mut conn, map_id)?) as anyhow::Result<HashMap<SourceDestXY, Coords>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let defenders: Vec<DefenderDetails> = util::get_defenders(&mut conn, map_id, defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let defenders: Vec<DefenderDetails> = web::block(move || {
-        Ok(util::get_defenders(&mut conn, map_id, defender_id)?)
-            as anyhow::Result<Vec<DefenderDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let hut_defenders: HashMap<i32, DefenderDetails> = web::block(move || {
-        Ok(util::get_hut_defender(&mut conn, defender_id)?)
-            as anyhow::Result<HashMap<i32, DefenderDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let hut_defenders: HashMap<i32, DefenderDetails> =
+        util::get_hut_defender(&mut conn, defender_id)
+            .map_err(|err| error::handle_error(err.into()))?;
 
     log::info!("hut defender map: {:?}", hut_defenders);
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let mines = web::block(move || {
-        Ok(util::get_mines(&mut conn, map_id)?) as anyhow::Result<Vec<MineDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mines =
+        util::get_mines(&mut conn, map_id).map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let buildings = web::block(move || {
-        Ok(util::get_buildings(&mut conn, map_id)?) as anyhow::Result<Vec<BuildingDetails>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let buildings =
+        util::get_buildings(&mut conn, map_id).map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let roads = web::block(move || {
-        Ok(get_valid_road_paths(map_id, &mut conn)?) as anyhow::Result<HashSet<(i32, i32)>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let roads =
+        get_valid_road_paths(map_id, &mut conn).map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let bomb_types =
-        web::block(move || Ok(util::get_bomb_types(&mut conn)?) as anyhow::Result<Vec<BombType>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
+        util::get_bomb_types(&mut conn).map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let attacker_type = web::block(move || {
-        Ok(util::get_attacker_types(&mut conn)?) as anyhow::Result<HashMap<i32, AttackerType>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let attacker_type =
+        util::get_attacker_types(&mut conn).map_err(|err| error::handle_error(err.into()))?;
 
     let attacker_user_details =
-        web::block(move || Ok(fetch_user(&mut conn, attacker_id)?) as anyhow::Result<Option<User>>)
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+        fetch_user(&mut conn, attacker_id).map_err(|err| error::handle_error(err.into()))?;
 
     let defender_user_details =
-        web::block(move || Ok(fetch_user(&mut conn, defender_id)?) as anyhow::Result<Option<User>>)
-            .await?
+        fetch_user(&mut conn, defender_id).map_err(|err| error::handle_error(err.into()))?;
+
+    let defender_base_details =
+        util::get_opponent_base_details_for_simulation(defender_id, &mut conn)
             .map_err(|err| error::handle_error(err.into()))?;
-
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-
-    let defender_base_details = web::block(move || {
-        Ok(util::get_opponent_base_details_for_simulation(
-            defender_id,
-            &mut conn,
-        )?) as anyhow::Result<SimulationBaseResponse>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
 
     if attacker_user_details.is_none() || defender_user_details.is_none() {
         return Err(ErrorBadRequest("User details not found"));
     }
-
-    let redis_conn = redis_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
 
     if util::add_game_id_to_redis(attacker_id, defender_id, game_id, redis_conn).is_err() {
         println!("Cannot add game:{} to redis", game_id);
@@ -652,22 +560,16 @@ async fn attack_history(
     if page <= 0 || limit <= 0 {
         return Err(ErrorBadRequest("Invalid query params"));
     }
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_attack_history(user_id, page, limit, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response = util::fetch_attack_history(user_id, page, limit, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }
 
 async fn get_top_attacks(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl Responder> {
     let user_id = user.0;
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_top_attacks(user_id, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response = util::fetch_top_attacks(user_id, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }

@@ -1,4 +1,3 @@
-use self::util::{DefenderTypeResponse, MineTypeResponse};
 
 use super::attack::util::get_game_id_from_redis;
 use super::auth::session::AuthUser;
@@ -8,12 +7,10 @@ use super::PgPool;
 use super::RedisPool;
 use crate::api::error;
 use crate::api::util::HistoryboardQuery;
-use crate::models::*;
 use actix_web::error::{ErrorBadRequest, ErrorNotFound};
 use actix_web::web::{self, Data, Json};
 use actix_web::{Responder, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 pub mod shortest_path;
 pub mod util;
@@ -85,24 +82,14 @@ async fn post_transfer_artifacts(
     let mut conn = pg_pool
         .get()
         .map_err(|err| error::handle_error(err.into()))?;
-    let bank_block_type_id = web::block(move || util::get_block_id_of_bank(&mut conn, &user_id))
-        .await?
+    let bank_block_type_id = util::get_block_id_of_bank(&mut conn, &user_id)
         .map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pg_pool
-        .get()
+    let current_layout_id = util::check_valid_map_id(&mut conn, &user_id, &transfer.map_space_id)
         .map_err(|err| error::handle_error(err.into()))?;
-    let current_layout_id =
-        web::block(move || util::check_valid_map_id(&mut conn, &user_id, &transfer.map_space_id))
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
     let is_valid_map_space_building =
-        web::block(move || util::check_valid_map_space_building(&mut conn, &transfer.map_space_id))
-            .await?
+        util::check_valid_map_space_building(&mut conn, &transfer.map_space_id)
             .map_err(|err| error::handle_error(err.into()))?;
 
     if !is_valid_map_space_building {
@@ -111,47 +98,28 @@ async fn post_transfer_artifacts(
         ));
     }
 
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-    let bank_map_space_id = web::block(move || {
+    let bank_map_space_id =
         util::get_bank_map_space_id(&mut conn, &current_layout_id, &bank_block_type_id)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+            .map_err(|err| error::handle_error(err.into()))?;
 
     if bank_map_space_id == transfer.map_space_id {
         return Err(ErrorBadRequest("Cannot transfer to the same building"));
     }
 
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-    let bank_artifact_count = web::block(move || {
+    let bank_artifact_count =
         util::get_building_artifact_count(&mut conn, &current_layout_id, &bank_map_space_id)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+            .map_err(|err| error::handle_error(err.into()))?;
 
     if transfer.artifacts_differ > bank_artifact_count {
         return Err(ErrorBadRequest("Not enough artifacts in the bank"));
     }
 
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-    let mut building_artifact_count = web::block(move || {
+    let mut building_artifact_count =
         util::get_building_artifact_count(&mut conn, &current_layout_id, &transfer.map_space_id)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+            .map_err(|err| error::handle_error(err.into()))?;
 
     if building_artifact_count == -1 {
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        web::block(move || util::create_artifact_record(&mut conn, &transfer.map_space_id, &0))
-            .await?
+        util::create_artifact_record(&mut conn, &transfer.map_space_id, &0)
             .map_err(|err| error::handle_error(err.into()))?;
         building_artifact_count = 0;
     }
@@ -160,13 +128,8 @@ async fn post_transfer_artifacts(
         return Err(ErrorBadRequest("Not enough artifacts in the building"));
     }
 
-    let mut conn = pg_pool
-        .get()
+    let building_capacity = util::get_building_capacity(&mut conn, &transfer.map_space_id)
         .map_err(|err| error::handle_error(err.into()))?;
-    let building_capacity =
-        web::block(move || util::get_building_capacity(&mut conn, &transfer.map_space_id))
-            .await?
-            .map_err(|err| error::handle_error(err.into()))?;
 
     if building_capacity < transfer.artifacts_differ + building_artifact_count {
         return Err(ErrorBadRequest("Building capacity not sufficient"));
@@ -176,19 +139,13 @@ async fn post_transfer_artifacts(
     let new_bank_artifact_count = bank_artifact_count - transfer.artifacts_differ;
 
     //Transfer Artifacts
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-    web::block(move || {
-        util::transfer_artifacts_building(
-            &mut conn,
-            &transfer.map_space_id,
-            &bank_map_space_id,
-            &new_building_artifact_count,
-            &new_bank_artifact_count,
-        )
-    })
-    .await?
+    util::transfer_artifacts_building(
+        &mut conn,
+        &transfer.map_space_id,
+        &bank_map_space_id,
+        &new_building_artifact_count,
+        &new_bank_artifact_count,
+    )
     .map_err(|err| error::handle_error(err.into()))?;
 
     Ok(web::Json(TransferArtifactResponse {
@@ -228,28 +185,16 @@ async fn post_batch_transfer_artifacts(
         let mut conn = pg_pool
             .get()
             .map_err(|err| error::handle_error(err.into()))?;
-        let bank_block_type_id =
-            web::block(move || util::get_block_id_of_bank(&mut conn, &user_id))
-                .await?
+        let bank_block_type_id = util::get_block_id_of_bank(&mut conn, &user_id)
+            .map_err(|err| error::handle_error(err.into()))?;
+
+        let current_layout_id =
+            util::check_valid_map_id(&mut conn, &user_id, &transfer.map_space_id)
                 .map_err(|err| error::handle_error(err.into()))?;
 
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        let current_layout_id = web::block(move || {
-            util::check_valid_map_id(&mut conn, &user_id, &transfer.map_space_id)
-        })
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
-
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        let is_valid_map_space_building = web::block(move || {
+        let is_valid_map_space_building =
             util::check_valid_map_space_building(&mut conn, &transfer.map_space_id)
-        })
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+                .map_err(|err| error::handle_error(err.into()))?;
 
         if !is_valid_map_space_building {
             return Err(ErrorBadRequest(
@@ -257,47 +202,31 @@ async fn post_batch_transfer_artifacts(
             ));
         }
 
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        let bank_map_space_id = web::block(move || {
+        let bank_map_space_id =
             util::get_bank_map_space_id(&mut conn, &current_layout_id, &bank_block_type_id)
-        })
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+                .map_err(|err| error::handle_error(err.into()))?;
 
         if bank_map_space_id == transfer.map_space_id {
             return Err(ErrorBadRequest("Cannot transfer to the same building"));
         }
 
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        let bank_artifact_count = web::block(move || {
+        let bank_artifact_count =
             util::get_building_artifact_count(&mut conn, &current_layout_id, &bank_map_space_id)
-        })
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+                .map_err(|err| error::handle_error(err.into()))?;
 
         if total_artifact_differ > bank_artifact_count + accum_val {
             return Err(ErrorBadRequest("Not enough artifacts in the bank"));
         }
 
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        let mut building_artifact_count = web::block(move || {
-            util::get_building_artifact_count(&mut conn, &current_layout_id, &transfer.map_space_id)
-        })
-        .await?
+        let mut building_artifact_count = util::get_building_artifact_count(
+            &mut conn,
+            &current_layout_id,
+            &transfer.map_space_id,
+        )
         .map_err(|err| error::handle_error(err.into()))?;
 
         if building_artifact_count == -1 {
-            let mut conn = pg_pool
-                .get()
-                .map_err(|err| error::handle_error(err.into()))?;
-            web::block(move || util::create_artifact_record(&mut conn, &transfer.map_space_id, &0))
-                .await?
+            util::create_artifact_record(&mut conn, &transfer.map_space_id, &0)
                 .map_err(|err| error::handle_error(err.into()))?;
             building_artifact_count = 0;
         }
@@ -306,13 +235,8 @@ async fn post_batch_transfer_artifacts(
             return Err(ErrorBadRequest("Not enough artifacts in the building"));
         }
 
-        let mut conn = pg_pool
-            .get()
+        let building_capacity = util::get_building_capacity(&mut conn, &transfer.map_space_id)
             .map_err(|err| error::handle_error(err.into()))?;
-        let building_capacity =
-            web::block(move || util::get_building_capacity(&mut conn, &transfer.map_space_id))
-                .await?
-                .map_err(|err| error::handle_error(err.into()))?;
 
         if building_capacity < transfer.artifacts_differ + building_artifact_count {
             return Err(ErrorBadRequest("Building capacity not sufficient"));
@@ -321,19 +245,13 @@ async fn post_batch_transfer_artifacts(
         let new_building_artifact_count = building_artifact_count + transfer.artifacts_differ;
         let new_bank_artifact_count = bank_artifact_count - transfer.artifacts_differ;
 
-        let mut conn = pg_pool
-            .get()
-            .map_err(|err| error::handle_error(err.into()))?;
-        web::block(move || {
-            util::transfer_artifacts_building(
-                &mut conn,
-                &transfer.map_space_id,
-                &bank_map_space_id,
-                &new_building_artifact_count,
-                &new_bank_artifact_count,
-            )
-        })
-        .await?
+        util::transfer_artifacts_building(
+            &mut conn,
+            &transfer.map_space_id,
+            &bank_map_space_id,
+            &new_building_artifact_count,
+            &new_bank_artifact_count,
+        )
         .map_err(|err| error::handle_error(err.into()))?;
         accum_val += transfer.artifacts_differ;
         responses.push(TransferArtifactResponse {
@@ -349,14 +267,15 @@ async fn post_batch_transfer_artifacts(
 
 async fn get_user_base_details(pool: Data<PgPool>, user: AuthUser) -> Result<impl Responder> {
     let defender_id = user.0;
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        let user = fetch_user(&mut conn, defender_id)?;
-        let map = util::fetch_map_layout(&mut conn, &defender_id)?;
-        util::get_details_from_map_layout(&mut conn, map, user)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let user = fetch_user(&mut conn, defender_id).map_err(|err| error::handle_error(err.into()))?;
+
+    let map = util::fetch_map_layout(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let response = util::get_details_from_map_layout(&mut conn, map, user)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok(Json(response))
 }
@@ -367,28 +286,21 @@ async fn get_other_base_details(
 ) -> Result<impl Responder> {
     let defender_id = defender_id.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let defender_exists = web::block(move || util::defender_exists(defender_id, &mut conn))
-        .await?
+    let defender_exists = util::defender_exists(defender_id, &mut conn)
         .map_err(|err| error::handle_error(err.into()))?;
     if !defender_exists {
         return Err(ErrorNotFound("Player not found"));
     }
 
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let map = web::block(move || util::fetch_map_layout(&mut conn, &defender_id))
-        .await?
+    let map = util::fetch_map_layout(&mut conn, &defender_id)
         .map_err(|err| error::handle_error(err.into()))?;
 
     if !map.is_valid {
         return Err(ErrorBadRequest("Invalid Base"));
     }
 
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::get_map_details_for_attack(&mut conn, map, defender_id)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let response = util::get_map_details_for_attack(&mut conn, map, defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok(Json(response))
 }
@@ -399,20 +311,15 @@ async fn get_game_base_details(
 ) -> Result<impl Responder> {
     let game_id = game_id.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let map = web::block(move || util::fetch_map_layout_from_game(&mut conn, game_id))
-        .await?
+    let map = util::fetch_map_layout_from_game(&mut conn, game_id)
         .map_err(|err| error::handle_error(err.into()))?;
 
     if map.is_none() {
         return Err(ErrorNotFound("Game not found"));
     }
 
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::get_details_from_map_layout(&mut conn, map.unwrap(), None)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let response = util::get_details_from_map_layout(&mut conn, map.unwrap(), None)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok(Json(response))
 }
@@ -425,25 +332,18 @@ async fn set_base_details(
     let defender_id = user.0;
     let map_spaces = map_spaces.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let (map, blocks, buildings) = web::block(move || {
-        Ok((
-            util::fetch_map_layout(&mut conn, &defender_id)?,
-            util::fetch_blocks(&mut conn, &defender_id)?,
-            util::fetch_buildings(&mut conn)?,
-        )) as anyhow::Result<(MapLayout, HashMap<i32, BlockType>, Vec<BuildingType>)>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let map = util::fetch_map_layout(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+    let blocks = util::fetch_blocks(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+    let buildings =
+        util::fetch_buildings(&mut conn).map_err(|err| error::handle_error(err.into()))?;
 
     validate::is_valid_update_layout(&map_spaces, &blocks, &buildings)?;
 
-    web::block(move || {
-        let mut conn = pool.get()?;
-        // util::set_map_invalid(&mut conn, map.id)?;
-        util::put_base_details(&map_spaces, &map, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    // util::set_map_invalid(&mut conn, map.id)?;
+    util::put_base_details(&map_spaces, &map, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok("Updated successfully")
 }
@@ -466,29 +366,23 @@ async fn confirm_base_details(
 
     let map_spaces = map_spaces.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let (map, blocks, mut level_constraints, buildings, defenders, mines, user_artifacts) =
-        web::block(move || {
-            let map = util::fetch_map_layout(&mut conn, &defender_id)?;
-            Ok((
-                map.clone(),
-                util::fetch_blocks(&mut conn, &defender_id)?,
-                util::get_level_constraints(&mut conn, map.level_id, &defender_id)?,
-                util::fetch_buildings(&mut conn)?,
-                util::fetch_defender_types(&mut conn, &defender_id)?,
-                util::fetch_mine_types(&mut conn, &defender_id)?,
-                get_user_artifacts(defender_id, &mut conn)?,
-            ))
-                as anyhow::Result<(
-                    MapLayout,
-                    HashMap<i32, BlockType>,
-                    HashMap<i32, i32>,
-                    Vec<BuildingType>,
-                    Vec<DefenderTypeResponse>,
-                    Vec<MineTypeResponse>,
-                    i32,
-                )>
-        })
-        .await?
+
+    let map = util::fetch_map_layout(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let map = map.clone();
+    let blocks = util::fetch_blocks(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+
+    let mut level_constraints = util::get_level_constraints(&mut conn, map.level_id, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+    let buildings =
+        util::fetch_buildings(&mut conn).map_err(|err| error::handle_error(err.into()))?;
+    let defenders = util::fetch_defender_types(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+    let mines = util::fetch_mine_types(&mut conn, &defender_id)
+        .map_err(|err| error::handle_error(err.into()))?;
+    let user_artifacts = get_user_artifacts(defender_id, &mut conn)
         .map_err(|err| error::handle_error(err.into()))?;
 
     validate::is_valid_save_layout(
@@ -501,14 +395,10 @@ async fn confirm_base_details(
         &user_artifacts,
     )?;
 
-    web::block(move || {
-        let mut conn = pool.get()?;
-        util::put_base_details(&map_spaces, &map, &mut conn)
+    util::put_base_details(&map_spaces, &map, &mut conn)
         // util::calculate_shortest_paths(&mut conn, map.id)?;
         // util::set_map_valid(&mut conn, map.id)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+        .map_err(|err| error::handle_error(err.into()))?;
 
     Ok("Saved successfully")
 }
@@ -524,22 +414,16 @@ async fn defense_history(
     if page <= 0 || limit <= 0 {
         return Err(ErrorBadRequest("Invalid query params"));
     }
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_defense_historyboard(user_id, page, limit, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response = util::fetch_defense_historyboard(user_id, page, limit, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }
 
 async fn get_top_defenses(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl Responder> {
     let user_id = user.0;
-    let response = web::block(move || {
-        let mut conn = pool.get()?;
-        util::fetch_top_defenses(user_id, &mut conn)
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let response = util::fetch_top_defenses(user_id, &mut conn)
+        .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }
