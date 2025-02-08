@@ -1,5 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+use self::{
+    state::State,
+    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
+};
 use crate::{
     api::attack::{
         socket::{
@@ -13,12 +17,7 @@ use crate::{
     validator::util::{Coords, SourceDestXY},
 };
 use anyhow::{Ok, Result};
-use util::{Companion, CompanionResult, MineResponse, Path};
-
-use self::{
-    state::State,
-    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
-};
+use util::{maze_place_attacker_handle, Companion, CompanionResult, MineResponse, Path};
 
 pub mod challenges;
 pub mod error;
@@ -40,6 +39,9 @@ pub fn game_handler(
     match socket_request.action_type {
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
+            let challenge = &mut _game_state.challenge;
+            maze_place_attacker_handle(challenge);
+
             let mut event_response = EventResponse {
                 attacker_id: None,
                 bomb_id: None,

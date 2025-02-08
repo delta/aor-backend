@@ -1,10 +1,12 @@
-use crate::api::game;
+use actix::System;
+
+use crate::{api::game, constants::GAME_AGE_IN_MINUTES};
 
 use super::{
     state::State,
     util::{Attacker, BuildingDetails, Challenge, ChallengeType, FallGuys, InValidation},
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, time::SystemTime};
 pub mod util;
 
 pub fn attacker_movement_challenge_handle(
@@ -36,6 +38,13 @@ pub fn attacker_movement_challenge_handle(
                         if attacker_current.attacker_pos.x == challenge.end_tile.x
                             && attacker_current.attacker_pos.y == challenge.end_tile.y
                         {
+                            let time_elapsed = SystemTime::now()
+                                .duration_since(maze.start_time)
+                                .expect("Time went backwards")
+                                .as_secs();
+                            let score_increment =
+                                GAME_AGE_IN_MINUTES as i32 * 60 - time_elapsed as i32;
+                            challenge.score += score_increment;
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
                                 message: "Maze Challenge Completed".to_string(),
@@ -107,6 +116,18 @@ pub fn bomb_blast_fallguys_handle(
                     } else if building.name == "Treasury3" {
                         challenge.score += damage_buildings * fallguys.multipliers.treasury_level_3;
                     }
+                }
+            }
+        }
+    }
+}
+
+pub fn maze_place_attacker_handle(challenge: &mut Option<Challenge>) {
+    if let Some(challenge) = challenge {
+        if let Some(challenge_type) = challenge.challenge_type {
+            if challenge_type == ChallengeType::Maze {
+                if let Some(ref mut maze) = challenge.maze {
+                    maze.start_time = SystemTime::now();
                 }
             }
         }

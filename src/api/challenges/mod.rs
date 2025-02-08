@@ -11,7 +11,7 @@ use std::{
     collections::{HashMap, HashSet},
     env, fs,
     io::Read,
-    time,
+    time::{self, SystemTime},
 };
 use util::{
     get_challenge_maps, get_challenge_type_enum, get_leaderboard, is_challenge_possible,
@@ -461,7 +461,10 @@ async fn challenge_socket_handler(
     log::info!("Challenge Type: {:?}", challenge_type);
 
     let maze = if challenge_type.as_ref().unwrap() == &ChallengeType::Maze {
-        Some(MazeChallenge { coins: 0 })
+        Some(MazeChallenge {
+            coins: 0,
+            start_time: SystemTime::now(),
+        })
     } else {
         None
     };

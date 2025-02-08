@@ -244,8 +244,8 @@ pub enum ChallengeType {
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub struct MazeChallenge {
     pub coins: i32,
+    pub start_time: SystemTime,
 }
-
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash, Copy, Deserialize)]
 pub struct FallGuys {
     pub hut_range_increment: i32,
