@@ -159,19 +159,43 @@ async fn init_challenge(
         })
         .clone();
 
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-    let attacker_types = web::block(move || fetch_attacker_types(&mut conn, &attacker_id))
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+    // let mut conn = pg_pool
+    //     .get()
+    //     .map_err(|err| error::handle_error(err.into()))?;
+    // let attacker_types = web::block(move || fetch_attacker_types(&mut conn, &attacker_id))
+    //     .await?
+    //     .map_err(|err| error::handle_error(err.into()))?;
 
-    let mut conn = pg_pool
-        .get()
-        .map_err(|err| error::handle_error(err.into()))?;
-    let bomb_types = web::block(move || fetch_emp_types(&mut conn, &attacker_id))
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+    // let mut conn = pg_pool
+    //     .get()
+    //     .map_err(|err| error::handle_error(err.into()))?;
+    // let bomb_types = web::block(move || fetch_emp_types(&mut conn, &attacker_id))
+    //     .await?
+    //     .map_err(|err| error::handle_error(err.into()))?;
+
+    let attacker_health = map_data.challenge.attacker_health;
+    let attacker_types = vec![AttackerType {
+        amt_of_emps: 10,
+        id: 0,
+        max_health: attacker_health,
+        speed: 4,
+        level: 1,
+        cost: 0,
+        name: "ChallengeAttacker".to_string(),
+        prop_id: -1,
+    }];
+
+    let bomb_radius = map_data.challenge.bomb_radius;
+    let bomb_damage = map_data.challenge.bomb_damage;
+    let bomb_types = vec![EmpType {
+        att_type: "ChallengeAttacker".to_string(),
+        name: "ChallengeBomb".to_string(),
+        id: 0,
+        attack_damage: bomb_damage,
+        attack_radius: bomb_radius,
+        cost: 0,
+        level: 1,
+    }];
 
     let resp = ChallengeInitResponse {
         attacker_types,
