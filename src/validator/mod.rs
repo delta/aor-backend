@@ -299,7 +299,6 @@ pub fn game_handler(
                 let challenge = if let Some(challenge_state) = _game_state.challenge {
                     Some(ChallengeResponse {
                         score: challenge_state.score,
-                        invalidation: _game_state.in_validation.message.clone(),
                     })
                 } else {
                     None
