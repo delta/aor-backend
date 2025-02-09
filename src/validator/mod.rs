@@ -244,10 +244,19 @@ pub fn game_handler(
                 }
 
                 if _game_state.in_validation.is_invalidated {
-                    return Some(Ok(send_terminate_game_message(
+                    let mut response = send_terminate_game_message(
                         socket_request.frame_number,
                         _game_state.in_validation.message.clone(),
-                    )));
+                    );
+                    let challenge = if let Some(challenge_state) = _game_state.challenge {
+                        Some(ChallengeResponse {
+                            score: challenge_state.score,
+                        })
+                    } else {
+                        None
+                    };
+                    response.challenge = challenge;
+                    return Some(Ok(response));
                 }
 
                 let spawn_result = _game_state
