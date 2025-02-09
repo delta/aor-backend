@@ -112,12 +112,12 @@ pub fn game_handler(
             }
 
             for defender in _game_state.defenders.iter() {
-                log::info!(
-                    "defender id : {} , position x {}, y {} ",
-                    defender.map_space_id,
-                    defender.defender_pos.x,
-                    defender.defender_pos.y
-                );
+                // log::info!(
+                //     "defender id : {} , position x {}, y {} ",
+                //     defender.map_space_id,
+                //     defender.defender_pos.x,
+                //     defender.defender_pos.y
+                // );
             }
 
             let attacker_health = _game_state

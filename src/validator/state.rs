@@ -66,7 +66,7 @@ impl State {
         for building in buildings.clone() {
             if building.name == "Defender_Hut" {
                 //get defender_level for the hut
-                log::info!("hut map space id: {}", building.map_space_id);
+                //log::info!("hut map space id: {}", building.map_space_id);
                 let defender_level = hut_defenders.get(&building.map_space_id).unwrap().level;
 
                 let defenders_count = LEVEL[(defender_level - 1) as usize].hut.defenders_limit;
@@ -76,11 +76,11 @@ impl State {
                     hut_defenders_count: defenders_count,
                     hut_defender_latest_time: None,
                 };
-                log::info!(
-                    "hutttt: {:?} {:?}",
-                    hut_defender_details,
-                    building.map_space_id
-                );
+                // log::info!(
+                //     "hutttt: {:?} {:?}",
+                //     hut_defender_details,
+                //     building.map_space_id
+                // );
                 hut.insert(building.map_space_id, hut_defender_details);
             }
         }
@@ -307,7 +307,7 @@ impl State {
                 if let Some(hut) = self.hut.get_mut(&hut_building.map_space_id) {
                     if !hut.hut_triggered {
                         // Hut triggered
-                        log::info!("Inside hut range!");
+                        //log::info!("Inside hut range!");
                         //trigger hut
                         hut.hut_triggered = true;
                     }
@@ -330,11 +330,11 @@ impl State {
             bomb_count: attacker.bomb_count,
         };
 
-        log::info!(
-            "attacker health: {}, companion health: {}",
-            self.attacker.as_ref().unwrap().attacker_health,
-            self.companion.as_ref().unwrap().companion_health
-        );
+        // log::info!(
+        //     "attacker health: {}, companion health: {}",
+        //     self.attacker.as_ref().unwrap().attacker_health,
+        //     self.companion.as_ref().unwrap().companion_health
+        // );
         Some(attacker_result)
     }
 
@@ -577,7 +577,7 @@ impl State {
                                     if self.frame_no
                                         >= companion.last_attack_tick + companion.attack_interval
                                     {
-                                        log::info!("Defender attacked");
+                                        //log::info!("Defender attacked");
                                         defender.current_health =
                                             max(defender.current_health - companion.damage, 0);
                                         companion.last_attack_tick = self.frame_no;
@@ -616,7 +616,7 @@ impl State {
                         roads,
                         shortest_path,
                     );
-                    log::info!("Priority: {:?}", priority);
+                    //log::info!("Priority: {:?}", priority);
                     let target_building = if priority.high_prior_building.0.is_some() {
                         priority.high_prior_building.0
                     } else {
@@ -794,15 +794,15 @@ impl State {
                     .map(move |x| Coords { x, y })
             })
             .collect();
-        log::info!(
-            "Bomb position : {}, {}, range x: {} to {} range y: {} to {}",
-            bomb_position.x,
-            bomb_position.y,
-            bomb_position.x - bomb.radius,
-            bomb_position.x + bomb.radius,
-            bomb_position.y - bomb.radius,
-            bomb_position.y + bomb.radius
-        );
+        // log::info!(
+        //     "Bomb position : {}, {}, range x: {} to {} range y: {} to {}",
+        //     bomb_position.x,
+        //     bomb_position.y,
+        //     bomb_position.x - bomb.radius,
+        //     bomb_position.x + bomb.radius,
+        //     bomb_position.y - bomb.radius,
+        //     bomb_position.y + bomb.radius
+        // );
         for building in self.buildings.iter_mut() {
             if building.current_hp > 0 {
                 let mut artifacts_taken_by_destroying_building: i32 = 0;
@@ -895,21 +895,21 @@ impl State {
 
         for defender in defenders_damaged.iter() {
             if defender.health > 0 {
-                log::info!(
-                    "Defender:{} is damaged, health is : {}, position is {}, {}",
-                    defender.map_space_id,
-                    defender.health,
-                    defender.position.x,
-                    defender.position.y
-                );
+                // log::info!(
+                //     "Defender:{} is damaged, health is : {}, position is {}, {}",
+                //     defender.map_space_id,
+                //     defender.health,
+                //     defender.position.x,
+                //     defender.position.y
+                // );
             }
             if defender.health == 0 {
-                log::info!(
-                    "Defender:{} is dead, died at position {}, {}",
-                    defender.map_space_id,
-                    defender.position.x,
-                    defender.position.y
-                );
+                // log::info!(
+                //     "Defender:{} is dead, died at position {}, {}",
+                //     defender.map_space_id,
+                //     defender.position.x,
+                //     defender.position.y
+                // );
             }
         }
 
@@ -962,7 +962,7 @@ impl State {
                 let new_state = sentry.is_sentry_activated;
 
                 if prev_state != new_state && new_state == true {
-                    log::info!("sentry activated");
+                    //log::info!("sentry activated");
                     sentry.sentry_start_time = SystemTime::now();
                     if is_attacker_in_range {
                         sentry.target_id = 0;
@@ -970,7 +970,7 @@ impl State {
                         sentry.target_id = 1;
                     }
                 } else if prev_state != new_state && new_state == false {
-                    log::info!("sentry deactivated");
+                    //log::info!("sentry deactivated");
                     sentry.current_bullet_shot_time = SystemTime::now() - Duration::new(2, 0);
                     sentry.target_id = -1;
                 }
@@ -1003,20 +1003,20 @@ impl State {
                         if bullet.target_id == 0 {
                             attacker.attacker_health =
                                 max(0, attacker.attacker_health - bullet.damage);
-                            log::info!(
-                                "ATTACKER HEALTH : {}, bullet_id {}",
-                                attacker.attacker_health,
-                                bullet.bullet_id
-                            );
+                            // log::info!(
+                            //     "ATTACKER HEALTH : {}, bullet_id {}",
+                            //     attacker.attacker_health,
+                            //     bullet.bullet_id
+                            // );
                             bullet.has_collided = true;
                         } else if bullet.target_id == 1 {
                             companion.companion_health =
                                 max(0, companion.companion_health - bullet.damage);
-                            log::info!(
-                                "COMPANION HEALTH : {}, bullet_id {}",
-                                companion.companion_health,
-                                bullet.bullet_id
-                            );
+                            // log::info!(
+                            //     "COMPANION HEALTH : {}, bullet_id {}",
+                            //     companion.companion_health,
+                            //     bullet.bullet_id
+                            // );
                             bullet.has_collided = true;
                         }
                     }
@@ -1039,11 +1039,11 @@ impl State {
             {
                 sentry.current_bullet_shot_id += 1;
                 sentry.current_bullet_shot_time = SystemTime::now();
-                log::info!(
-                    "sentry id: {}, bullet id: {}",
-                    sentry.id,
-                    sentry.current_bullet_shot_id
-                );
+                // log::info!(
+                //     "sentry id: {}, bullet id: {}",
+                //     sentry.id,
+                //     sentry.current_bullet_shot_id
+                // );
                 if sentry.building_data.level == 3 {
                     bullet_damage = DAMAGE_PER_BULLET_LEVEL_3;
                 } else if sentry.building_data.level == 2 {
@@ -1059,11 +1059,11 @@ impl State {
                     has_collided: false,
                     target_id: sentry.target_id,
                 };
-                log::info!(
-                    "bullet {} from sentry {}",
-                    sentry.current_bullet_shot_id,
-                    sentry.id
-                );
+                // log::info!(
+                //     "bullet {} from sentry {}",
+                //     sentry.current_bullet_shot_id,
+                //     sentry.id
+                // );
                 shoot_bullet_res_array.push(bullet_response.clone());
                 sentry.bullets_shot.push(bullet_response);
             }
@@ -1113,12 +1113,12 @@ impl State {
                         if attacker_position.x == defender.defender_pos.x
                             && attacker_position.y == defender.defender_pos.y
                         {
-                            log::info!(
-                                "Defender pos {} {} and id {}",
-                                defender.defender_pos.x,
-                                defender.defender_pos.y,
-                                defender.map_space_id
-                            );
+                            // log::info!(
+                            //     "Defender pos {} {} and id {}",
+                            //     defender.defender_pos.x,
+                            //     defender.defender_pos.y,
+                            //     defender.map_space_id
+                            // );
 
                             defenders_damaged.push(DefenderResponse {
                                 map_space_id: defender.map_space_id,
@@ -1156,12 +1156,12 @@ impl State {
                         if companion.companion_pos.x == defender.defender_pos.x
                             && companion.companion_pos.y == defender.defender_pos.y
                         {
-                            log::info!(
-                                "Defender pos {} {} and id {}",
-                                defender.defender_pos.x,
-                                defender.defender_pos.y,
-                                defender.map_space_id
-                            );
+                            // log::info!(
+                            //     "Defender pos {} {} and id {}",
+                            //     defender.defender_pos.x,
+                            //     defender.defender_pos.y,
+                            //     defender.map_space_id
+                            // );
 
                             defenders_damaged.push(DefenderResponse {
                                 map_space_id: defender.map_space_id,

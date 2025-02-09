@@ -394,9 +394,9 @@ async fn get_admin_base(
         .unwrap()
         .is_mod;
 
-    log::info!("{:?}", base_req.map_id);
+    //log::info!("{:?}", base_req.map_id);
     let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
-    log::info!("Json path: {}", json_path.display());
+    //log::info!("Json path: {}", json_path.display());
     let mut json_data_str = String::new();
     if json_path.exists() {
         let mut file = fs::File::open(json_path.clone())?;
@@ -602,9 +602,9 @@ async fn save_admin_base(
         .is_mod;
 
     if is_mod {
-        log::info!("{:?}", save_data);
+        //log::info!("{:?}", save_data);
         let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
-        log::info!("Json path: {}", json_path.display());
+        //log::info!("Json path: {}", json_path.display());
         let mut json_data_str = String::new();
         if json_path.exists() {
             let mut file = fs::File::open(json_path.clone())?;
@@ -625,7 +625,7 @@ async fn save_admin_base(
             json_data.insert(defender_id, user_record);
         }
 
-        log::info!("Json data {:?}", json_data);
+        //log::info!("Json data {:?}", json_data);
 
         let updated_json_str = serde_json::to_string_pretty(&json_data)?;
         let mut file = OpenOptions::new()
@@ -653,7 +653,7 @@ async fn delete_admin_base(
 
     if is_mod {
         let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
-        log::info!("Json path: {}", json_path.display());
+        //log::info!("Json path: {}", json_path.display());
         let mut json_data_str = String::new();
         if json_path.exists() {
             let mut file = fs::File::open(json_path.clone())?;

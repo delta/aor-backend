@@ -463,7 +463,7 @@ async fn challenge_socket_handler(
         .await?
         .map_err(|err| error::handle_error(err.into()))?;
 
-    log::info!("Challenge Type: {:?}", challenge_type);
+    //log::info!("Challenge Type: {:?}", challenge_type);
 
     let maze = if challenge_type.as_ref().unwrap() == &ChallengeType::Maze {
         Some(MazeChallenge {
