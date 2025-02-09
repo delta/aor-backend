@@ -785,7 +785,7 @@ pub fn get_hut_defender_types(conn: &mut PgConnection) -> Result<Vec<DefenderDet
     let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
     for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
         hut_defender_array.push(DefenderDetails {
-            mapSpaceId: (i + 1) as i32,
+            map_space_id: -1,
             name: defender_type.name.clone(),
             radius: prop.range,
             speed: defender_type.speed,
@@ -797,6 +797,8 @@ pub fn get_hut_defender_types(conn: &mut PgConnection) -> Result<Vec<DefenderDet
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender_type.level,
+            current_health: defender_type.max_health,
+            max_health: defender_type.max_health,
         });
         log::info!("hut_defenders {:?}", i);
     }

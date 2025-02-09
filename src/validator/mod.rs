@@ -7,8 +7,8 @@ use self::{
 use crate::{
     api::attack::{
         socket::{
-            ActionType, BaseItemsDamageResponse, BuildingResponse, ChallengeResponse, ResultType,
-            SocketRequest, SocketResponse,
+            ActionType, BaseItemsDamageResponse, ChallengeResponse, ResultType, SocketRequest,
+            SocketResponse,
         },
         util::{EventResponse, GameLog},
     },
@@ -17,7 +17,8 @@ use crate::{
     validator::util::{Coords, SourceDestXY},
 };
 use anyhow::{Ok, Result};
-use util::{maze_place_attacker_handle, Companion, CompanionResult, MineResponse, Path};
+use challenges::maze_place_attacker_handle;
+use util::{Companion, CompanionResult, MineResponse, Path};
 
 pub mod challenges;
 pub mod error;
@@ -198,6 +199,7 @@ pub fn game_handler(
                 message: Some(String::from("Placed companion")),
                 companion: None,
                 shoot_bullets: None,
+                challenge: None,
             }));
         }
 
@@ -571,7 +573,8 @@ pub fn game_handler(
                 is_game_over: false,
                 shoot_bullets: None,
                 message: Some(String::from("Self Destructed")),
-                comapnion,
+                challenge: None,
+                companion: None,
             };
 
             return Some(Ok(socket_response));

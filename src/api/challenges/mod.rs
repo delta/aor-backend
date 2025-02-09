@@ -21,7 +21,7 @@ use util::{
 use crate::{
     api::{
         attack::{
-            socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse},
+            socket::{BaseItemsDamageResponse, ResultType, SocketRequest, SocketResponse},
             util::{
                 get_attacker_types, get_bomb_types, get_hut_defender_types, GameLog, ResultResponse,
             },
@@ -263,7 +263,7 @@ async fn challenge_socket_handler(
         .iter()
         .map(|defender| DefenderDetails {
             block_id: defender.block_id,
-            mapSpaceId: defender.map_space_id,
+            map_space_id: defender.map_space_id,
             name: defender.name.clone(),
             radius: defender.radius,
             speed: defender.speed,
@@ -277,6 +277,8 @@ async fn challenge_socket_handler(
             target_id: None,
             path_in_current_frame: Vec::new(),
             level: defender.level,
+            current_health: defender.max_health,
+            max_health: defender.max_health,
         })
         .collect();
 
@@ -329,6 +331,7 @@ async fn challenge_socket_handler(
             name: building.name.clone(),
             range: building.range,
             frequency: building.frequency,
+            level: building.level,
         })
         .collect();
 
@@ -426,6 +429,8 @@ async fn challenge_socket_handler(
             level: defender.level,
             cost: defender.cost,
             name: defender.name.clone(),
+            defender_id: defender.map_space_id,
+            max_health: defender.max_health,
         })
         .collect();
 
@@ -511,7 +516,10 @@ async fn challenge_socket_handler(
         return Err(ErrorBadRequest("Attacker Does not exist"));
     }
 
-    let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
+    let mut damaged_base_items: BaseItemsDamageResponse = BaseItemsDamageResponse {
+        buildings_damaged: Vec::new(),
+        defenders_damaged: Vec::new(),
+    };
 
     let game_log = GameLog {
         g: -1,
@@ -651,8 +659,20 @@ async fn challenge_socket_handler(
                                     //     }
                                     // }
                                     else if response.result_type == ResultType::BuildingsDamaged {
-                                        damaged_buildings
-                                            .extend(response.damaged_buildings.unwrap());
+                                        damaged_base_items.buildings_damaged.extend(
+                                            response
+                                                .damaged_base_items
+                                                .clone()
+                                                .unwrap()
+                                                .buildings_damaged,
+                                        );
+                                        damaged_base_items.defenders_damaged.extend(
+                                            response
+                                                .damaged_base_items
+                                                .clone()
+                                                .unwrap()
+                                                .defenders_damaged,
+                                        );
                                         // if util::deduct_artifacts_from_building(
                                         //     response.damaged_buildings.unwrap(),
                                         //     &mut conn,
@@ -768,11 +788,13 @@ async fn challenge_socket_handler(
                     defender_damaged: None,
                     hut_triggered: false,
                     hut_defenders: None,
-                    damaged_buildings: None,
+                    damaged_base_items: None,
                     total_damage_percentage: None,
                     is_sync: false,
+                    shoot_bullets: None,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
+                    companion: None,
                     challenge: None,
                 })
                 .unwrap();

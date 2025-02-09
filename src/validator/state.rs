@@ -26,10 +26,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     challenges::{attacker_movement_challenge_handle, bomb_blast_fallguys_handle},
-    util::{
-        select_side_hut_defender, BombType, Challenge, ChallengeType, Companion, CompanionResult,
-        DefenderTarget, HutDefenderDetails, MazeChallenge, Path,
-    },
+    util::{Challenge, Companion, CompanionResult, DefenderTarget, Path},
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -119,6 +116,8 @@ impl State {
                 is_invalidated: false,
             },
             challenge,
+            hut_defenders_released: 0,
+            sentries: Vec::new(),
         }
     }
     pub fn get_sentries(&mut self) {
@@ -920,66 +919,6 @@ impl State {
             defenders_damaged: defenders_damaged.clone(),
         };
         base_items_damaged
-    }
-
-    pub fn activate_sentry(&mut self) {
-        for sentry in self.sentries.iter_mut() {
-            let mut current_sentry_data: BuildingDetails = BuildingDetails {
-                map_space_id: 0,
-                current_hp: 0,
-                total_hp: 0,
-                artifacts_obtained: 0,
-                tile: Coords { x: 0, y: 0 },
-                width: 0,
-                name: "".to_string(),
-                range: 0,
-                frequency: 0,
-                block_id: 0,
-                level: 0,
-            };
-            for building in self.buildings.iter() {
-                if building.map_space_id == sentry.building_data.map_space_id {
-                    current_sentry_data = building.clone();
-                }
-            }
-
-            if current_sentry_data.current_hp > 0 {
-                //for attacker
-                let attacker_pos = self.attacker.as_ref().unwrap().attacker_pos;
-                let companion_pos = self.companion.as_ref().unwrap().companion_pos;
-                let companion_health = self.companion.as_ref().unwrap().companion_health;
-                let attacker_health = self.attacker.as_ref().unwrap().attacker_health;
-                let prev_state = sentry.is_sentry_activated;
-                let is_attacker_in_range = (sentry.building_data.tile.x - attacker_pos.x).abs()
-                    + (sentry.building_data.tile.y - attacker_pos.y).abs()
-                    <= sentry.building_data.range
-                    && attacker_health > 0;
-                let is_companion_in_range = (sentry.building_data.tile.x - companion_pos.x).abs()
-                    + (sentry.building_data.tile.y - companion_pos.y).abs()
-                    <= sentry.building_data.range
-                    && companion_health > 0;
-
-                sentry.is_sentry_activated = is_attacker_in_range || is_companion_in_range;
-                let new_state = sentry.is_sentry_activated;
-
-                if prev_state != new_state && new_state == true {
-                    log::info!("sentry activated");
-                    sentry.sentry_start_time = SystemTime::now();
-                    if is_attacker_in_range {
-                        sentry.target_id = 0;
-                    } else if is_companion_in_range {
-                        sentry.target_id = 1;
-                    }
-                } else if prev_state != new_state && new_state == false {
-                    log::info!("sentry deactivated");
-                    sentry.current_bullet_shot_time = SystemTime::now() - Duration::new(2, 0);
-                    sentry.target_id = -1;
-                }
-            } else {
-                sentry.is_sentry_activated = false;
-                sentry.target_id = -1;
-            }
-        }
     }
 
     pub fn activate_sentry(&mut self) {

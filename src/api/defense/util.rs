@@ -175,6 +175,8 @@ pub struct DefenderSave {
     pub pos_x: i32,
     pub pos_y: i32,
     pub is_placed: bool,
+    pub max_health: i32,
+    pub current_health: i32,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
@@ -1073,9 +1075,9 @@ pub fn fetch_attacker_types(conn: &mut PgConnection, user_id: &i32) -> Result<Ve
 
 pub fn fetch_emp_types(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<EmpType>> {
     let bomb_types = emp_type::table
-        .inner_join(available_blocks::table)
-        .filter(available_blocks::user_id.eq(user_id))
-        .load::<(EmpType, AvailableBlocks)>(conn)
+        .inner_join(available_emps::table.on(available_emps::emp_type_id.eq(emp_type::id)))
+        .filter(available_emps::user_id.eq(&user_id))
+        .load::<(EmpType, AvailableEmps)>(conn)
         .map_err(|err| DieselError {
             table: "emp_type",
             function: function!(),
@@ -1084,7 +1086,6 @@ pub fn fetch_emp_types(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<Emp
         .into_iter()
         .map(|(emp_type, _)| emp_type)
         .collect();
-
     Ok(bomb_types)
 }
 

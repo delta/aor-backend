@@ -119,7 +119,7 @@ pub fn run_shortest_paths(
 
 pub fn run_shortest_paths_challenges(
     road_data: &Vec<RoadSave>,
-) -> Result<HashMap<SourceDestXY, Coords>> {
+) -> Result<HashMap<SourceDestXY, Path>> {
     let roads_list: Vec<(i32, i32)> = road_data
         .iter()
         .map(|road_save| (road_save.pos_x, road_save.pos_y))
@@ -154,17 +154,17 @@ pub fn run_shortest_paths_challenges(
         adjacency_list.insert((road_x, road_y), neighbors);
     }
 
-    let mut shortest_paths: HashMap<SourceDestXY, Coords> = HashMap::new();
+    let mut shortest_paths: HashMap<SourceDestXY, Path> = HashMap::new();
 
     for (start_x, start_y) in &roads_list {
         let start_node = (*start_x, *start_y);
         let mut visited: HashSet<(i32, i32)> = HashSet::new();
-        let mut queue: VecDeque<((i32, i32), (i32, i32))> = VecDeque::new();
+        let mut queue: VecDeque<((i32, i32), (i32, i32), i32)> = VecDeque::new();
 
         visited.insert(start_node);
-        queue.push_back((start_node, start_node));
+        queue.push_back((start_node, start_node, 0));
 
-        while let Some((current_node, parent_node)) = queue.pop_front() {
+        while let Some((current_node, parent_node, current_length)) = queue.pop_front() {
             for neighbor in &adjacency_list[&current_node] {
                 if visited.insert(*neighbor) {
                     let next_hop = if start_node == parent_node {
@@ -173,7 +173,7 @@ pub fn run_shortest_paths_challenges(
                         parent_node
                     };
 
-                    queue.push_back((*neighbor, next_hop));
+                    queue.push_back((*neighbor, next_hop, current_length + 1));
 
                     shortest_paths.insert(
                         SourceDestXY {
@@ -182,9 +182,10 @@ pub fn run_shortest_paths_challenges(
                             dest_x: neighbor.0,
                             dest_y: neighbor.1,
                         },
-                        Coords {
+                        Path {
                             x: next_hop.0,
                             y: next_hop.1,
+                            l: current_length + 1,
                         },
                     );
                 }
