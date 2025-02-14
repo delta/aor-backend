@@ -283,17 +283,31 @@ pub fn game_handler(
                     _game_state.cause_bullet_damage();
                 }
 
-                let companion_res = _game_state
-                    .move_companion(_roads, _shortest_path)
-                    .unwrap_or(CompanionResult {
-                        current_target: None,
-                        map_space_id: -1,
-                        current_target_tile: None,
-                        is_alive: false,
-                        health: -1,
-                        building_damaged: None,
-                        defender_damaged: None,
-                    });
+                let companion_res = _game_state.move_companion(_roads, _shortest_path);
+
+                //if we get companion result we get set base_items_damaged
+                let damaged_base_items = if let Some(companion_res) = companion_res.as_ref() {
+                    let buildings_damaged =
+                        if let Some(building_damaged) = &companion_res.building_damaged {
+                            vec![building_damaged.clone()]
+                        } else {
+                            Vec::new()
+                        };
+
+                    let defenders_damaged =
+                        if let Some(defender_damaged) = &companion_res.defender_damaged {
+                            vec![defender_damaged.clone()]
+                        } else {
+                            Vec::new()
+                        };
+
+                    Some(BaseItemsDamageResponse {
+                        buildings_damaged,
+                        defenders_damaged,
+                    })
+                } else {
+                    None
+                };
 
                 _game_state.defender_trigger();
 
@@ -314,24 +328,6 @@ pub fn game_handler(
                 } else {
                     None
                 };
-                let buildings_damaged =
-                    if let Some(building_damaged) = &companion_res.building_damaged {
-                        vec![building_damaged.clone()]
-                    } else {
-                        Vec::new()
-                    };
-
-                let defenders_damaged =
-                    if let Some(defender_damaged) = &companion_res.defender_damaged {
-                        vec![defender_damaged.clone()]
-                    } else {
-                        Vec::new()
-                    };
-
-                let damaged_base_items = Some(BaseItemsDamageResponse {
-                    buildings_damaged,
-                    defenders_damaged,
-                });
 
                 let response = SocketResponse {
                     frame_number: socket_request.frame_number,
@@ -349,7 +345,7 @@ pub fn game_handler(
                     is_game_over: false,
                     shoot_bullets: Some(shoot_bullets),
                     message: Some(String::from("Movement Response")),
-                    companion: Some(companion_res),
+                    companion: companion_res,
                     challenge,
                 };
                 return Some(Ok(response));
