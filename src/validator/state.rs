@@ -636,7 +636,7 @@ impl State {
                             roads,
                             shortest_path,
                         );
-                        //log::info!("Priority: {:?}", priority);
+                        log::info!("Priority: {:?}", priority);
                         let target_building = if priority.high_prior_building.0.is_some() {
                             priority.high_prior_building.0
                         } else {
@@ -645,7 +645,7 @@ impl State {
 
                         let target_defender = priority.high_prior_defender.0;
 
-                        let target_tile = priority.high_prior_tile.0;
+                        let target_tile = priority.high_prior_tile;
 
                         let current_target = priority.current_target;
 
