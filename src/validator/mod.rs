@@ -306,7 +306,10 @@ pub fn game_handler(
                         defenders_damaged,
                     })
                 } else {
-                    None
+                    Some(BaseItemsDamageResponse {
+                        buildings_damaged: Vec::new(),
+                        defenders_damaged: Vec::new(),
+                    })
                 };
 
                 _game_state.defender_trigger();
