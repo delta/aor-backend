@@ -11,7 +11,8 @@ SET row_security = off;
 
 DELETE FROM public.artifact;
 DELETE FROM public.map_spaces;
-DELETE FROM public.available_blocks;
+DELETE FROM public.available_attackers;
+DELETE FROM public.available_emps;
 DELETE FROM public.level_constraints;
 DELETE FROM public.block_type;
 DELETE FROM public.attacker_type;
@@ -120,18 +121,18 @@ COPY public.building_type FROM stdin;
 \.
 
 COPY public.defender_type FROM stdin;
-1	4	50	1	10	Defender_1	1
-2	4	40	1	10	Defender_2	2
-3	4	30	1	10	Defender_3	3
-4	4	60	2	150	Defender_1	4
-5	4	50	2	250	Defender_2	5
-6	4	40	2	350	Defender_3	6
-7	4	70	3	-1	Defender_1	7
-8	4	60	3	-1	Defender_2	8
-9	4	50	3	-1	Defender_3	9
-10	4	20	1	-1	Hut_Defender	19
-11	4	30	2	-1	Hut_Defender	20
-12	4	50	3	-1	Hut_Defender	21
+1	1	50	1	10	Defender_1	1	100
+2	1	40	1	10	Defender_2	2	100
+3	1	30	1	10	Defender_3	3	100
+4	1	60	2	150	Defender_1	4	100
+5	1	50	2	250	Defender_2	5	100
+6	1	40	2	350	Defender_3	6	100
+7	1	70	3	-1	Defender_1	7	100
+8	1	60	3	-1	Defender_2	8	100
+9	1	50	3	-1	Defender_3	9	100
+10	1	20	1	-1	Hut_Defender	19	100
+11	1	30	2	-1	Hut_Defender	20	100
+12	1	50	3	-1	Hut_Defender	21	100
 \.
 
 COPY public.emp_type FROM stdin;
@@ -153,15 +154,15 @@ COPY public.mine_type FROM stdin;
 \.
 
 COPY public.attacker_type FROM stdin;
-1	100	4	10	1	10	Attacker_1	0
-2	120	4	12	1	10	Attacker_2	0
-3	80	4	8	1	10	Attacker_3	0
-4	150	4	15	2	80	Attacker_1	0
-5	180	4	18	2	100	Attacker_2	0
-6	120	4	12	2	60	Attacker_3	0
-7	200	4	20	3	-1	Attacker_1	0
-8	240	4	24	3	-1	Attacker_2	0
-9	160	4	16	3	-1	Attacker_3	0
+1	100	1	10	1	10	Attacker_1	0
+2	120	1	12	1	10	Attacker_2	0
+3	80	1	8	1	10	Attacker_3	0
+4	150	1	15	2	80	Attacker_1	0
+5	180	1	18	2	100	Attacker_2	0
+6	120	1	12	2	60	Attacker_3	0
+7	200	1	20	3	-1	Attacker_1	0
+8	240	1	24	3	-1	Attacker_2	0
+9	160	1	16	3	-1	Attacker_3	0
 \.
 
 COPY public.block_type FROM stdin;
@@ -231,41 +232,21 @@ COPY public.block_type FROM stdin;
 63	\N	\N	building	51
 64	10	\N	defender	0
 65	11	\N	defender	0
-67	12	\N	defender	0
+66	12	\N	defender	0
 \.
 
-COPY public.available_blocks FROM stdin;
-0	1	\N	\N	block	0
-1	1	\N	\N	block	1
-2	1	\N	\N	block	2
-3	1	\N	\N	block	3
-4	1	\N	\N	block	4
-5	1	\N	\N	block	5
-6	1	\N	\N	block	6
-7	1	\N	\N	block	7
-8	1	\N	\N	block	8
-9	1	\N	\N	block	9
-10	1	\N	\N	block	10
-11	1	\N	\N	block	11
-12	1	\N	\N	block	12
-13	1	\N	\N	block	13
-14	1	\N	\N	block	14
-15	1	\N	\N	block	15
-46	1	\N	\N	block	16
-47	1	\N	\N	block	17
-48	1	\N	\N	block	18
-55	1	\N	\N	block	19
-\N	1	1	\N	attacker	20
-\N	1	2	\N	attacker	21
-\N	1	3	\N	attacker	22
-\N	1	\N	1	emp	23
-\N	1	\N	2	emp	24
-\N	1	\N	3	emp	25
-58	1	\N	\N	block	26
-61	1	\N	\N	block	27
-58	1	\N	\N	block	28
+
+COPY public.available_attackers FROM stdin;
+1	1	1
+2	1	2
+3	1	3
 \.
 
+COPY public.available_emps FROM stdin;
+1	1	1
+2	1	2
+3	1	3
+\.
 COPY public.map_spaces FROM stdin;
 1	1	0	0	0
 2	1	0	1	0
@@ -440,7 +421,8 @@ COPY public.map_spaces FROM stdin;
 171	1	1	34	15
 172	1	36	20	58
 173	1	20	36	61
-174	1	36	10	58
+174	1	10	36	61
+175	1	36	10	58
 \.
 
 COPY public.artifact FROM stdin;
@@ -512,4 +494,5 @@ SELECT pg_catalog.setval('public.map_layout_id_seq', 2, false);
 SELECT pg_catalog.setval('public.game_id_seq', 1, false);
 SELECT pg_catalog.setval('public.block_type_id_seq', 64, false);
 SELECT pg_catalog.setval('public.map_spaces_id_seq', 178, false);
-SELECT pg_catalog.setval('public.available_blocks_id_seq', 28, false);
+SELECT pg_catalog.setval('public.available_attackers_id_seq', 4, false);
+SELECT pg_catalog.setval('public.available_emps_id_seq', 4, false);

@@ -88,7 +88,7 @@ pub fn add_user(
             error: err,
         })?;
     // Set last reset password time as 0 for new user
-    redis_conn.set(user.id, 0)?;
+    redis_conn.set::<_, _, ()>(user.id, 0)?;
     Ok(())
 }
 

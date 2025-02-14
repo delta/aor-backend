@@ -293,6 +293,8 @@ async fn socket_handler(
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
 
+    log::info!("hut defender map: {:?}", hut_defenders);
+
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let mines = web::block(move || {
         Ok(util::get_mines(&mut conn, map_id)?) as anyhow::Result<Vec<MineDetails>>
@@ -414,6 +416,7 @@ async fn socket_handler(
             buildings,
         );
         game_state.set_total_hp_buildings();
+        game_state.get_sentries();
 
         let game_logs = &mut game_log.clone();
 
@@ -483,21 +486,26 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                    } else if response.result_type == ResultType::DefendersDamaged {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::DefendersTriggered
+                                    } else if response.result_type == ResultType::DefendersDamaged
+                                        || response.result_type == ResultType::DefendersTriggered
+                                        || response.result_type == ResultType::SpawnHutDefender
                                     {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                    } else if response.result_type == ResultType::SpawnHutDefender {
-                                        // game_state.hut.hut_defenders_count -= 1;
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::BuildingsDamaged {
+                                    }
+                                    // else if response.result_type == ResultType::DefendersTriggered
+                                    // {
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // } else if response.result_type == ResultType::SpawnHutDefender {
+                                    //     // game_state.hut.hut_defenders_count -= 1;
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // }
+                                    else if response.result_type == ResultType::BuildingsDamaged {
                                         damaged_buildings
                                             .extend(response.damaged_buildings.unwrap());
                                         // if util::deduct_artifacts_from_building(
@@ -609,6 +617,7 @@ async fn socket_handler(
                     damaged_buildings: None,
                     total_damage_percentage: None,
                     is_sync: false,
+                    shoot_bullets: None,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
                 })
