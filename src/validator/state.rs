@@ -587,7 +587,7 @@ impl State {
                                             health: defender.current_health,
                                         });
 
-                                        if defender.current_health <= 0 {
+                                        if defender.current_health <= 0 || !defender.is_alive {
                                             defender.is_alive = false;
                                             companion.reached_dest = false;
                                             companion.target_building = None;
@@ -1127,6 +1127,7 @@ impl State {
                                 target_id,
                             });
                             defender.is_alive = false;
+                            defender.current_health = 0;
                             attacker.attacker_health =
                                 max(0, attacker.attacker_health - defender.damage);
                         }
@@ -1170,6 +1171,7 @@ impl State {
                                 target_id,
                             });
                             defender.is_alive = false;
+                            defender.current_health = 0;
                             companion.companion_health =
                                 max(0, companion.companion_health - defender.damage);
                         }
