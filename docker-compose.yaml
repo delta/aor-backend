@@ -9,6 +9,14 @@ services:
       TZ: "Asia/Calcutta"
     depends_on:
       - db
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8000/game/leaderboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 7s
+    volumes:
+      - ./:/usr/src/aot-backend
 
   db:
     image: postgres
