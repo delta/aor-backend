@@ -176,7 +176,6 @@ impl State {
         }
     }
     pub fn place_attacker(&mut self, attacker: Attacker) {
-        let attacker_position = attacker.attacker_pos;
         self.attacker = Some(attacker);
         //self.activate_sentry(attacker_position, 0);
         // println!("defnders: {:?}",self.defenders);
