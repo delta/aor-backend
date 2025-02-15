@@ -8129,7 +8129,7 @@
           "x": 0,
           "y": 0
         },
-        "attackerHealth": 120,
+        "attackerHealth": 650,
         "bombDamage": 10,
         "bombRadius": 10
       }

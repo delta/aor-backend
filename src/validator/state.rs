@@ -139,6 +139,7 @@ impl State {
                 });
             }
         }
+        //log::info!("sentries: {:?}", sentries);
         self.sentries = sentries;
     }
 
