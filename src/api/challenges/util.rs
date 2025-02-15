@@ -58,6 +58,7 @@ pub fn get_challenge_type(conn: &mut PgConnection) -> Result<Option<ChallengeTyp
 pub fn get_challenge_maps(
     conn: &mut PgConnection,
     challenge_id: i32,
+    attacker_id: i32,
 ) -> Result<Vec<ChallengeMapsResponse>> {
     let challenge_maps_resp: Vec<ChallengeMapsResponse> = challenge_maps::table
         .inner_join(challenges::table)
@@ -70,16 +71,18 @@ pub fn get_challenge_maps(
         })?
         .into_iter()
         .map(|(challenge_map, _)| {
-            let completed = is_challenge_possible(
-                conn,
-                challenge_map.user_id,
-                challenge_map.map_id,
-                challenge_id,
-            );
+            let completed =
+                is_challenge_possible(conn, attacker_id, challenge_map.map_id, challenge_id);
 
             let completed = match completed {
-                core::result::Result::Ok(completed) => !completed,
-                Err(_) => false,
+                core::result::Result::Ok(completed) => {
+                    log::info!("is possible: {completed}");
+                    !completed
+                }
+                Err(_) => {
+                    log::info!("Errorrrr");
+                    false
+                }
             };
 
             ChallengeMapsResponse {
