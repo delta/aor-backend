@@ -85,12 +85,18 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
         .app_data(Data::new(web::JsonConfig::default().limit(1024 * 1024)));
 }
 
-async fn challenge_maps(challenge_id: Path<i32>, pool: Data<PgPool>) -> Result<impl Responder> {
+async fn challenge_maps(
+    challenge_id: Path<i32>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let attacker_id = user.0;
     let challenge_id = challenge_id.into_inner();
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let challenge_maps = web::block(move || get_challenge_maps(&mut conn, challenge_id))
-        .await?
-        .map_err(|err| error::handle_error(err.into()))?;
+    let challenge_maps =
+        web::block(move || get_challenge_maps(&mut conn, challenge_id, attacker_id))
+            .await?
+            .map_err(|err| error::handle_error(err.into()))?;
     Ok(Json(challenge_maps))
 }
 

@@ -556,7 +556,7 @@ impl State {
                                         {
                                             companion.last_attack_tick = self.frame_no;
                                             if building.current_hp <= 0 {
-                                                log::info!("Double down!!");
+                                                //log::info!("Double down!!");
                                                 companion.reached_dest = false;
                                                 companion.target_building = None;
                                                 companion.target_defender = None;
@@ -645,7 +645,7 @@ impl State {
                             roads,
                             shortest_path,
                         );
-                        log::info!("Priority: {:?}", priority);
+                        //log::info!("Priority: {:?}", priority);
                         let target_building = if priority.high_prior_building.0.is_some() {
                             priority.high_prior_building.0
                         } else {
@@ -678,14 +678,14 @@ impl State {
                             x: next_hop.x,
                             y: next_hop.y,
                         };
-                        log::info!("moved");
+                        //log::info!("moved");
                         if companion.companion_pos.x == target_tile.x
                             && companion.companion_pos.y == target_tile.y
                         {
                             companion.reached_dest = true;
                         }
                     } else {
-                        log::info!("In the same place");
+                        //log::info!("In the same place");
                         companion.reached_dest = true;
                     }
                 }
