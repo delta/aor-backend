@@ -554,14 +554,22 @@ impl State {
                                             >= companion.last_attack_tick
                                                 + companion.attack_interval
                                         {
+                                            companion.last_attack_tick = self.frame_no;
+                                            if building.current_hp <= 0 {
+                                                log::info!("Double down!!");
+                                                companion.reached_dest = false;
+                                                companion.target_building = None;
+                                                companion.target_defender = None;
+                                                companion.target_tile = None;
+                                                companion.current_target = None;
+                                                break;
+                                            }
                                             let mut artifacts_taken_by_destroying_building = 0;
                                             building.current_hp =
                                                 max(building.current_hp - companion.damage, 0);
                                             self.damage_percentage += companion.damage as f32
                                                 / self.total_hp_buildings as f32
                                                 * 100.0_f32;
-
-                                            companion.last_attack_tick = self.frame_no;
 
                                             if building.current_hp <= 0 {
                                                 companion.reached_dest = false;
@@ -625,6 +633,7 @@ impl State {
                         companion.target_building = None;
                         companion.target_defender = None;
                         companion.current_target = None;
+                        companion.target_tile = None;
                     }
                 } else {
                     //get priorities if we don't have a target.
@@ -669,12 +678,14 @@ impl State {
                             x: next_hop.x,
                             y: next_hop.y,
                         };
+                        log::info!("moved");
                         if companion.companion_pos.x == target_tile.x
                             && companion.companion_pos.y == target_tile.y
                         {
                             companion.reached_dest = true;
                         }
                     } else {
+                        log::info!("In the same place");
                         companion.reached_dest = true;
                     }
                 }
