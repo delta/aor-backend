@@ -701,6 +701,7 @@ pub(crate) fn upgrade_building(
             .inner_join(block_type::table.on(block_type::id.eq(map_spaces::block_type_id)))
             .filter(block_type::category.eq(BlockCategory::Building))
             .filter(map_layout::player.eq(player_id))
+            .filter(block_type::id.eq(block_id))
             .filter(map_spaces::id.eq(map_space_id)),
     ))
     .get_result::<bool>(conn)?;
@@ -721,6 +722,7 @@ pub(crate) fn upgrade_building(
         )
         .filter(block_type::category.eq(BlockCategory::Building))
         .filter(map_layout::player.eq(player_id))
+        .filter(map_spaces::id.eq(map_space_id))
         .filter(block_type::id.eq(block_id));
 
     let (cost, level, name, map_space_id): (i32, i32, String, i32) = joined_table
@@ -788,8 +790,7 @@ pub(crate) fn upgrade_building(
         map_space_id,
     );
 
-    let building_map_space_id = get_building_map_space_id(conn, &id_of_map, &next_level_block.0)?;
-    Ok(building_map_space_id)
+    Ok(map_space_id)
 }
 
 pub(crate) fn upgrade_defender(
@@ -1325,22 +1326,4 @@ pub fn get_bank_map_space_id(
             error: err,
         })?;
     Ok(fetched_bank_map_space_id)
-}
-
-pub fn get_building_map_space_id(
-    conn: &mut PgConnection,
-    filtered_layout_id: &i32,
-    block_id: &i32,
-) -> Result<i32> {
-    let fetched_building_map_space_id = map_spaces::table
-        .filter(map_spaces::map_id.eq(filtered_layout_id))
-        .filter(map_spaces::block_type_id.eq(block_id))
-        .select(map_spaces::id)
-        .first::<i32>(conn)
-        .map_err(|err| DieselError {
-            table: "map_spaces",
-            function: function!(),
-            error: err,
-        })?;
-    Ok(fetched_building_map_space_id)
 }
