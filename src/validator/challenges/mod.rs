@@ -43,7 +43,8 @@ pub fn attacker_movement_challenge_handle(
                                 .expect("Time went backwards")
                                 .as_secs();
                             let score_increment =
-                                GAME_AGE_IN_MINUTES as i32 * 60 - time_elapsed as i32;
+                                (GAME_AGE_IN_MINUTES as i32 * 60 - time_elapsed as i32) * 2;
+                            log::info!("score_increment: {score_increment}");
                             challenge.score += score_increment;
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
