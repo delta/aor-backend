@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::time::SystemTime;
 
 use crate::api::attack::socket::{
-    BuildingDamageResponse, DefenderDamageResponse, DefenderResponse,
+    BuildingDamageResponse, ChallengeResponse, DefenderDamageResponse, DefenderResponse,
 };
 use crate::api::attack::socket::{ResultType, SocketResponse};
 use crate::constants::COMPANION_PRIORITY;
