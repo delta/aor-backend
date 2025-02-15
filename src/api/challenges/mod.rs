@@ -573,6 +573,7 @@ async fn challenge_socket_handler(
             Some(challenge),
         );
         game_state.set_total_hp_buildings();
+        game_state.get_sentries();
 
         let game_logs = &mut game_log.clone();
 
