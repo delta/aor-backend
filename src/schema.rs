@@ -240,11 +240,11 @@ diesel::table! {
 }
 
 diesel::joinable!(artifact -> map_spaces (map_space_id));
-diesel::joinable!(available_attackers -> user(user_id));
-diesel::joinable!(available_attackers -> attacker_type(attacker_type_id));
-diesel::joinable!(available_emps -> user(user_id));
-diesel::joinable!(available_emps -> emp_type(emp_type_id));
 diesel::joinable!(attacker_type -> prop (prop_id));
+diesel::joinable!(available_attackers -> attacker_type (attacker_type_id));
+diesel::joinable!(available_attackers -> user (user_id));
+diesel::joinable!(available_emps -> emp_type (emp_type_id));
+diesel::joinable!(available_emps -> user (user_id));
 diesel::joinable!(block_type -> building_type (building_type));
 diesel::joinable!(block_type -> defender_type (defender_type));
 diesel::joinable!(block_type -> mine_type (mine_type));
