@@ -1,6 +1,9 @@
 use anyhow::{Ok, Result};
 use chrono::Utc;
+use diesel::dsl::sum;
+use diesel::dsl::Nullable;
 use diesel::prelude::*;
+use diesel::sql_types::BigInt;
 use diesel::PgConnection;
 use serde::Serialize;
 
@@ -11,9 +14,9 @@ use crate::models::ChallengeResponse;
 use crate::models::NewChallengeResponse;
 use crate::schema::challenge_maps;
 use crate::schema::challenges_responses;
+use crate::schema::user;
 use crate::util::function;
 use crate::validator::util::ChallengeType;
-use crate::validator::util::Coords;
 use crate::{models::Challenge, schema::challenges};
 
 #[derive(Serialize)]
@@ -28,6 +31,13 @@ pub struct ChallengeMapsResponse {
     pub user_id: i32,
     pub map_id: i32,
     pub completed: bool,
+}
+
+#[derive(Serialize)]
+pub struct ChallengeLeaderBoardResponse {
+    id: i32,
+    name: String,
+    score: i64,
 }
 
 pub fn get_challenge_type(conn: &mut PgConnection) -> Result<Option<ChallengeTypeResponse>> {
@@ -173,15 +183,33 @@ pub fn get_challenge_type_enum(
 pub fn get_leaderboard(
     conn: &mut PgConnection,
     challenge_id: i32,
-) -> Result<Vec<ChallengeResponse>> {
+) -> Result<Vec<(ChallengeLeaderBoardResponse)>> {
     let resp = challenges_responses::table
+        .inner_join(user::table.on(challenges_responses::attacker_id.eq(user::id)))
         .filter(challenges_responses::challenge_id.eq(challenge_id))
-        .order(challenges_responses::score.desc())
-        .load::<ChallengeResponse>(conn)
+        .group_by(user::id)
+        .select((
+            user::id,
+            user::name,
+            sum(challenges_responses::score).nullable(), // Ensuring compatibility
+        ))
+        .order(sum(challenges_responses::score).nullable().desc()) // Sorting remains correct
+        .load::<(i32, String, Option<i64>)>(conn) // Handling nullable sum return type
         .map_err(|err| DieselError {
             table: "challenges_responses",
             function: function!(),
             error: err,
         })?;
-    Ok(resp)
+
+    // Convert `Option<i64>` to `i64`, replacing `None` with `0`
+    let leaderboard = resp
+        .into_iter()
+        .map(|(id, name, score_)| ChallengeLeaderBoardResponse {
+            id,
+            name,
+            score: score_.unwrap_or(0),
+        })
+        .collect();
+
+    Ok(leaderboard)
 }
