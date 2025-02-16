@@ -75,7 +75,7 @@ pub struct EventResponse {
     pub attacker_initial_position: Option<Coords>,
     // pub companion_initial_position: Option<Coords>,
     pub companion_result: Option<CompanionResult>,
-    pub hut_defender_details: Option<DefenderDetails>,
+    pub hut_defender_details: Option<Vec<DefenderDetails>>,
     pub defender_details: Option<Vec<DefenderResponse>>,
     pub mine_details: Option<Vec<MineResponse>>,
     pub bomb_details: Option<BaseItemsDamageResponse>,
@@ -86,7 +86,7 @@ pub struct EventResponse {
 }
 
 #[derive(Serialize, Clone, Debug)]
-pub struct ResultResponse {
+pub struct  ResultResponse {
     pub damage_done: i32,           //damage_done
     pub artifacts_collected: i32,   //artifacts_collected
     pub bombs_used: i32,            //bombs_used

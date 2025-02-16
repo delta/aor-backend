@@ -313,7 +313,7 @@ pub fn game_handler(
                         mine_details: None,
                         bullets_details: None,
                         companion_result: Some(companion_res.clone()),
-                        hut_defender_details: None,
+                        hut_defender_details: Some(spawn_result.clone()),
                         defender_details: None,
                         bomb_type: None,
                         bomb_details: None,
