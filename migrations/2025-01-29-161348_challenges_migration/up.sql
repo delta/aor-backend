@@ -14,7 +14,7 @@ CREATE TABLE challenge_maps
     user_id INTEGER NOT NULL,
     map_id INTEGER NOT NULL,
     CONSTRAINT fk_chall_map_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id),
-    CONSTRAINT fk_chall_map_user FOREIGN KEY (user_id) REFERENCES "user"(id),
+    CONSTRAINT fk_chall_map_user FOREIGN KEY (user_id) REFERENCES "user"(id)
 );
 
 CREATE TABLE challenges_responses
@@ -26,7 +26,6 @@ CREATE TABLE challenges_responses
     score INTEGER NOT NULL,
     CONSTRAINT chall_response_attacker FOREIGN KEY (attacker_id) REFERENCES "user"(id),
     CONSTRAINT chall_response_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id),
-    CONSTRAINT chall_response_mapid FOREIGN KEY (map_id) REFERENCES map_layout(id),
     CONSTRAINT unique_attacker_challenge UNIQUE (attacker_id, challenge_id)
 );
 
