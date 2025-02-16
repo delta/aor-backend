@@ -1,4 +1,4 @@
-use std::{
+    use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -957,6 +957,7 @@ impl State {
 
                     if defender.current_health <= 0 {
                         defender.current_health = 0;
+                        defender.is_alive=false;
                     }
 
                     defenders_damaged.push(DefenderDamageResponse {
