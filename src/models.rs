@@ -18,7 +18,7 @@ pub enum BlockCategory {
 //     Block,
 // }
 
-#[derive(Queryable, Serialize, Clone, Debug)]
+#[derive(Queryable, Serialize, Clone, Debug, Deserialize)]
 pub struct EmpType {
     pub id: i32,
     pub att_type: String,
@@ -159,7 +159,7 @@ pub struct NewGame<'a> {
     pub date: &'a NaiveDate,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Clone, Copy)]
 pub struct LevelsFixture {
     pub id: i32,
     pub start_date: NaiveDateTime,
@@ -179,7 +179,7 @@ pub struct NewLevelFixture<'a> {
     pub no_of_attackers: &'a i32,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Clone, Copy)]
 pub struct LevelConstraints {
     pub level_id: i32,
     pub no_of_blocks: i32,
@@ -210,7 +210,7 @@ pub struct NewMapLayout<'a> {
     pub is_valid: &'a bool,
 }
 
-#[derive(Queryable, Debug, Serialize, Deserialize, Clone)]
+#[derive(Queryable, Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct MapSpaces {
     pub id: i32,
     pub map_id: i32,
@@ -337,7 +337,7 @@ pub struct NewBlockType<'a> {
     pub category_id: &'a i32,
 }
 
-#[derive(Queryable, Clone, Debug, Serialize)]
+#[derive(Queryable, Clone, Debug, Serialize, Deserialize)]
 pub struct AttackerType {
     pub id: i32,
     pub max_health: i32,

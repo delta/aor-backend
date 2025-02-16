@@ -3,8 +3,8 @@ use std::hash::Hash;
 use std::time::SystemTime;
 
 use crate::api::attack::socket::{
-    BuildingDamageResponse, DefenderDamageResponse, DefenderResponse,
-};
+    BuildingDamageResponse, DefenderDamageResponse, {DefenderResponse,
+}, DirectionType};
 use crate::api::attack::socket::{ResultType, SocketResponse};
 use crate::constants::COMPANION_PRIORITY;
 use crate::validator::state::State;
@@ -34,6 +34,7 @@ pub struct Attacker {
     pub attacker_pos: Coords,
     pub attacker_health: i32,
     pub attacker_speed: i32,
+    pub attacker_direction: DirectionType,
     // pub path_in_current_frame: Vec<Coords>,
     pub bombs: Vec<Bomb>,
     pub trigger_defender: bool,

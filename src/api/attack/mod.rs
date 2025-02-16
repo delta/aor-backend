@@ -1,20 +1,22 @@
-use self::util::{get_valid_road_paths, AttackResponse, GameLog, ResultResponse};
+use self::util::{get_valid_road_paths, AttackResponse};
 use super::auth::session::AuthUser;
 use super::defense::shortest_path::run_shortest_paths;
 use super::defense::util::{
     AttackBaseResponse, DefenseResponse, MineTypeResponseWithoutBlockId, SimulationBaseResponse,
 };
+
 use super::user::util::fetch_user;
 use super::{error, PgPool, RedisPool};
 use crate::api::attack::socket::{
-    BuildingDamageResponse, ResultType, SocketRequest, SocketResponse,
+    ResultType, SocketRequest, SocketResponse,
 };
+use crate::api::game::util::{AttackLog, EventResponse, EventType, EventLog, ResultResponse};
 use crate::api::util::HistoryboardQuery;
 use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails, Path};
-use crate::validator::util::{Coords, SourceDestXY};
+use crate::validator::util::SourceDestXY;
 use actix_rt;
 use actix_web::error::ErrorBadRequest;
 use actix_web::web::{Data, Json};
@@ -379,23 +381,43 @@ async fn socket_handler(
         defenders_damaged: Vec::new(),
     };
 
-    let game_log = GameLog {
-        g: game_id,
-        a: attacker_user_details.unwrap(),
-        d: defender_user_details.unwrap(),
-        b: defender_base_details,
-        e: Vec::new(),
-        r: ResultResponse {
-            d: 0,
-            a: 0,
-            b: 0,
-            au: 0,
-            na: 0,
-            nd: 0,
-            oa: 0,
-            od: 0,
+    let game_log = EventLog {
+        // current_base_details: defender_base_details,
+        event: EventResponse {
+            attacker_type: None,
+            attacker_initial_position: None,
+            bomb_details: None,
+            // companion_initial_position: None,
+            mine_details: None, 
+            companion_result: None,
+            defender_details: None,
+            hut_defender_details: None,
+            bullets_details: None,
+            event_type: EventType::GameStart,
+            bomb_type: None,
+        },
+        // date: chrono::Utc::now().naive_utc(),
+        frame_no: 0,
+    };
+
+    let mut attack_log = AttackLog {
+        game_id,
+        attacker: attacker_user_details.unwrap(),
+        defender: defender_user_details.unwrap(),
+        base_details: defender_base_details,
+        game_log: Vec::new(),
+        result: ResultResponse {
+            damage_done: 0,
+            artifacts_collected: 0,
+            bombs_used: 0,
+            attackers_used: 0,
+            new_attacker_trophies: 0,
+            new_defender_trophies: 0,
+            old_attacker_trophies: 0,
+            old_defender_trophies: 0,
         },
     };
+    attack_log.game_log.push(game_log);
 
     log::info!(
         "Game:{} is ready for Attacker:{} and Defender:{}",
@@ -428,7 +450,7 @@ async fn socket_handler(
         game_state.set_total_hp_buildings();
         game_state.get_sentries();
 
-        let game_logs = &mut game_log.clone();
+        let attack_log = &mut attack_log.clone();
 
         let mut conn = pool
             .get()
@@ -469,7 +491,7 @@ async fn socket_handler(
                             shortest_path,
                             roads,
                             bomb_types,
-                            game_logs,
+                            attack_log,
                         );
                         match response_result {
                             Some(Ok(response)) => {
@@ -483,10 +505,10 @@ async fn socket_handler(
                                             log::info!("Error closing the socket connection for game:{} and attacker:{} and opponent:{}", game_id, attacker_id, defender_id);
                                         }
                                         if util::terminate_game(
-                                            game_logs,
                                             &mut conn,
                                             &damaged_base_items.buildings_damaged,
                                             &mut redis_conn,
+                                            attack_log,
                                         )
                                         .is_err()
                                         {
@@ -582,10 +604,10 @@ async fn socket_handler(
                 }
                 Message::Close(_s) => {
                     if util::terminate_game(
-                        game_logs,
                         &mut conn,
                         &damaged_base_items.buildings_damaged,
                         &mut redis_conn,
+                        attack_log,
                     )
                     .is_err()
                     {

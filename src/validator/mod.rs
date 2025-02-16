@@ -1,10 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    api::attack::{
-        socket::{ActionType, BaseItemsDamageResponse, ResultType, SocketRequest, SocketResponse},
-        util::{EventResponse, GameLog},
-    },
+    api::attack::socket::{ActionType, BaseItemsDamageResponse, ResultType, SocketRequest, SocketResponse, DirectionType},
+    api::game::util::{AttackLog, EventResponse, EventType, EventLog},
     constants::COMPANION_BOT_RANGE,
     models::AttackerType,
     validator::util::{Coords, SourceDestXY},
@@ -14,7 +12,7 @@ use util::{Companion, CompanionResult, MineResponse, Path};
 
 use self::{
     state::State,
-    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
+    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType},
 };
 
 pub mod error;
@@ -28,21 +26,32 @@ pub fn game_handler(
     _shortest_path: &HashMap<SourceDestXY, Path>,
     _roads: &HashSet<(i32, i32)>,
     _bomb_types: &Vec<BombType>,
-    mut _game_log: &mut GameLog,
+    attack_log: &mut AttackLog,
 ) -> Option<Result<SocketResponse>> {
     let defender_damaged_result: DefenderReturnType;
     let exploded_mines_result: Vec<MineResponse>;
     let base_items_damaged_result: BaseItemsDamageResponse;
+    // log::info!("ATTACKER DIRECTION: {:?}", socket_request.attacker_direction);
     match socket_request.action_type {
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
-            let mut event_response = EventResponse {
-                attacker_id: None,
-                bomb_id: None,
-                coords: Coords { x: 0, y: 0 },
-                // direction: Direction::Up,
-                is_bomb: false,
+            let event_response = EventResponse {
+                attacker_initial_position: socket_request.current_position,
+                attacker_type: socket_request.attacker_id,
+                mine_details: None,
+                hut_defender_details: None,
+                defender_details: None,
+                companion_result: None,
+                bullets_details: None,
+                event_type: EventType::PlaceAttacker,
+                bomb_type: socket_request.bomb_id,
+                bomb_details: None,
             };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: socket_request.frame_number,
+                // date: chrono::Utc::now().naive_utc(),
+            });
 
             if let Some(attacker_id) = socket_request.attacker_id {
                 let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
@@ -55,6 +64,7 @@ pub fn game_handler(
                     bombs: Vec::new(),
                     trigger_defender: false,
                     bomb_count: attacker.amt_of_emps,
+                    attacker_direction: DirectionType::stationary,
                 });
 
                 for bomb_type in _bomb_types {
@@ -64,16 +74,9 @@ pub fn game_handler(
                         }
                     }
                 }
-
-                event_response.attacker_id = Some(attacker_id);
-                event_response.coords = socket_request.current_position.unwrap();
             }
 
             // _game_state.set_mines(mine_positions);
-            event_response.bomb_id = socket_request.bomb_id;
-
-            _game_log.e.push(event_response);
-            _game_log.r.au += 1;
 
             if _game_state.in_validation.is_invalidated {
                 return Some(Ok(send_terminate_game_message(
@@ -151,6 +154,25 @@ pub fn game_handler(
                     }
                 }
             }
+
+            let event_response = EventResponse {
+                attacker_initial_position: None,
+                attacker_type: None,
+                companion_result: None,
+                hut_defender_details: None,
+                defender_details: None,
+                mine_details: None,
+                event_type: EventType::PlaceCompanion,
+                bullets_details: None,
+                bomb_type: None,
+                bomb_details: None,
+            };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: socket_request.frame_number,
+                // date: chrono::Utc::now().naive_utc(),
+            });
+
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::PlacedCompanion,
@@ -190,13 +212,15 @@ pub fn game_handler(
                         bombs: Vec::new(),
                         trigger_defender: false,
                         bomb_count: attacker.amt_of_emps,
+                        attacker_direction: socket_request.attacker_direction.unwrap_or(DirectionType::none),
                     },
+                    attack_log,
                 );
 
                 // let attacker_result_clone = attacker_result.clone().unwrap();
 
                 defender_damaged_result = _game_state
-                    .defender_movement_one_tick(socket_request.current_position?, _shortest_path);
+                    .defender_movement_one_tick(socket_request.current_position?, _shortest_path, attack_log, socket_request.frame_number);
 
                 let mut is_attacker_alive = true;
 
@@ -234,9 +258,28 @@ pub fn game_handler(
                 if _game_state.attacker.is_some() || _game_state.attacker.is_some() {
                     _game_state.cause_bullet_damage();
                 }
+                if !shoot_bullets.is_empty() {
+                    let event_response = EventResponse {
+                        attacker_initial_position: None,
+                        attacker_type: None,
+                        companion_result: None,
+                        hut_defender_details: None,
+                        mine_details: None,
+                        event_type: EventType::BulletShooting,
+                        defender_details: None,
+                        bullets_details: Some(shoot_bullets.clone()),
+                        bomb_type: None,
+                        bomb_details: None,
+                    };
+                    attack_log.game_log.push(EventLog {
+                        event: event_response.clone(),
+                        frame_no: socket_request.frame_number,
+                        // // date: chrono::Utc::now().naive_utc(),
+                    });
+                }
 
                 let companion_res = _game_state
-                    .move_companion(_roads, _shortest_path)
+                    .move_companion(_roads, _shortest_path, attack_log, socket_request.frame_number)
                     .unwrap_or(CompanionResult {
                         current_target: None,
                         map_space_id: -1,
@@ -247,11 +290,39 @@ pub fn game_handler(
                         defender_damaged: None,
                     });
 
+                let initially_triggered_defenders_count = _game_state
+                    .defenders
+                    .clone()
+                    .iter()
+                    .filter(|d| d.target_id.is_some())
+                    .count();
                 _game_state.defender_trigger();
-
+                let triggered_defenders_count = _game_state
+                    .defenders
+                    .iter()
+                    .filter(|d| d.target_id.is_some())
+                    .count();
+                
                 let hut_triggered = !spawn_result.is_empty();
 
                 let result_type = if hut_triggered {
+                    let event_response = EventResponse {
+                        attacker_initial_position: None,
+                        attacker_type: None,
+                        event_type: EventType::HutDefenderSpawn,
+                        mine_details: None,
+                        bullets_details: None,
+                        companion_result: Some(companion_res.clone()),
+                        hut_defender_details: None,
+                        defender_details: None,
+                        bomb_type: None,
+                        bomb_details: None,
+                    };
+                    attack_log.game_log.push(EventLog {
+                        event: event_response.clone(),
+                        frame_no: socket_request.frame_number,
+                        // date: chrono::Utc::now().naive_utc(),
+                    });
                     ResultType::SpawnHutDefender
                 } else if defender_damaged_result.clone().defender_response.len() > 0 {
                     ResultType::DefendersDamaged
@@ -273,6 +344,25 @@ pub fn game_handler(
                         Vec::new()
                     };
 
+                if initially_triggered_defenders_count != triggered_defenders_count {
+                    let event_response = EventResponse {
+                        attacker_initial_position: None,
+                        attacker_type: None,
+                        event_type: EventType::DefenderActivated,
+                        bullets_details: None,
+                        companion_result: None,
+                        mine_details: None,
+                        hut_defender_details: None,
+                        defender_details: Some(defender_damaged_result.clone().defender_response),
+                        bomb_details: None,
+                        bomb_type: None,
+                    };
+                    attack_log.game_log.push(EventLog {
+                        event: event_response.clone(),
+                        frame_no: socket_request.frame_number,
+                        // date: chrono::Utc::now().naive_utc(),
+                    });
+                }
                 let damaged_base_items = Some(BaseItemsDamageResponse {
                     buildings_damaged,
                     defenders_damaged,
@@ -309,6 +399,23 @@ pub fn game_handler(
                 bool_temp = true;
             }
             let result_type = if bool_temp {
+                let event_response = EventResponse {
+                    attacker_initial_position: None,
+                    attacker_type: None,
+                    event_type: EventType::MineBlast,
+                    bullets_details: None,
+                    mine_details: Some(exploded_mines_result.clone()),
+                    companion_result: None,
+                    hut_defender_details: None,
+                    defender_details: None,
+                    bomb_type: None,
+                    bomb_details: None,
+                };
+                attack_log.game_log.push(EventLog {
+                    event: event_response.clone(),
+                    frame_no: socket_request.frame_number,
+                    // date: chrono::Utc::now().naive_utc(),
+                });
                 ResultType::MinesExploded
             } else {
                 ResultType::Nothing
@@ -392,9 +499,9 @@ pub fn game_handler(
 
             base_items_damaged_result = _game_state.place_bombs(current_pos, bomb_coords);
 
-            _game_log.r.b += 1;
-            _game_log.r.d = _game_state.damage_percentage as i32;
-            _game_log.r.a = _game_state.artifacts;
+            attack_log.result.bombs_used += 1;
+            attack_log.result.damage_done = _game_state.damage_percentage as i32;
+            attack_log.result.artifacts_collected = _game_state.artifacts;
 
             let mut bool_temp = false;
             if !base_items_damaged_result.buildings_damaged.is_empty()
@@ -402,6 +509,24 @@ pub fn game_handler(
             {
                 bool_temp = true;
             }
+
+            let event_response = EventResponse {
+                attacker_initial_position: None,
+                attacker_type: None,
+                event_type: EventType::PlaceBomb,
+                bullets_details: None,
+                mine_details: None,
+                bomb_details: Some(base_items_damaged_result.clone()),
+                companion_result: None,
+                hut_defender_details: None,
+                defender_details: None,
+                bomb_type: None,
+            };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: socket_request.frame_number,
+                // date: chrono::Utc::now().naive_utc(),
+            });
             let result_type = if bool_temp {
                 ResultType::BuildingsDamaged
             } else {
@@ -486,6 +611,23 @@ pub fn game_handler(
                 message: Some(String::from("Game over")),
                 companion: None,
             };
+            let event_response = EventResponse {
+                attacker_initial_position: None,
+                attacker_type: None,
+                event_type: EventType::GameOver,
+                bullets_details: None,
+                companion_result: None,
+                mine_details: None,
+                hut_defender_details: None,
+                defender_details: None,
+                bomb_details: None,
+                bomb_type: None,
+            };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: socket_request.frame_number,
+                // date: chrono::Utc::now().naive_utc(),
+            });
             return Some(Ok(socket_response));
         }
         ActionType::SelfDestruct => {
@@ -515,7 +657,23 @@ pub fn game_handler(
                 message: Some(String::from("Self Destructed")),
                 companion: None,
             };
-
+            let event_response = EventResponse {
+                attacker_initial_position: None,
+                attacker_type: None,
+                event_type: EventType::SelfDestruction,
+                bullets_details: None,
+                companion_result: None,
+                mine_details: None,
+                hut_defender_details: None,
+                defender_details: None,
+                bomb_details: None,
+                bomb_type: None,
+            };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: socket_request.frame_number,
+                // date: chrono::Utc::now().naive_utc(),
+            });
             return Some(Ok(socket_response));
         }
     }
