@@ -21,7 +21,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
         .service(web::resource("/isLoggedIn").route(web::get().to(is_logged_in)));
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct LoginResponse {
     pub user_id: i32,
     pub username: String,

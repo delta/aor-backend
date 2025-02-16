@@ -453,6 +453,7 @@ dependencies = [
  "diesel-derive-enum",
  "diesel_migrations",
  "dotenv",
+ "flate2",
  "flexi_logger",
  "futures",
  "futures-util",

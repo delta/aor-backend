@@ -47,7 +47,7 @@ async fn get_replay(
 
     let response = web::block(move || {
         let mut conn = pool.get()?;
-        util::fetch_replay(game_id, &mut conn)
+        util::get_replay(game_id, &mut conn)
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;

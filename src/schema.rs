@@ -177,6 +177,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    replays (game_id) {
+        game_id -> Int4,
+        attacker_id -> Int4,
+        defender_id -> Int4,
+        base_data -> Bytea,
+        game_data -> Bytea,
+    }
+}
+
+diesel::table! {
     shortest_path (base_id, source_x, source_y, dest_x, dest_y) {
         base_id -> Int4,
         source_x -> Int4,
@@ -211,11 +221,11 @@ diesel::table! {
 }
 
 diesel::joinable!(artifact -> map_spaces (map_space_id));
-diesel::joinable!(available_attackers -> user(user_id));
-diesel::joinable!(available_attackers -> attacker_type(attacker_type_id));
-diesel::joinable!(available_emps -> user(user_id));
-diesel::joinable!(available_emps -> emp_type(emp_type_id));
 diesel::joinable!(attacker_type -> prop (prop_id));
+diesel::joinable!(available_attackers -> attacker_type (attacker_type_id));
+diesel::joinable!(available_attackers -> user (user_id));
+diesel::joinable!(available_emps -> emp_type (emp_type_id));
+diesel::joinable!(available_emps -> user (user_id));
 diesel::joinable!(block_type -> building_type (building_type));
 diesel::joinable!(block_type -> defender_type (defender_type));
 diesel::joinable!(block_type -> mine_type (mine_type));
@@ -229,6 +239,7 @@ diesel::joinable!(map_layout -> user (player));
 diesel::joinable!(map_spaces -> block_type (block_type_id));
 diesel::joinable!(map_spaces -> map_layout (map_id));
 diesel::joinable!(mine_type -> prop (prop_id));
+diesel::joinable!(replays -> game (game_id));
 diesel::joinable!(shortest_path -> map_layout (base_id));
 diesel::joinable!(simulation_log -> game (game_id));
 
@@ -249,6 +260,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     map_spaces,
     mine_type,
     prop,
+    replays,
     shortest_path,
     simulation_log,
     user,

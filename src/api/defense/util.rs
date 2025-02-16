@@ -20,7 +20,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct MapSpacesResponseWithArifacts {
     pub id: i32,
     pub x_coordinate: i32,
@@ -45,7 +45,7 @@ pub struct MineTypeResponseWithoutBlockId {
     pub name: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct MineTypeResponse {
     pub id: i32,
     pub radius: i32,
@@ -56,7 +56,7 @@ pub struct MineTypeResponse {
     pub name: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct DefenderTypeResponse {
     pub id: i32,
     pub defender_id: i32,
@@ -70,7 +70,7 @@ pub struct DefenderTypeResponse {
     pub max_health: i32,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct BuildingTypeResponse {
     pub id: i32,
     pub name: String,
@@ -102,7 +102,7 @@ pub struct AttackBaseResponse {
     pub mine_types: Vec<MineTypeResponseWithoutBlockId>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct SimulationBaseResponse {
     pub m: i32,                                 //map_id
     pub ms: Vec<MapSpacesResponseWithArifacts>, //map_spaces
@@ -113,7 +113,7 @@ pub struct SimulationBaseResponse {
     pub bt: Vec<EmpType>,                       //bomb_types
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct DefenseResponse {
     pub map_spaces: Vec<MapSpaces>,
     pub blocks: Vec<BuildingTypeResponse>,

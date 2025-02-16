@@ -18,6 +18,7 @@ use crate::models::{
     Artifact, AttackerType, BlockCategory, BlockType, BuildingType, DefenderType, EmpType, Game,
     LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop, User,
 };
+use crate::api::game::util::AttackLog;
 use crate::schema::{block_type, building_type, defender_type, map_layout, map_spaces, prop, user};
 use crate::util::function;
 use crate::validator::util::Coords;
@@ -32,7 +33,7 @@ use rand::seq::IteratorRandom;
 use redis::Commands;
 use std::collections::{HashMap, HashSet};
 use std::env;
-
+use crate::api::game::util::add_game_to_replays;
 use super::socket::BuildingDamageResponse;
 
 #[derive(Debug, Serialize)]
@@ -70,38 +71,6 @@ pub struct AttackToken {
 //     Left,
 //     Right,
 // }
-
-#[derive(Serialize, Clone, Debug)]
-pub struct EventResponse {
-    // pub attacker_initial_position: Option<Coords>,
-    pub attacker_id: Option<i32>,
-    pub bomb_id: Option<i32>,
-    pub coords: Coords,
-    // pub direction: Direction,
-    pub is_bomb: bool,
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub struct ResultResponse {
-    pub d: i32,  //damage_done
-    pub a: i32,  //artifacts_collected
-    pub b: i32,  //bombs_used
-    pub au: i32, //attackers_used
-    pub na: i32, //new_attacker_trophies
-    pub nd: i32, //new_defender_trophies
-    pub oa: i32, //old_attacker_trophies
-    pub od: i32, //old_defender_trophies
-}
-
-#[derive(Serialize, Clone)]
-pub struct GameLog {
-    pub g: i32,                    //game_id
-    pub a: User,                   //attacker
-    pub d: User,                   //defender
-    pub b: SimulationBaseResponse, //base
-    pub e: Vec<EventResponse>,     //events
-    pub r: ResultResponse,         //result
-}
 
 pub fn get_map_id(defender_id: &i32, conn: &mut PgConnection) -> Result<Option<i32>> {
     use crate::schema::map_layout;
@@ -821,18 +790,18 @@ pub fn update_buidling_artifacts(
 }
 
 pub fn terminate_game(
-    game_log: &mut GameLog,
     conn: &mut PgConnection,
     damaged_buildings: &[BuildingDamageResponse],
     redis_conn: &mut RedisConn,
+    attack_log: &mut AttackLog,
 ) -> Result<()> {
     use crate::schema::{artifact, game};
-    let attacker_id = game_log.a.id;
-    let defender_id = game_log.d.id;
-    let damage_done = game_log.r.d;
-    let bombs_used = game_log.r.b;
-    let artifacts_collected = game_log.r.a;
-    let game_id = game_log.g;
+    let attacker_id = attack_log.attacker.id;
+    let defender_id = attack_log.defender.id;
+    let damage_done = attack_log.result.damage_done;
+    let bombs_used = attack_log.result.bombs_used;
+    let artifacts_collected = attack_log.result.artifacts_collected;
+    let game_id = attack_log.game_id;
     log::info!(
         "Terminating game for game:{} and attacker:{} and opponent:{}",
         game_id,
@@ -876,10 +845,10 @@ pub fn terminate_game(
 
     //Add bonus trophies (just call the function)
 
-    game_log.r.oa = attacker_details.trophies;
-    game_log.r.od = defender_details.trophies;
-    game_log.r.na = new_trophies.0;
-    game_log.r.nd = new_trophies.1;
+    attack_log.result.old_attacker_trophies = attacker_details.trophies;
+    attack_log.result.old_defender_trophies = defender_details.trophies;
+    attack_log.result.new_attacker_trophies = new_trophies.0;
+    attack_log.result.new_defender_trophies = new_trophies.1;
 
     diesel::update(game::table.find(game_id))
         .set((
@@ -903,10 +872,10 @@ pub fn terminate_game(
         (1, 0)
     };
 
-    diesel::update(user::table.find(&game_log.a.id))
+    diesel::update(user::table.find(&attack_log.attacker.id))
         .set((
             user::artifacts.eq(user::artifacts + artifacts_collected),
-            user::trophies.eq(user::trophies + new_trophies.0 - attacker_details.trophies),
+            user::trophies.eq(user::trophies + (new_trophies.0 - attacker_details.trophies)),
             user::attacks_won.eq(user::attacks_won + attacker_wins),
         ))
         .execute(conn)
@@ -924,10 +893,10 @@ pub fn terminate_game(
             defender_id
         );
     }
-    diesel::update(user::table.find(&game_log.d.id))
+    diesel::update(user::table.find(&attack_log.defender.id))
         .set((
             user::artifacts.eq(user::artifacts - artifacts_collected),
-            user::trophies.eq(user::trophies + new_trophies.1 - defender_details.trophies),
+            user::trophies.eq(user::trophies + (new_trophies.1 - defender_details.trophies)),
             user::defenses_won.eq(user::defenses_won + defender_wins),
         ))
         .execute(conn)
@@ -970,7 +939,7 @@ pub fn terminate_game(
     //     println!("Done Inserting into similation log, game id: {}", game_id);
     // }
 
-    if delete_game_id_from_redis(game_log.a.id, game_log.d.id, redis_conn).is_err() {
+    if delete_game_id_from_redis(attack_log.attacker.id, attack_log.defender.id, redis_conn).is_err() {
         log::info!(
             "Can't remove game:{} and attacker:{} and opponent:{} from redis",
             game_id,
@@ -979,6 +948,8 @@ pub fn terminate_game(
         );
         return Err(anyhow::anyhow!("Can't remove game from redis"));
     }
+
+    add_game_to_replays(attack_log, conn)?;
 
     // for event in game_log.events.iter() {
     //     println!("Event: {:?}\n", event);

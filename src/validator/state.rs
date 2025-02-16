@@ -14,6 +14,8 @@ use crate::constants::{
     DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LEVEL, LIVES,
     PERCENTANGE_ARTIFACTS_OBTAINABLE,
 };
+use crate::validator::DirectionType;
+use crate::api::game::util::{EventLog, EventResponse, EventType};
 use crate::{
     api::attack::socket::{BuildingDamageResponse, DefenderDamageResponse, DefenderResponse},
     validator::util::{
@@ -22,9 +24,9 @@ use crate::{
     },
 };
 
-use serde::{Deserialize, Serialize};
-
 use super::util::{Companion, CompanionResult, DefenderTarget, Path};
+use crate::validator::AttackLog;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
@@ -219,6 +221,7 @@ impl State {
         frame_no: i32,
         roads: &HashSet<(i32, i32)>,
         attacker_current: Attacker,
+        attack_log: &mut AttackLog,
     ) -> Option<Attacker> {
         if (frame_no - self.frame_no) != 1 {
             self.in_validation = InValidation {
@@ -308,6 +311,36 @@ impl State {
         self.frame_no += 1;
         attacker.attacker_pos = attacker_current.attacker_pos;
         self.attacker.as_mut().unwrap().attacker_pos = attacker_current.attacker_pos.clone();
+        let previous_direction = self.attacker.as_mut().unwrap().attacker_direction.clone();
+        let current_direction = attacker_current.attacker_direction.clone();
+        if previous_direction != current_direction && current_direction != DirectionType::none {
+            self.attacker.as_mut().unwrap().attacker_direction = attacker_current.attacker_direction;
+            let new_direction_event = match current_direction {
+                DirectionType::up => EventType::MoveAttackerUp,
+                DirectionType::down => EventType::MoveAttackerDown,
+                DirectionType::left => EventType::MoveAttackerLeft,
+                DirectionType::right => EventType::MoveAttackerRight,
+                DirectionType::stationary => EventType::AttackerStationary,
+                _ => EventType::AttackerStationary,
+            };
+            let event_response = EventResponse {
+                attacker_initial_position: Some(attacker_current.attacker_pos.clone()),
+                attacker_type: None,
+                event_type: new_direction_event,
+                mine_details: None,
+                bullets_details: None,
+                companion_result: None,
+                hut_defender_details: None,
+                defender_details: None,
+                bomb_type: None,
+                bomb_details: None,
+            };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: frame_no,
+                // date: chrono::Utc::now().naive_utc(),
+            });
+        }
 
         let attacker_result = Attacker {
             id: attacker.id,
@@ -318,6 +351,7 @@ impl State {
             bombs: attacker.bombs.clone(),
             trigger_defender: attacker.trigger_defender,
             bomb_count: attacker.bomb_count,
+            attacker_direction: attacker.attacker_direction,
         };
 
         log::info!(
@@ -501,7 +535,10 @@ impl State {
         &mut self,
         roads: &HashSet<(i32, i32)>,
         shortest_path: &HashMap<SourceDestXY, Path>,
+        attack_log: &mut AttackLog,
+        frame_no: i32,
     ) -> Option<CompanionResult> {
+        let mut companion_changed_target = false;
         let companion = self.companion.as_mut().unwrap();
         let mut building_damaged: Option<BuildingDamageResponse> = None;
         let mut defender_damaged: Option<DefenderDamageResponse> = None;
@@ -623,6 +660,7 @@ impl State {
                     companion.target_defender = target_defender;
                     companion.target_tile = target_tile;
                     companion.current_target = current_target;
+                    companion_changed_target = true;
                 }
 
                 //move to destination.
@@ -677,7 +715,7 @@ impl State {
             -1
         };
 
-        Some(CompanionResult {
+        let companion_result = CompanionResult {
             current_target: companion.current_target,
             map_space_id: target_mapspace_id,
             current_target_tile: companion.target_tile,
@@ -685,7 +723,27 @@ impl State {
             health: companion.companion_health,
             building_damaged,
             defender_damaged,
-        })
+        };
+        if companion_changed_target {
+            let event_response = EventResponse {
+                attacker_initial_position: None,
+                attacker_type: None,
+                event_type: EventType::NewCompanionTarget,
+                mine_details: None,
+                bullets_details: None,
+                companion_result: Some(companion_result.clone()),
+                hut_defender_details: None,
+                defender_details: None,
+                bomb_type: None,
+                bomb_details: None,
+            };
+            attack_log.game_log.push(EventLog {
+                event: event_response.clone(),
+                frame_no: frame_no,
+                // date: chrono::Utc::now().naive_utc(),
+            });
+        }
+        Some(companion_result)
     }
 
     pub fn place_bombs(
@@ -1063,6 +1121,8 @@ impl State {
         &mut self,
         attacker_position: Coords,
         shortest_path: &HashMap<SourceDestXY, Path>,
+        attack_log: &mut AttackLog,
+        frame_no: i32,
     ) -> DefenderReturnType {
         let attacker = self.attacker.as_mut().unwrap();
         let companion = self.companion.as_mut().unwrap();
@@ -1117,6 +1177,24 @@ impl State {
                             defender.is_alive = false;
                             attacker.attacker_health =
                                 max(0, attacker.attacker_health - defender.damage);
+
+                            let event_response = EventResponse {
+                                attacker_initial_position: None,
+                                attacker_type: None,
+                                event_type: EventType::DefenderCollidedWithAttacker,
+                                mine_details: None,
+                                bullets_details: None,
+                                companion_result: None,
+                                hut_defender_details: None,
+                                defender_details: None,
+                                bomb_type: None,
+                                bomb_details: None,
+                            };
+                            attack_log.game_log.push(EventLog {
+                                event: event_response.clone(),
+                                frame_no: frame_no,
+                                // date: chrono::Utc::now().naive_utc(),
+                            });
                         }
                     }
                     DefenderTarget::Companion => {
@@ -1160,6 +1238,24 @@ impl State {
                             defender.is_alive = false;
                             companion.companion_health =
                                 max(0, companion.companion_health - defender.damage);
+
+                            let event_response = EventResponse {
+                                attacker_initial_position: None,
+                                attacker_type: None,
+                                event_type: EventType::DefenderCollidedWithCompanion,
+                                mine_details: None,
+                                bullets_details: None,
+                                companion_result: None,
+                                hut_defender_details: None,
+                                defender_details: None,
+                                bomb_type: None,
+                                bomb_details: None,
+                            };
+                            attack_log.game_log.push(EventLog {
+                                event: event_response.clone(),
+                                frame_no: frame_no,
+                                // date: chrono::Utc::now().naive_utc(),
+                            });
                         }
                     }
                 }

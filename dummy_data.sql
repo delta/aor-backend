@@ -21,6 +21,7 @@ DELETE FROM public.emp_type;
 DELETE FROM public.defender_type;
 DELETE FROM public.building_type;
 DELETE FROM public.simulation_log;
+DELETE FROM public.replays;
 DELETE FROM public.game;
 DELETE FROM public.map_layout;
 DELETE FROM public.user;

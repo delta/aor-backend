@@ -5,7 +5,7 @@ use crate::validator::{
     self,
     util::{
         Attacker, BombType, BuildingDetails, BulletSpawnResponse, CompanionResult, Coords,
-        DefenderDetails, DefenderTarget, MineDetails,
+        DefenderDetails, MineDetails,
     },
 };
 
@@ -17,6 +17,7 @@ pub struct SocketRequest {
     pub bomb_id: Option<i32>,
     pub current_position: Option<Coords>,
     // pub attacker_path: Vec<Coords>,
+    pub attacker_direction: Option<DirectionType>,
     pub bomb_position: Coords,
     pub is_game_over: Option<bool>,
 }
@@ -65,6 +66,16 @@ pub enum ResultType {
     PlacedAttacker,
     PlacedCompanion,
     Nothing,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum DirectionType {
+    up,
+    down,
+    left,
+    right,
+    stationary,
+    none,
 }
 
 #[derive(Serialize, Deserialize)]
