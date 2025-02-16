@@ -6,6 +6,7 @@ use actix_session::{
 use actix_web::cookie::time::Duration;
 use actix_web::web::Data;
 use actix_web::{cookie::Key, middleware, web, App, HttpResponse, HttpServer};
+use api::challenges;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use flexi_logger::{Cleanup, Criterion, Duplicate, FileSpec, Naming};
 
@@ -84,6 +85,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::scope("/base").configure(defense::routes))
             .service(web::scope("/game").configure(game::routes))
             .service(web::scope("/inventory").configure(inventory::routes))
+            .service(web::scope("/challenge").configure(challenges::routes))
     })
     .bind("0.0.0.0:8000")?
     .run()

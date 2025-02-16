@@ -1,8 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
+use self::{
+    state::State,
+    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
+};
 use crate::{
     api::attack::{
-        socket::{ActionType, BaseItemsDamageResponse, ResultType, SocketRequest, SocketResponse},
+        socket::{
+            ActionType, BaseItemsDamageResponse, ChallengeResponse, ResultType, SocketRequest,
+            SocketResponse,
+        },
         util::{EventResponse, GameLog},
     },
     constants::COMPANION_BOT_RANGE,
@@ -10,13 +17,10 @@ use crate::{
     validator::util::{Coords, SourceDestXY},
 };
 use anyhow::{Ok, Result};
+use challenges::maze_place_attacker_handle;
 use util::{Companion, CompanionResult, MineResponse, Path};
 
-use self::{
-    state::State,
-    util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
-};
-
+pub mod challenges;
 pub mod error;
 pub mod state;
 pub mod util;
@@ -36,6 +40,9 @@ pub fn game_handler(
     match socket_request.action_type {
         ActionType::PlaceAttacker => {
             _game_state.update_frame_number(socket_request.frame_number);
+            let challenge = &mut _game_state.challenge;
+            maze_place_attacker_handle(challenge);
+
             let mut event_response = EventResponse {
                 attacker_id: None,
                 bomb_id: None,
@@ -44,8 +51,8 @@ pub fn game_handler(
                 is_bomb: false,
             };
 
-            if let Some(attacker_id) = socket_request.attacker_id {
-                let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
+            if let Some(challenge) = _game_state.challenge {
+                let attacker = attacker_type.get(&0).unwrap().clone();
                 _game_state.place_attacker(Attacker {
                     id: attacker.id,
                     // path_in_current_frame: Vec::new(),
@@ -56,21 +63,43 @@ pub fn game_handler(
                     trigger_defender: false,
                     bomb_count: attacker.amt_of_emps,
                 });
+                let bomb_type = _bomb_types
+                    .iter()
+                    .find(|bomb| bomb.id == 0)
+                    .unwrap()
+                    .clone();
+                _game_state.set_bombs(bomb_type, 10);
+                event_response.attacker_id = Some(0);
+                event_response.coords = socket_request.current_position.unwrap();
+                event_response.bomb_id = Some(0);
+            } else {
+                if let Some(attacker_id) = socket_request.attacker_id {
+                    let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
+                    _game_state.place_attacker(Attacker {
+                        id: attacker.id,
+                        // path_in_current_frame: Vec::new(),
+                        attacker_pos: socket_request.current_position.unwrap(),
+                        attacker_health: attacker.max_health,
+                        attacker_speed: attacker.speed,
+                        bombs: Vec::new(),
+                        trigger_defender: false,
+                        bomb_count: attacker.amt_of_emps,
+                    });
 
-                for bomb_type in _bomb_types {
-                    if let Some(bomb_id) = socket_request.bomb_id {
-                        if bomb_type.id == bomb_id {
-                            _game_state.set_bombs(bomb_type.clone(), attacker.amt_of_emps);
+                    for bomb_type in _bomb_types {
+                        if let Some(bomb_id) = socket_request.bomb_id {
+                            if bomb_type.id == bomb_id {
+                                _game_state.set_bombs(bomb_type.clone(), attacker.amt_of_emps);
+                            }
                         }
                     }
+
+                    event_response.attacker_id = Some(attacker_id);
+                    event_response.coords = socket_request.current_position.unwrap();
                 }
-
-                event_response.attacker_id = Some(attacker_id);
-                event_response.coords = socket_request.current_position.unwrap();
+                // _game_state.set_mines(mine_positions);
+                event_response.bomb_id = socket_request.bomb_id;
             }
-
-            // _game_state.set_mines(mine_positions);
-            event_response.bomb_id = socket_request.bomb_id;
 
             _game_log.e.push(event_response);
             _game_log.r.au += 1;
@@ -83,12 +112,12 @@ pub fn game_handler(
             }
 
             for defender in _game_state.defenders.iter() {
-                log::info!(
-                    "defender id : {} , position x {}, y {} ",
-                    defender.map_space_id,
-                    defender.defender_pos.x,
-                    defender.defender_pos.y
-                );
+                // log::info!(
+                //     "defender id : {} , position x {}, y {} ",
+                //     defender.map_space_id,
+                //     defender.defender_pos.x,
+                //     defender.defender_pos.y
+                // );
             }
 
             let attacker_health = _game_state
@@ -115,6 +144,7 @@ pub fn game_handler(
                     "Place Attacker, set attacker and bomb response",
                 )),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::PlaceCompanion => {
@@ -169,12 +199,17 @@ pub fn game_handler(
                 message: Some(String::from("Placed companion")),
                 companion: None,
                 shoot_bullets: None,
+                challenge: None,
             }));
         }
 
         ActionType::MoveAttacker => {
             if let Some(attacker_id) = socket_request.attacker_id {
-                let attacker: AttackerType = attacker_type.get(&attacker_id).unwrap().clone();
+                let attacker: AttackerType = if let Some(challenge) = _game_state.challenge {
+                    attacker_type.get(&0).unwrap().clone()
+                } else {
+                    attacker_type.get(&attacker_id).unwrap().clone()
+                };
                 // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
                 // let attacker_delta_clone = attacker_delta.clone();
 
@@ -193,6 +228,10 @@ pub fn game_handler(
                     },
                 );
 
+                if let Some(challenge) = _game_state.challenge {
+                    _game_log.r.sc = challenge.score;
+                }
+
                 // let attacker_result_clone = attacker_result.clone().unwrap();
 
                 defender_damaged_result = _game_state
@@ -207,10 +246,19 @@ pub fn game_handler(
                 }
 
                 if _game_state.in_validation.is_invalidated {
-                    return Some(Ok(send_terminate_game_message(
+                    let mut response = send_terminate_game_message(
                         socket_request.frame_number,
                         _game_state.in_validation.message.clone(),
-                    )));
+                    );
+                    let challenge = if let Some(challenge_state) = _game_state.challenge {
+                        Some(ChallengeResponse {
+                            score: challenge_state.score,
+                        })
+                    } else {
+                        None
+                    };
+                    response.challenge = challenge;
+                    return Some(Ok(response));
                 }
 
                 let spawn_result = _game_state
@@ -235,17 +283,34 @@ pub fn game_handler(
                     _game_state.cause_bullet_damage();
                 }
 
-                let companion_res = _game_state
-                    .move_companion(_roads, _shortest_path)
-                    .unwrap_or(CompanionResult {
-                        current_target: None,
-                        map_space_id: -1,
-                        current_target_tile: None,
-                        is_alive: false,
-                        health: -1,
-                        building_damaged: None,
-                        defender_damaged: None,
-                    });
+                let companion_res = _game_state.move_companion(_roads, _shortest_path);
+
+                //if we get companion result we get set base_items_damaged
+                let damaged_base_items = if let Some(companion_res) = companion_res.as_ref() {
+                    let buildings_damaged =
+                        if let Some(building_damaged) = &companion_res.building_damaged {
+                            vec![building_damaged.clone()]
+                        } else {
+                            Vec::new()
+                        };
+
+                    let defenders_damaged =
+                        if let Some(defender_damaged) = &companion_res.defender_damaged {
+                            vec![defender_damaged.clone()]
+                        } else {
+                            Vec::new()
+                        };
+
+                    Some(BaseItemsDamageResponse {
+                        buildings_damaged,
+                        defenders_damaged,
+                    })
+                } else {
+                    Some(BaseItemsDamageResponse {
+                        buildings_damaged: Vec::new(),
+                        defenders_damaged: Vec::new(),
+                    })
+                };
 
                 _game_state.defender_trigger();
 
@@ -259,24 +324,13 @@ pub fn game_handler(
                     ResultType::BuildingsDamaged
                 };
 
-                let buildings_damaged =
-                    if let Some(building_damaged) = &companion_res.building_damaged {
-                        vec![building_damaged.clone()]
-                    } else {
-                        Vec::new()
-                    };
-
-                let defenders_damaged =
-                    if let Some(defender_damaged) = &companion_res.defender_damaged {
-                        vec![defender_damaged.clone()]
-                    } else {
-                        Vec::new()
-                    };
-
-                let damaged_base_items = Some(BaseItemsDamageResponse {
-                    buildings_damaged,
-                    defenders_damaged,
-                });
+                let challenge = if let Some(challenge_state) = _game_state.challenge {
+                    Some(ChallengeResponse {
+                        score: challenge_state.score,
+                    })
+                } else {
+                    None
+                };
 
                 let response = SocketResponse {
                     frame_number: socket_request.frame_number,
@@ -294,7 +348,8 @@ pub fn game_handler(
                     is_game_over: false,
                     shoot_bullets: Some(shoot_bullets),
                     message: Some(String::from("Movement Response")),
-                    companion: Some(companion_res),
+                    companion: companion_res,
+                    challenge,
                 };
                 return Some(Ok(response));
             }
@@ -351,6 +406,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Is Mine Response")),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::PlaceBombs => {
@@ -437,6 +493,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Place Bomb Response")),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::Idle => {
@@ -461,6 +518,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Idle Response")),
                 companion: None,
+                challenge: None,
             }));
         }
         ActionType::Terminate => {
@@ -485,6 +543,7 @@ pub fn game_handler(
                 shoot_bullets: None,
                 message: Some(String::from("Game over")),
                 companion: None,
+                challenge: None,
             };
             return Some(Ok(socket_response));
         }
@@ -513,6 +572,7 @@ pub fn game_handler(
                 is_game_over: false,
                 shoot_bullets: None,
                 message: Some(String::from("Self Destructed")),
+                challenge: None,
                 companion: None,
             };
 

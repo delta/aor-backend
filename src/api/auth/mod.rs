@@ -33,6 +33,7 @@ pub struct LoginResponse {
     pub artifacts: i32,
     pub email: String,
     pub token: Option<String>,
+    pub is_mod: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,6 +159,7 @@ async fn login(
             artifacts: user.artifacts,
             email: user.email,
             token: Some(token),
+            is_mod: user.is_mod,
         })))
 }
 

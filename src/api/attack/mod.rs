@@ -394,6 +394,7 @@ async fn socket_handler(
             nd: 0,
             oa: 0,
             od: 0,
+            sc: 0,
         },
     };
 
@@ -424,6 +425,7 @@ async fn socket_handler(
             hut_defenders,
             mines,
             buildings,
+            None,
         );
         game_state.set_total_hp_buildings();
         game_state.get_sentries();
@@ -581,6 +583,9 @@ async fn socket_handler(
                     }
                 }
                 Message::Close(_s) => {
+                    if game_logs.d.is_pragyan {
+                        //challenge game terminate
+                    }
                     if util::terminate_game(
                         game_logs,
                         &mut conn,
@@ -643,6 +648,7 @@ async fn socket_handler(
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
                     companion: None,
+                    challenge: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {

@@ -1,6 +1,7 @@
 /// CRUD functions
 use super::MapSpacesEntry;
 use crate::api::auth::LoginResponse;
+use crate::api::challenges::util::{get_challenge_type, ChallengeTypeResponse};
 use crate::api::error::AuthError;
 use crate::api::game::util::UserDetail;
 use crate::api::user::util::fetch_user;
@@ -9,8 +10,9 @@ use crate::api::util::{HistoryboardEntry, HistoryboardResponse};
 use crate::api::{self};
 use crate::constants::{BANK_BUILDING_NAME, INITIAL_ARTIFACTS, INITIAL_RATING, ROAD_ID};
 use crate::models::*;
-use crate::schema::{available_emps, map_layout, map_spaces, prop};
+use crate::schema::{available_emps, emp_type, map_layout, map_spaces, prop};
 use crate::util::function;
+use crate::validator::util::{BombType, Coords};
 use crate::{api::util::GameHistoryResponse, error::DieselError};
 use anyhow::{Ok, Result};
 use awc::http::header::map;
@@ -92,6 +94,7 @@ pub struct DefenseBaseResponse {
     pub blocks: Vec<BuildingTypeResponse>,
     pub defender_types: Vec<DefenderTypeResponse>,
     pub mine_types: Vec<MineTypeResponse>,
+    pub challenge_type: Option<ChallengeTypeResponse>,
 }
 
 #[derive(Serialize)]
@@ -130,6 +133,110 @@ pub struct DefenseResponse {
 #[derive(Deserialize, Serialize)]
 pub struct DefenceHistoryResponse {
     pub games: Vec<Game>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildingSave {
+    pub id: i32,
+    pub cost: i32,
+    pub block_id: i32,
+    pub map_space_id: i32,
+    pub level: i32,
+    pub name: String,
+    pub width_in_tiles: i32,
+    pub length_in_tiles: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub artifacts: i32,
+    pub hp: i32,
+    pub is_bank: bool,
+    pub is_defence_building: bool,
+    pub capacity: i32,
+    pub range: i32,
+    pub frequency: i32,
+    pub is_placed: bool,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefenderSave {
+    pub radius: i32,
+    pub speed: i32,
+    pub damage: i32,
+    pub id: i32,
+    pub block_id: i32,
+    pub map_space_id: i32,
+    pub level: i32,
+    pub cost: i32,
+    pub name: String,
+    pub width_in_tiles: i32,
+    pub length_in_tiles: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub is_placed: bool,
+    pub max_health: i32,
+    pub current_health: i32,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MineSave {
+    pub id: i32,
+    pub block_id: i32,
+    pub map_space_id: i32,
+    pub level: i32,
+    pub cost: i32,
+    pub name: String,
+    pub width_in_tiles: i32,
+    pub length_in_tiles: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub is_placed: bool,
+    pub radius: i32,
+    pub damage: i32,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoadSave {
+    pub id: i32,
+    pub map_space_id: i32,
+    pub block_id: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminSaveData {
+    pub map_id: i32,
+    pub building: Vec<BuildingSave>,
+    pub defenders: Vec<DefenderSave>,
+    pub mine_type: Vec<MineSave>,
+    pub road: Vec<RoadSave>,
+    pub challenge: ChallengeData,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChallengeData {
+    pub start_tile: Coords,
+    pub end_tile: Coords,
+    pub attacker_health: i32,
+    pub bomb_damage: i32,
+    pub bomb_radius: i32,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminBaseRequest {
+    pub map_id: i32,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+pub struct AdminBaseResponse {
+    base: AdminSaveData,
 }
 
 pub fn check_valid_map_id(
@@ -433,10 +540,12 @@ pub fn get_details_from_map_layout(
             artifacts: user.artifacts,
             email: user.email,
             token: None,
+            is_mod: user.is_mod,
         })
     } else {
         None
     };
+    let challenge_type = get_challenge_type(conn)?;
 
     Ok(DefenseBaseResponse {
         map_spaces,
@@ -444,6 +553,7 @@ pub fn get_details_from_map_layout(
         mine_types,
         defender_types,
         user: user_response,
+        challenge_type,
     })
 }
 
@@ -963,6 +1073,22 @@ pub fn fetch_attacker_types(conn: &mut PgConnection, user_id: &i32) -> Result<Ve
     Ok(results)
 }
 
+pub fn fetch_emp_types(conn: &mut PgConnection, user_id: &i32) -> Result<Vec<EmpType>> {
+    let bomb_types = emp_type::table
+        .inner_join(available_emps::table.on(available_emps::emp_type_id.eq(emp_type::id)))
+        .filter(available_emps::user_id.eq(&user_id))
+        .load::<(EmpType, AvailableEmps)>(conn)
+        .map_err(|err| DieselError {
+            table: "emp_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter()
+        .map(|(emp_type, _)| emp_type)
+        .collect();
+    Ok(bomb_types)
+}
+
 pub fn add_user_default_base(
     conn: &mut PgConnection,
     user_name: &str,
@@ -979,6 +1105,7 @@ pub fn add_user_default_base(
             email: user_email,
             username,
             is_pragyan: &false,
+            is_mod: &false,
             attacks_won: &0,
             defenses_won: &0,
             trophies: &INITIAL_RATING,
