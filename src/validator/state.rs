@@ -1,4 +1,4 @@
-use std::{
+    use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -8,14 +8,14 @@ use super::util::{
     select_side_hut_defender, BombType, BulletSpawnResponse, HutDefenderDetails, MineResponse,
     Sentry,
 };
-use crate::api::attack::socket::BaseItemsDamageResponse;
+use crate::api::attack::{self, socket::BaseItemsDamageResponse};
 use crate::constants::{
     BOMB_DAMAGE_MULTIPLIER, BULLET_COLLISION_TIME, DAMAGE_PER_BULLET_LEVEL_1,
     DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LEVEL, LIVES,
     PERCENTANGE_ARTIFACTS_OBTAINABLE,
 };
 use crate::{
-    api::attack::socket::{BuildingDamageResponse, DefenderDamageResponse, DefenderResponse},
+    api::attack::socket::{BuildingDamageResponse, DefenderDamageResponse, DefenderResponse , BulletHit},
     validator::util::{
         get_companion_priority, Attacker, BuildingDetails, CompanionTarget, Coords,
         DefenderDetails, DefenderReturnType, InValidation, MineDetails, SourceDestXY,
@@ -24,7 +24,10 @@ use crate::{
 
 use serde::{Deserialize, Serialize};
 
-use super::util::{Companion, CompanionResult, DefenderTarget, Path};
+use super::{
+    challenges::{attacker_movement_challenge_handle, bomb_blast_fallguys_handle},
+    util::{Challenge, Companion, CompanionResult, DefenderTarget, Path},
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
@@ -46,6 +49,12 @@ pub struct State {
     pub in_validation: InValidation,
     pub sentries: Vec<Sentry>,
     pub hut_defenders_released: i32,
+    pub challenge: Option<Challenge>,
+    pub revealed_mines: Vec<MineDetails>,
+    pub last_processed_frame: i32,
+    pub revealed_checkpoints: Vec<f32>,
+    pub uav_revealed: bool,
+    pub uav_checkpoints: Vec<f32>,
 }
 
 impl State {
@@ -56,12 +65,13 @@ impl State {
         hut_defenders: HashMap<i32, DefenderDetails>,
         mines: Vec<MineDetails>,
         buildings: Vec<BuildingDetails>,
+        challenge: Option<Challenge>,
     ) -> State {
         let mut hut = HashMap::new();
         for building in buildings.clone() {
             if building.name == "Defender_Hut" {
                 //get defender_level for the hut
-                log::info!("hut map space id: {}", building.map_space_id);
+                //log::info!("hut map space id: {}", building.map_space_id);
                 let defender_level = hut_defenders.get(&building.map_space_id).unwrap().level;
 
                 let defenders_count = LEVEL[(defender_level - 1) as usize].hut.defenders_limit;
@@ -71,14 +81,15 @@ impl State {
                     hut_defenders_count: defenders_count,
                     hut_defender_latest_time: None,
                 };
-                log::info!(
-                    "hutttt: {:?} {:?}",
-                    hut_defender_details,
-                    building.map_space_id
-                );
+                // log::info!(
+                //     "hutttt: {:?} {:?}",
+                //     hut_defender_details,
+                //     building.map_space_id
+                // );
                 hut.insert(building.map_space_id, hut_defender_details);
             }
         }
+
         State {
             frame_no: 0,
             attacker_user_id,
@@ -109,11 +120,16 @@ impl State {
                 message: "".to_string(),
                 is_invalidated: false,
             },
-            sentries: Vec::new(),
+            challenge,
             hut_defenders_released: 0,
+            sentries: Vec::new(),
+            uav_revealed: false,
+            uav_checkpoints: vec![20.0, 50.0, 70.0],
+            revealed_checkpoints: Vec::new(),
+            revealed_mines: Vec::new(),
+            last_processed_frame: -1,
         }
     }
-
     pub fn get_sentries(&mut self) {
         let mut sentries = Vec::new();
         for building in self.buildings.iter() {
@@ -133,7 +149,36 @@ impl State {
                 });
             }
         }
+        //log::info!("sentries: {:?}", sentries);
         self.sentries = sentries;
+    }
+    pub fn check_uav_reveal(&mut self) -> Option<Vec<MineDetails>> {
+        let mut revealed: Vec<MineDetails> = Vec::new();
+        for checkpoint in &self.uav_checkpoints {
+            if self.damage_percentage >= *checkpoint
+                && !self.revealed_checkpoints.contains(checkpoint)
+            {
+                self.revealed_checkpoints.push(*checkpoint);
+                let mines: Vec<MineDetails> = self
+                    .mines
+                    .iter()
+                    .map(|mine| MineDetails {
+                        name: mine.name.clone(),
+                        id: mine.id,
+                        position: mine.position.clone(),
+                        radius: mine.radius,
+                        damage: mine.damage,
+                    })
+                    .collect();
+                revealed.extend(mines);
+            }
+        }
+        if !revealed.is_empty() {
+            self.revealed_mines = revealed.clone();
+            return Some(revealed);
+        }
+
+        None
     }
 
     pub fn self_destruct(&mut self) {
@@ -170,7 +215,6 @@ impl State {
         }
     }
     pub fn place_attacker(&mut self, attacker: Attacker) {
-        let attacker_position = attacker.attacker_pos;
         self.attacker = Some(attacker);
         //self.activate_sentry(attacker_position, 0);
         // println!("defnders: {:?}",self.defenders);
@@ -188,7 +232,7 @@ impl State {
         damage_to_companion: i32,
     ) {
         let attacker = self.attacker.as_mut().unwrap();
-        let companion = self.companion.as_mut().unwrap();
+        let companion = self.companion.as_mut();
 
         if attacker.attacker_health > 0 {
             attacker.attacker_health =
@@ -202,9 +246,11 @@ impl State {
             }
         }
 
-        if companion.companion_health > 0 {
-            companion.companion_health =
-                std::cmp::max(0, companion.companion_health - damage_to_companion);
+        if let Some(companion) = companion {
+            if companion.companion_health > 0 {
+                companion.companion_health =
+                    std::cmp::max(0, companion.companion_health - damage_to_companion);
+            }
         }
 
         self.mines.retain(|mine| mine.id != _id);
@@ -229,11 +275,15 @@ impl State {
         }
 
         if self.attacker_death_count == LIVES {
+            log::info!("Attacker lives forged");
             self.in_validation = InValidation {
                 message: "Attacker Lives forged!".to_string(),
                 is_invalidated: true,
             };
         }
+
+        //challenges handler
+        attacker_movement_challenge_handle(self, roads, &attacker_current);
 
         if !roads.contains(&(
             attacker_current.attacker_pos.x,
@@ -297,7 +347,7 @@ impl State {
                 if let Some(hut) = self.hut.get_mut(&hut_building.map_space_id) {
                     if !hut.hut_triggered {
                         // Hut triggered
-                        log::info!("Inside hut range!");
+                        //log::info!("Inside hut range!");
                         //trigger hut
                         hut.hut_triggered = true;
                     }
@@ -320,16 +370,15 @@ impl State {
             bomb_count: attacker.bomb_count,
         };
 
-        log::info!(
-            "attacker health: {}, companion health: {}",
-            self.attacker.as_ref().unwrap().attacker_health,
-            self.companion.as_ref().unwrap().companion_health
-        );
+        // log::info!(
+        //     "attacker health: {}, companion health: {}",
+        //     self.attacker.as_ref().unwrap().attacker_health,
+        //     self.companion.as_ref().unwrap().companion_health
+        // );
         Some(attacker_result)
     }
 
     pub fn defender_trigger(&mut self) {
-        let companion = self.companion.as_mut().unwrap();
         let attacker = self.attacker.as_mut().unwrap();
 
         for defender in self.defenders.iter_mut() {
@@ -340,53 +389,70 @@ impl State {
                         attacker.trigger_defender = true;
                     }
                 } else {
-                    let attacker_manhattan_dist =
-                        (defender.defender_pos.x - attacker.attacker_pos.x).abs()
-                            + (defender.defender_pos.y - attacker.attacker_pos.y).abs();
-                    let companion_manhattan_dist =
-                        (defender.defender_pos.x - companion.companion_pos.x).abs()
-                            + (defender.defender_pos.y - companion.companion_pos.y).abs();
+                    let companion = self.companion.as_mut();
+                    if let Some(companion) = companion {
+                        let attacker_manhattan_dist =
+                            (defender.defender_pos.x - attacker.attacker_pos.x).abs()
+                                + (defender.defender_pos.y - attacker.attacker_pos.y).abs();
 
-                    if companion_manhattan_dist <= defender.radius
-                        && attacker_manhattan_dist <= defender.radius
-                    {
-                        if attacker_manhattan_dist <= companion_manhattan_dist {
-                            if attacker.attacker_health > 0 {
-                                defender.target_id = Some(DefenderTarget::Attacker);
-                                attacker.trigger_defender = true;
-                            } else if companion.companion_health > 0 {
-                                defender.target_id = Some(DefenderTarget::Companion);
-                                companion.trigger_defender = true;
+                        let companion_manhattan_dist =
+                            (defender.defender_pos.x - companion.companion_pos.x).abs()
+                                + (defender.defender_pos.y - companion.companion_pos.y).abs();
+
+                        if companion_manhattan_dist <= defender.radius
+                            && attacker_manhattan_dist <= defender.radius
+                        {
+                            if attacker_manhattan_dist <= companion_manhattan_dist {
+                                if attacker.attacker_health > 0 {
+                                    defender.target_id = Some(DefenderTarget::Attacker);
+                                    attacker.trigger_defender = true;
+                                } else if companion.companion_health > 0 {
+                                    defender.target_id = Some(DefenderTarget::Companion);
+                                    companion.trigger_defender = true;
+                                } else {
+                                    defender.target_id = None;
+                                }
                             } else {
-                                defender.target_id = None;
+                                if companion.companion_health > 0 {
+                                    defender.target_id = Some(DefenderTarget::Companion);
+                                    companion.trigger_defender = true;
+                                } else if attacker.attacker_health > 0 {
+                                    defender.target_id = Some(DefenderTarget::Attacker);
+                                    attacker.trigger_defender = true;
+                                } else {
+                                    defender.target_id = None;
+                                }
                             }
-                        } else {
+                        } else if companion_manhattan_dist <= defender.radius {
                             if companion.companion_health > 0 {
                                 defender.target_id = Some(DefenderTarget::Companion);
                                 companion.trigger_defender = true;
-                            } else if attacker.attacker_health > 0 {
+                            } else {
+                                defender.target_id = None;
+                            }
+                        } else if attacker_manhattan_dist <= defender.radius {
+                            if attacker.attacker_health > 0 {
                                 defender.target_id = Some(DefenderTarget::Attacker);
                                 attacker.trigger_defender = true;
                             } else {
                                 defender.target_id = None;
                             }
-                        }
-                    } else if companion_manhattan_dist <= defender.radius {
-                        if companion.companion_health > 0 {
-                            defender.target_id = Some(DefenderTarget::Companion);
-                            companion.trigger_defender = true;
-                        } else {
-                            defender.target_id = None;
-                        }
-                    } else if attacker_manhattan_dist <= defender.radius {
-                        if attacker.attacker_health > 0 {
-                            defender.target_id = Some(DefenderTarget::Attacker);
-                            attacker.trigger_defender = true;
                         } else {
                             defender.target_id = None;
                         }
                     } else {
-                        defender.target_id = None;
+                        let attacker_manhattan_dist =
+                            (defender.defender_pos.x - attacker.attacker_pos.x).abs()
+                                + (defender.defender_pos.y - attacker.attacker_pos.y).abs();
+
+                        if attacker_manhattan_dist <= defender.radius {
+                            if attacker.attacker_health > 0 {
+                                defender.target_id = Some(DefenderTarget::Attacker);
+                                attacker.trigger_defender = true;
+                            } else {
+                                defender.target_id = None;
+                            }
+                        }
                     }
                 }
             }
@@ -502,190 +568,207 @@ impl State {
         roads: &HashSet<(i32, i32)>,
         shortest_path: &HashMap<SourceDestXY, Path>,
     ) -> Option<CompanionResult> {
-        let companion = self.companion.as_mut().unwrap();
-        let mut building_damaged: Option<BuildingDamageResponse> = None;
-        let mut defender_damaged: Option<DefenderDamageResponse> = None;
-        let is_companion_alive = companion.companion_health > 0;
+        //let companion = self.companion.as_mut().unwrap();
+        if let Some(companion) = self.companion.as_mut() {
+            let mut building_damaged: Option<BuildingDamageResponse> = None;
+            let mut defender_damaged: Option<DefenderDamageResponse> = None;
+            let is_companion_alive = companion.companion_health > 0;
 
-        if is_companion_alive {
-            //defender logic
-            if companion.reached_dest {
-                //in destination.
-                let target_building = companion.target_building.clone();
-                let target_defender = companion.target_defender.clone();
-                let current_target = companion.current_target;
+            if is_companion_alive {
+                //defender logic
+                if companion.reached_dest {
+                    //in destination.
+                    let target_building = companion.target_building.clone();
+                    let target_defender = companion.target_defender.clone();
+                    let current_target = companion.current_target;
 
-                //check for defender or building to update reached.
-                if let Some(current_target) = current_target {
-                    match current_target {
-                        CompanionTarget::Building => {
-                            let target_building = target_building.unwrap();
-                            for building in self.buildings.iter_mut() {
-                                if building.map_space_id == target_building.map_space_id {
-                                    if self.frame_no
-                                        >= companion.last_attack_tick + companion.attack_interval
-                                    {
-                                        let mut artifacts_taken_by_destroying_building = 0;
-                                        building.current_hp =
-                                            max(building.current_hp - companion.damage, 0);
-                                        self.damage_percentage += companion.damage as f32
-                                            / self.total_hp_buildings as f32
-                                            * 100.0_f32;
+                    //check for defender or building to update reached.
+                    if let Some(current_target) = current_target {
+                        match current_target {
+                            CompanionTarget::Building => {
+                                let target_building = target_building.unwrap();
+                                for building in self.buildings.iter_mut() {
+                                    if building.map_space_id == target_building.map_space_id {
+                                        if self.frame_no
+                                            >= companion.last_attack_tick
+                                                + companion.attack_interval
+                                        {
+                                            companion.last_attack_tick = self.frame_no;
+                                            if building.current_hp <= 0 {
+                                                //log::info!("Double down!!");
+                                                companion.reached_dest = false;
+                                                companion.target_building = None;
+                                                companion.target_defender = None;
+                                                companion.target_tile = None;
+                                                companion.current_target = None;
+                                                break;
+                                            }
+                                            let mut artifacts_taken_by_destroying_building = 0;
+                                            building.current_hp =
+                                                max(building.current_hp - companion.damage, 0);
+                                            self.damage_percentage += companion.damage as f32
+                                                / self.total_hp_buildings as f32
+                                                * 100.0_f32;
 
-                                        companion.last_attack_tick = self.frame_no;
+                                            if building.current_hp <= 0 {
+                                                companion.reached_dest = false;
+                                                companion.target_building = None;
+                                                companion.target_defender = None;
+                                                companion.target_tile = None;
+                                                companion.current_target = None;
+                                                artifacts_taken_by_destroying_building =
+                                                    (building.artifacts_obtained as f32
+                                                        * PERCENTANGE_ARTIFACTS_OBTAINABLE)
+                                                        .floor()
+                                                        as i32;
+                                                self.artifacts +=
+                                                    artifacts_taken_by_destroying_building;
+                                            }
 
-                                        if building.current_hp <= 0 {
-                                            companion.reached_dest = false;
-                                            companion.target_building = None;
-                                            companion.target_defender = None;
-                                            companion.target_tile = None;
-                                            companion.current_target = None;
-                                            artifacts_taken_by_destroying_building =
-                                                (building.artifacts_obtained as f32
-                                                    * PERCENTANGE_ARTIFACTS_OBTAINABLE)
-                                                    .floor()
-                                                    as i32;
-                                            self.artifacts +=
-                                                artifacts_taken_by_destroying_building;
-                                        }
-
-                                        building_damaged = Some(BuildingDamageResponse {
-                                            id: building.map_space_id,
-                                            position: building.tile.clone(),
-                                            hp: building.current_hp,
-                                            artifacts_if_damaged:
-                                                artifacts_taken_by_destroying_building,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                        CompanionTarget::Defender => {
-                            let target_defender = target_defender.unwrap();
-                            for defender in self.defenders.iter_mut() {
-                                if defender.map_space_id == target_defender.map_space_id {
-                                    if self.frame_no
-                                        >= companion.last_attack_tick + companion.attack_interval
-                                    {
-                                        log::info!("Defender attacked");
-                                        defender.current_health =
-                                            max(defender.current_health - companion.damage, 0);
-                                        companion.last_attack_tick = self.frame_no;
-                                        defender_damaged = Some(DefenderDamageResponse {
-                                            map_space_id: defender.map_space_id,
-                                            position: defender.defender_pos,
-                                            health: defender.current_health,
-                                        });
-
-                                        if defender.current_health <= 0 {
-                                            defender.is_alive = false;
-                                            companion.reached_dest = false;
-                                            companion.target_building = None;
-                                            companion.target_defender = None;
-                                            companion.target_tile = None;
-                                            companion.current_target = None;
+                                            building_damaged = Some(BuildingDamageResponse {
+                                                id: building.map_space_id,
+                                                position: building.tile.clone(),
+                                                hp: building.current_hp,
+                                                artifacts_if_damaged:
+                                                    artifacts_taken_by_destroying_building,
+                                            });
                                         }
                                     }
                                 }
                             }
+                            CompanionTarget::Defender => {
+                                let target_defender = target_defender.unwrap();
+                                for defender in self.defenders.iter_mut() {
+                                    if defender.map_space_id == target_defender.map_space_id {
+                                        if self.frame_no
+                                            >= companion.last_attack_tick
+                                                + companion.attack_interval
+                                        {
+                                            //log::info!("Defender attacked");
+                                            defender.current_health =
+                                                max(defender.current_health - companion.damage, 0);
+                                            companion.last_attack_tick = self.frame_no;
+                                            defender_damaged = Some(DefenderDamageResponse {
+                                                map_space_id: defender.map_space_id,
+                                                position: defender.defender_pos,
+                                                health: defender.current_health,
+                                            });
+
+                                            if defender.current_health <= 0 || !defender.is_alive {
+                                                defender.is_alive = false;
+                                                companion.reached_dest = false;
+                                                companion.target_building = None;
+                                                companion.target_defender = None;
+                                                companion.target_tile = None;
+                                                companion.current_target = None;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+                    } else {
+                        companion.reached_dest = false;
+                        companion.target_building = None;
+                        companion.target_defender = None;
+                        companion.current_target = None;
+                        companion.target_tile = None;
                     }
                 } else {
-                    companion.reached_dest = false;
-                    companion.target_building = None;
-                    companion.target_defender = None;
-                    companion.current_target = None;
-                }
-            } else {
-                //get priorities if we don't have a target.
-                if companion.current_target.is_none() {
-                    let priority = get_companion_priority(
-                        &self.buildings,
-                        &self.defenders,
-                        companion,
-                        roads,
-                        shortest_path,
-                    );
-                    log::info!("Priority: {:?}", priority);
-                    let target_building = if priority.high_prior_building.0.is_some() {
-                        priority.high_prior_building.0
+                    //get priorities if we don't have a target.
+                    if companion.current_target.is_none() {
+                        let priority = get_companion_priority(
+                            &self.buildings,
+                            &self.defenders,
+                            companion,
+                            roads,
+                            shortest_path,
+                        );
+                        //log::info!("Priority: {:?}", priority);
+                        let target_building = if priority.high_prior_building.0.is_some() {
+                            priority.high_prior_building.0
+                        } else {
+                            priority.second_prior_building.0
+                        };
+
+                        let target_defender = priority.high_prior_defender.0;
+
+                        let target_tile = priority.high_prior_tile;
+
+                        let current_target = priority.current_target;
+
+                        companion.target_building = target_building;
+                        companion.target_defender = target_defender;
+                        companion.target_tile = target_tile;
+                        companion.current_target = current_target;
+                    }
+
+                    //move to destination.
+                    let target_tile = companion.target_tile.clone().unwrap();
+                    let next_hop = shortest_path.get(&SourceDestXY {
+                        source_x: companion.companion_pos.x,
+                        source_y: companion.companion_pos.y,
+                        dest_x: target_tile.x,
+                        dest_y: target_tile.y,
+                    });
+
+                    if let Some(next_hop) = next_hop {
+                        companion.companion_pos = Coords {
+                            x: next_hop.x,
+                            y: next_hop.y,
+                        };
+                        //log::info!("moved");
+                        if companion.companion_pos.x == target_tile.x
+                            && companion.companion_pos.y == target_tile.y
+                        {
+                            companion.reached_dest = true;
+                        }
                     } else {
-                        priority.second_prior_building.0
-                    };
-
-                    let target_defender = priority.high_prior_defender.0;
-
-                    let target_tile = priority.high_prior_tile.0;
-
-                    let current_target = priority.current_target;
-
-                    companion.target_building = target_building;
-                    companion.target_defender = target_defender;
-                    companion.target_tile = target_tile;
-                    companion.current_target = current_target;
-                }
-
-                //move to destination.
-                let target_tile = companion.target_tile.clone().unwrap();
-                let next_hop = shortest_path.get(&SourceDestXY {
-                    source_x: companion.companion_pos.x,
-                    source_y: companion.companion_pos.y,
-                    dest_x: target_tile.x,
-                    dest_y: target_tile.y,
-                });
-
-                if let Some(next_hop) = next_hop {
-                    companion.companion_pos = Coords {
-                        x: next_hop.x,
-                        y: next_hop.y,
-                    };
-                    if companion.companion_pos.x == target_tile.x
-                        && companion.companion_pos.y == target_tile.y
-                    {
+                        //log::info!("In the same place");
                         companion.reached_dest = true;
                     }
-                } else {
-                    companion.reached_dest = true;
                 }
+            } else {
+                companion.reached_dest = false;
+                companion.target_building = None;
+                companion.target_defender = None;
+                companion.target_tile = None;
+                companion.current_target = None;
             }
+
+            let target_mapspace_id = if let Some(current_target) = &companion.current_target {
+                match current_target {
+                    CompanionTarget::Building => {
+                        if let Some(target_building) = &companion.target_building {
+                            target_building.map_space_id
+                        } else {
+                            -1
+                        }
+                    }
+                    CompanionTarget::Defender => {
+                        if let Some(target_defender) = &companion.target_defender {
+                            target_defender.map_space_id
+                        } else {
+                            -1
+                        }
+                    }
+                }
+            } else {
+                -1
+            };
+
+            Some(CompanionResult {
+                current_target: companion.current_target,
+                map_space_id: target_mapspace_id,
+                current_target_tile: companion.target_tile,
+                is_alive: companion.companion_health > 0,
+                health: companion.companion_health,
+                building_damaged,
+                defender_damaged,
+            })
         } else {
-            companion.reached_dest = false;
-            companion.target_building = None;
-            companion.target_defender = None;
-            companion.target_tile = None;
-            companion.current_target = None;
+            None
         }
-
-        let target_mapspace_id = if let Some(current_target) = &companion.current_target {
-            match current_target {
-                CompanionTarget::Building => {
-                    if let Some(target_building) = &companion.target_building {
-                        target_building.map_space_id
-                    } else {
-                        -1
-                    }
-                }
-                CompanionTarget::Defender => {
-                    if let Some(target_defender) = &companion.target_defender {
-                        target_defender.map_space_id
-                    } else {
-                        -1
-                    }
-                }
-            }
-        } else {
-            -1
-        };
-
-        Some(CompanionResult {
-            current_target: companion.current_target,
-            map_space_id: target_mapspace_id,
-            current_target_tile: companion.target_tile,
-            is_alive: companion.companion_health > 0,
-            health: companion.companion_health,
-            building_damaged,
-            defender_damaged,
-        })
     }
 
     pub fn place_bombs(
@@ -724,7 +807,11 @@ impl State {
         let mut damage_to_attacker = 0;
         let mut damage_to_companion = 0;
         let attack_current_pos = start_pos.unwrap();
-        let companion_current_pos = self.companion.as_ref().unwrap().companion_pos.clone();
+        let companion_current_pos = if let Some(companion) = self.companion.as_ref() {
+            companion.companion_pos.clone()
+        } else {
+            Coords { x: -1, y: -1 }
+        };
 
         let mut triggered_mines: Vec<MineResponse> = Vec::new();
 
@@ -776,6 +863,7 @@ impl State {
     pub fn bomb_blast(&mut self, bomb_position: Coords) -> BaseItemsDamageResponse {
         let bomb = &mut self.bombs;
         let mut buildings_damaged: Vec<BuildingDamageResponse> = Vec::new();
+        let challenge = &mut self.challenge;
         let bomb_matrix: HashSet<Coords> = (bomb_position.y - bomb.radius
             ..bomb_position.y + bomb.radius + 1)
             .flat_map(|y| {
@@ -783,15 +871,15 @@ impl State {
                     .map(move |x| Coords { x, y })
             })
             .collect();
-        log::info!(
-            "Bomb position : {}, {}, range x: {} to {} range y: {} to {}",
-            bomb_position.x,
-            bomb_position.y,
-            bomb_position.x - bomb.radius,
-            bomb_position.x + bomb.radius,
-            bomb_position.y - bomb.radius,
-            bomb_position.y + bomb.radius
-        );
+        // log::info!(
+        //     "Bomb position : {}, {}, range x: {} to {} range y: {} to {}",
+        //     bomb_position.x,
+        //     bomb_position.y,
+        //     bomb_position.x - bomb.radius,
+        //     bomb_position.x + bomb.radius,
+        //     bomb_position.y - bomb.radius,
+        //     bomb_position.y + bomb.radius
+        // );
         for building in self.buildings.iter_mut() {
             if building.current_hp > 0 {
                 let mut artifacts_taken_by_destroying_building: i32 = 0;
@@ -810,6 +898,7 @@ impl State {
                     coinciding_coords_damage as f32 / building_matrix.len() as f32;
 
                 if damage_buildings != 0.0 {
+                    bomb_blast_fallguys_handle(challenge, damage_buildings as i32, building);
                     let old_hp = building.current_hp;
                     let mut current_damage = (damage_buildings
                         * (bomb.damage as f32 * BOMB_DAMAGE_MULTIPLIER))
@@ -868,6 +957,7 @@ impl State {
 
                     if defender.current_health <= 0 {
                         defender.current_health = 0;
+                        defender.is_alive=false;
                     }
 
                     defenders_damaged.push(DefenderDamageResponse {
@@ -883,21 +973,21 @@ impl State {
 
         for defender in defenders_damaged.iter() {
             if defender.health > 0 {
-                log::info!(
-                    "Defender:{} is damaged, health is : {}, position is {}, {}",
-                    defender.map_space_id,
-                    defender.health,
-                    defender.position.x,
-                    defender.position.y
-                );
+                // log::info!(
+                //     "Defender:{} is damaged, health is : {}, position is {}, {}",
+                //     defender.map_space_id,
+                //     defender.health,
+                //     defender.position.x,
+                //     defender.position.y
+                // );
             }
             if defender.health == 0 {
-                log::info!(
-                    "Defender:{} is dead, died at position {}, {}",
-                    defender.map_space_id,
-                    defender.position.x,
-                    defender.position.y
-                );
+                // log::info!(
+                //     "Defender:{} is dead, died at position {}, {}",
+                //     defender.map_space_id,
+                //     defender.position.x,
+                //     defender.position.y
+                // );
             }
         }
 
@@ -933,8 +1023,12 @@ impl State {
             if current_sentry_data.current_hp > 0 {
                 //for attacker
                 let attacker_pos = self.attacker.as_ref().unwrap().attacker_pos;
-                let companion_pos = self.companion.as_ref().unwrap().companion_pos;
-                let companion_health = self.companion.as_ref().unwrap().companion_health;
+                let (companion_pos, companion_health) =
+                    if let Some(companion) = self.companion.as_ref() {
+                        (companion.companion_pos.clone(), companion.companion_health)
+                    } else {
+                        (Coords { x: -1, y: -1 }, 0)
+                    };
                 let attacker_health = self.attacker.as_ref().unwrap().attacker_health;
                 let prev_state = sentry.is_sentry_activated;
                 let is_attacker_in_range = (sentry.building_data.tile.x - attacker_pos.x).abs()
@@ -950,7 +1044,7 @@ impl State {
                 let new_state = sentry.is_sentry_activated;
 
                 if prev_state != new_state && new_state == true {
-                    log::info!("sentry activated");
+                    //log::info!("sentry activated");
                     sentry.sentry_start_time = SystemTime::now();
                     if is_attacker_in_range {
                         sentry.target_id = 0;
@@ -958,7 +1052,7 @@ impl State {
                         sentry.target_id = 1;
                     }
                 } else if prev_state != new_state && new_state == false {
-                    log::info!("sentry deactivated");
+                    //log::info!("sentry deactivated");
                     sentry.current_bullet_shot_time = SystemTime::now() - Duration::new(2, 0);
                     sentry.target_id = -1;
                 }
@@ -971,7 +1065,6 @@ impl State {
 
     pub fn cause_bullet_damage(&mut self) {
         let attacker = self.attacker.as_mut().unwrap();
-        let companion = self.companion.as_mut().unwrap();
         if attacker.attacker_health <= 0 {
             for sentry in self.sentries.iter_mut() {
                 for bullet in sentry.bullets_shot.iter_mut() {
@@ -991,20 +1084,21 @@ impl State {
                         if bullet.target_id == 0 {
                             attacker.attacker_health =
                                 max(0, attacker.attacker_health - bullet.damage);
-                            log::info!(
-                                "ATTACKER HEALTH : {}, bullet_id {}",
-                                attacker.attacker_health,
-                                bullet.bullet_id
-                            );
+                            // log::info!(
+                            //     "ATTACKER HEALTH : {}, bullet_id {}",
+                            //     attacker.attacker_health,
+                            //     bullet.bullet_id
+                            // );
                             bullet.has_collided = true;
                         } else if bullet.target_id == 1 {
+                            let companion = self.companion.as_mut().unwrap();
                             companion.companion_health =
                                 max(0, companion.companion_health - bullet.damage);
-                            log::info!(
-                                "COMPANION HEALTH : {}, bullet_id {}",
-                                companion.companion_health,
-                                bullet.bullet_id
-                            );
+                            // log::info!(
+                            //     "COMPANION HEALTH : {}, bullet_id {}",
+                            //     companion.companion_health,
+                            //     bullet.bullet_id
+                            // );
                             bullet.has_collided = true;
                         }
                     }
@@ -1027,11 +1121,11 @@ impl State {
             {
                 sentry.current_bullet_shot_id += 1;
                 sentry.current_bullet_shot_time = SystemTime::now();
-                log::info!(
-                    "sentry id: {}, bullet id: {}",
-                    sentry.id,
-                    sentry.current_bullet_shot_id
-                );
+                // log::info!(
+                //     "sentry id: {}, bullet id: {}",
+                //     sentry.id,
+                //     sentry.current_bullet_shot_id
+                // );
                 if sentry.building_data.level == 3 {
                     bullet_damage = DAMAGE_PER_BULLET_LEVEL_3;
                 } else if sentry.building_data.level == 2 {
@@ -1047,11 +1141,11 @@ impl State {
                     has_collided: false,
                     target_id: sentry.target_id,
                 };
-                log::info!(
-                    "bullet {} from sentry {}",
-                    sentry.current_bullet_shot_id,
-                    sentry.id
-                );
+                // log::info!(
+                //     "bullet {} from sentry {}",
+                //     sentry.current_bullet_shot_id,
+                //     sentry.id
+                // );
                 shoot_bullet_res_array.push(bullet_response.clone());
                 sentry.bullets_shot.push(bullet_response);
             }
@@ -1065,7 +1159,6 @@ impl State {
         shortest_path: &HashMap<SourceDestXY, Path>,
     ) -> DefenderReturnType {
         let attacker = self.attacker.as_mut().unwrap();
-        let companion = self.companion.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
 
         for defender in self.defenders.iter_mut() {
@@ -1101,12 +1194,12 @@ impl State {
                         if attacker_position.x == defender.defender_pos.x
                             && attacker_position.y == defender.defender_pos.y
                         {
-                            log::info!(
-                                "Defender pos {} {} and id {}",
-                                defender.defender_pos.x,
-                                defender.defender_pos.y,
-                                defender.map_space_id
-                            );
+                            // log::info!(
+                            //     "Defender pos {} {} and id {}",
+                            //     defender.defender_pos.x,
+                            //     defender.defender_pos.y,
+                            //     defender.map_space_id
+                            // );
 
                             defenders_damaged.push(DefenderResponse {
                                 map_space_id: defender.map_space_id,
@@ -1115,11 +1208,14 @@ impl State {
                                 target_id,
                             });
                             defender.is_alive = false;
+                            defender.current_health = 0;
                             attacker.attacker_health =
                                 max(0, attacker.attacker_health - defender.damage);
                         }
                     }
+                    
                     DefenderTarget::Companion => {
+                        let companion = self.companion.as_mut().unwrap();
                         let default_next_hop = Path {
                             x: defender.defender_pos.x,
                             y: defender.defender_pos.y,
@@ -1140,16 +1236,16 @@ impl State {
                             x: next_hop.x,
                             y: next_hop.y,
                         };
-
+                        // if defender.name.starts_with("Hut") {
                         if companion.companion_pos.x == defender.defender_pos.x
                             && companion.companion_pos.y == defender.defender_pos.y
                         {
-                            log::info!(
-                                "Defender pos {} {} and id {}",
-                                defender.defender_pos.x,
-                                defender.defender_pos.y,
-                                defender.map_space_id
-                            );
+                            // log::info!(
+                            //     "Defender pos {} {} and id {}",
+                            //     defender.defender_pos.x,
+                            //     defender.defender_pos.y,
+                            //     defender.map_space_id
+                            // );
 
                             defenders_damaged.push(DefenderResponse {
                                 map_space_id: defender.map_space_id,
@@ -1158,18 +1254,211 @@ impl State {
                                 target_id,
                             });
                             defender.is_alive = false;
+                            defender.current_health = 0;
                             companion.companion_health =
                                 max(0, companion.companion_health - defender.damage);
                         }
                     }
                 }
-            }
+                }
+
         }
+        let companion_health = if let Some(companion) = self.companion.as_ref() {
+            companion.companion_health
+        } else {
+            0
+        };
+
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
-            companion_health: companion.companion_health,
+            companion_health,
             defender_response: defenders_damaged,
             state: self.clone(),
+            bullet_hits: Vec::new(),
+        }
+    }
+
+    pub fn defender_ranged_attack(&mut self, frame_number: i32, coords: Coords) -> DefenderReturnType {
+        // log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
+    
+        if frame_number <= self.last_processed_frame {
+            return DefenderReturnType {
+                attacker_health: self.attacker.as_ref().unwrap().attacker_health,
+                defender_response: Vec::new(),
+                bullet_hits: Vec::new(),
+                state: self.clone(),
+                companion_health: 0,
+            };
+        }
+    
+        let state_clone = self.clone(); // Clone the state before borrowing self mutably
+        let attacker = self.attacker.as_mut().unwrap();
+        let companion = self.companion.as_mut().unwrap();
+        let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
+        let mut bullet_hits: Vec<BulletHit> = Vec::new();
+        let mut attackers: Vec<u32> = Vec::new();
+        let attacker_pos = coords;
+        let companion_pos = companion.companion_pos;
+    
+        // log::info!(
+        //     "Attacker position is ({:?})",
+        //     attacker_posF
+        // );
+        log::info!("Companion position is ({:?})", companion_pos);
+    
+        for defender in self.defenders.iter_mut() {
+            log::info!(
+                "Defender ID: {}, Target ID: {:?}, Position: ({}, {})",
+                defender.map_space_id,
+                defender.target_id,
+                defender.defender_pos.x,
+                defender.defender_pos.y
+            );
+            if !defender.is_alive {
+                continue;
+            }
+            if defender.range == 0 {
+                continue;
+            }
+            // log::info!("Defender range is {}", defender.range);
+    
+            let start = SystemTime::now();
+            let now = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
+            let time_interval = defender.frequency as u128;
+    
+            if defender.last_attack == 0 {
+                defender.last_attack = now.as_millis();
+                // log::info!("Initializing defender {} last_attack to {}", defender.map_space_id, defender.last_attack);
+            }
+    
+            let time_elapsed = now.as_millis() >= defender.last_attack as u128 + time_interval;
+    
+            if time_elapsed {
+                defender.last_attack = now.as_millis();
+                let target_pos = if defender.target_id == Some(DefenderTarget::Attacker) {
+                    attacker_pos
+                } else {
+                    companion_pos
+                };
+    
+                // Check if target is within defender's range
+                let distance = (((defender.defender_pos.x - target_pos.x).pow(2)
+                    + (defender.defender_pos.y - target_pos.y).pow(2))
+                    as f32)
+                    .sqrt();
+                log::info!("Distance between defender {} , with position {:?}, and target: {}", defender.map_space_id, defender.defender_pos, distance);
+    
+                if distance <= defender.range as f32 {
+                    // log::info!("Positions of companion and defender are: ({}, {}), ({}, {})", companion_pos.x, companion_pos.y, defender.defender_pos.x, defender.defender_pos.y);
+                    // log::info!("Defender {} is within range of target", defender.map_space_id);
+                    if defender.defender_pos.x == target_pos.x
+                        || defender.defender_pos.y == target_pos.y
+                    {
+                        attackers.push(defender.map_space_id.try_into().unwrap());
+                        // Check if there are any buildings between the defender and the target
+                        let mut blocked = false;
+                        if defender.defender_pos.x == target_pos.x {
+                            let min_y = defender.defender_pos.y.min(target_pos.y);
+                            let max_y = defender.defender_pos.y.max(target_pos.y);
+                            for building in &self.buildings {
+                                if building.tile.x == defender.defender_pos.x
+                                    && building.tile.y > min_y
+                                    && building.tile.y < max_y
+                                {
+                                    blocked = true;
+                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.map_space_id, building.tile.x, building.tile.y);
+                                    break;
+                                }
+                            }
+                        } else if defender.defender_pos.y == target_pos.y {
+                            let min_x = defender.defender_pos.x.min(target_pos.x);
+                            let max_x = defender.defender_pos.x.max(target_pos.x);
+                            for building in &self.buildings {
+                                if building.tile.y == defender.defender_pos.y
+                                    && building.tile.x > min_x
+                                    && building.tile.x < max_x
+                                {
+                                    blocked = true;
+                                    // log::info!("Defender {} attack is blocked by building at ({}, {})", defender.map_space_id, building.tile.x, building.tile.y);
+                                    break;
+                                }
+                            }
+                        }
+    
+                        if !blocked {
+                            if defender.target_id == Some(DefenderTarget::Attacker) {
+                                log::info!("Defender {} successfully attacks attacker", defender.map_space_id);
+                                log::info!("Positions of attacker and defender are: ({}, {}), ({}, {})", attacker_pos.x, attacker_pos.y, defender.defender_pos.x, defender.defender_pos.y);
+                                attacker.attacker_health =
+                                    attacker.attacker_health.saturating_sub(defender.damage);
+                                if attacker.attacker_health<=0{
+                                    defender.target_id = None;
+                                }
+                                defenders_damaged.push(DefenderResponse {
+                                    map_space_id: defender.map_space_id,
+                                    position: defender.defender_pos,
+                                    damage: defender.damage,
+                                    target_id: 0,
+                                });
+                                bullet_hits.push(BulletHit {
+                                    defender_id: defender.map_space_id,
+                                    target_id: 0,
+                                    damage: defender.damage,
+                                    position: defender.defender_pos,
+                                });
+                            } else if defender.target_id == Some(DefenderTarget::Companion) {
+                                log::info!("Defender {} successfully attacks companion", defender.map_space_id);
+                                log::info!("Positions of companion and defender are: ({}, {}), ({}, {})", companion_pos.x, companion_pos.y, defender.defender_pos.x, defender.defender_pos.y);
+                                companion.companion_health =
+                                    companion.companion_health.saturating_sub(defender.damage);
+                                if companion.companion_health<=0{
+                                        defender.target_id = None;
+                                }
+                                defenders_damaged.push(DefenderResponse {
+                                    map_space_id: defender.map_space_id,
+                                    position: defender.defender_pos,
+                                    damage: defender.damage,
+                                    target_id: 1,
+                                });
+                                bullet_hits.push(BulletHit {
+                                    defender_id: defender.map_space_id,
+                                    target_id: 1,
+                                    damage: defender.damage,
+                                    position: defender.defender_pos,
+                                });
+                            }
+                        } else {
+                            // log::info!("Defender {} attack is blocked", defender.map_space_id);
+                        }
+                    } else {
+                        log::info!(
+                            "Defender {} is not aligned with target. Defender position: ({}, {}), Target position: ({}, {})",
+                            defender.map_space_id,
+                            defender.defender_pos.x,
+                            defender.defender_pos.y,
+                            target_pos.x,
+                            target_pos.y
+                        );
+                    }
+                } else {
+                    log::info!("Defender {} is out of range of target", defender.map_space_id);
+                    log::info!("Defender range is {}", defender.range);
+                    defender.target_id=None;
+                }
+            } else {
+                // log::info!("Time not elapsed for defender {}. Skipping attack.", defender.map_space_id);
+            }
+        }
+    
+        // log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
+        log::info!("Defenders who attacked in this frame: {:?}", attackers);
+    
+        DefenderReturnType {
+            attacker_health: attacker.attacker_health,
+            defender_response: defenders_damaged,
+            bullet_hits,
+            state: state_clone,
+            companion_health: companion.companion_health,
         }
     }
 }
