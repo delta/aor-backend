@@ -86,7 +86,7 @@ pub struct EventResponse {
 }
 
 #[derive(Serialize, Clone, Debug)]
-pub struct  ResultResponse {
+pub struct ResultResponse {
     pub damage_done: i32,           //damage_done
     pub artifacts_collected: i32,   //artifacts_collected
     pub bombs_used: i32,            //bombs_used
@@ -283,7 +283,7 @@ pub fn get_replay(game_id: i32, conn: &mut PgConnection) -> Result<AttackLog> {
     let jsonified_decompressed_replay: Vec<EventLog> = serde_json::from_str(&decompressed_replay).unwrap();
     let jsonified_decompressed_base: SimulationBaseResponse = serde_json::from_str(&decompressed_base).unwrap();
     let attacker = fetch_user(conn, replay.attacker_id)?.expect("Attacker not found");
-    let defender = fetch_user(conn, replay.attacker_id)?.expect("Defender not found");
+    let defender = fetch_user(conn, replay.defender_id)?.expect("Defender not found");
     let game_result = fetch_game_details(game_id, replay.defender_id, conn)?;
     let attack_log: AttackLog = AttackLog {
         game_id: replay.game_id,
