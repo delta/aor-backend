@@ -285,6 +285,9 @@ async fn challenge_socket_handler(
             level: defender.level,
             current_health: defender.max_health,
             max_health: defender.max_health,
+            frequency: 0,
+            range: 0,
+            last_attack: 0,
         })
         .collect();
 
@@ -803,6 +806,8 @@ async fn challenge_socket_handler(
                     message: Some("Connection timed out".to_string()),
                     companion: None,
                     challenge: None,
+                    bullet_hits: None,
+                    revealed_mines: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {

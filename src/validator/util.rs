@@ -5,7 +5,7 @@ use std::time::SystemTime;
 use crate::api::attack::socket::{
     BuildingDamageResponse, ChallengeResponse, DefenderDamageResponse, DefenderResponse,
 };
-use crate::api::attack::socket::{ResultType, SocketResponse};
+use crate::api::attack::socket::{ResultType, SocketResponse , BulletHit};
 use crate::constants::COMPANION_PRIORITY;
 use crate::validator::state::State;
 use futures::future::LocalBoxFuture;
@@ -89,6 +89,9 @@ pub struct DefenderDetails {
     pub block_id: i32,
     pub level: i32,
     pub current_health: i32,
+    pub frequency : i32,
+    pub last_attack : u128,
+    pub range : i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -173,6 +176,7 @@ pub struct DefenderReturnType {
     pub companion_health: i32,
     pub defender_response: Vec<DefenderResponse>,
     pub state: State,
+    pub bullet_hits: Vec<BulletHit>,
 }
 
 #[derive(Serialize)]
@@ -294,6 +298,8 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         message: Some(message),
         companion: None,
         challenge: None,
+        bullet_hits: None,
+        revealed_mines: None,
     }
 }
 

@@ -547,6 +547,15 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
+                                    } else if response.result_type == ResultType::BulletHit {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    }
+                                    else if response.result_type == ResultType::UAV {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
                                     } else if response.result_type == ResultType::Nothing
                                         && session_clone1.text(response_json).await.is_err()
                                     {
@@ -649,6 +658,8 @@ async fn socket_handler(
                     message: Some("Connection timed out".to_string()),
                     companion: None,
                     challenge: None,
+                    bullet_hits: None,
+                    revealed_mines: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {
