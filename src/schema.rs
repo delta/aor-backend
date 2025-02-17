@@ -103,6 +103,7 @@ diesel::table! {
         challenge_id -> Int4,
         map_id -> Int4,
         score -> Int4,
+        attempts -> Int4,
     }
 }
 
@@ -250,10 +251,8 @@ diesel::joinable!(block_type -> defender_type (defender_type));
 diesel::joinable!(block_type -> mine_type (mine_type));
 diesel::joinable!(building_type -> prop (prop_id));
 diesel::joinable!(challenge_maps -> challenges (challenge_id));
-diesel::joinable!(challenge_maps -> map_layout (map_id));
 diesel::joinable!(challenge_maps -> user (user_id));
 diesel::joinable!(challenges_responses -> challenges (challenge_id));
-diesel::joinable!(challenges_responses -> map_layout (map_id));
 diesel::joinable!(challenges_responses -> user (attacker_id));
 diesel::joinable!(defender_type -> prop (prop_id));
 diesel::joinable!(game -> map_layout (map_layout_id));

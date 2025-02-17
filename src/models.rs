@@ -381,6 +381,7 @@ pub struct ChallengeResponse {
     pub challenge_id: i32,
     pub map_id: i32,
     pub score: i32,
+    pub attempts: i32,
 }
 
 #[derive(Insertable)]
@@ -390,4 +391,5 @@ pub struct NewChallengeResponse<'a> {
     pub challenge_id: &'a i32,
     pub map_id: &'a i32,
     pub score: &'a i32,
+    pub attempts: &'a i32,
 }

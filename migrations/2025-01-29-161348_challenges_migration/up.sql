@@ -24,6 +24,7 @@ CREATE TABLE challenges_responses
     challenge_id INTEGER NOT NULL,
     map_id INTEGER NOT NULL,
     score INTEGER NOT NULL,
+    attempts INTEGER NOT NULL,
     CONSTRAINT chall_response_attacker FOREIGN KEY (attacker_id) REFERENCES "user"(id),
     CONSTRAINT chall_response_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id),
     CONSTRAINT unique_attacker_challenge UNIQUE (attacker_id, challenge_id)
