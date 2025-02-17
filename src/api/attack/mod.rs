@@ -43,9 +43,10 @@ async fn init_attack(
     pool: web::Data<PgPool>,
     redis_pool: Data<RedisPool>,
     user: AuthUser,
+    is_self: web::Query<HashMap<String, bool>>,
 ) -> Result<impl Responder> {
     let attacker_id = user.0;
-
+    let is_self_attack = *is_self.get("is_self").unwrap_or(&false);
     log::info!("Attacker:{} is trying to initiate an attack", attacker_id);
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     if let Ok(check) = util::can_attack_happen(&mut conn, attacker_id, true) {
@@ -71,22 +72,27 @@ async fn init_attack(
         .get()
         .map_err(|err| error::handle_error(err.into()))?;
 
-    let random_opponent_id = web::block(move || {
-        Ok(util::get_random_opponent_id(
-            attacker_id,
-            &mut conn,
-            redis_conn,
-        )?) as anyhow::Result<Option<i32>>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
-
-    let opponent_id = if let Some(id) = random_opponent_id {
-        id
+    let opponent_id: i32;
+    if is_self_attack {
+        opponent_id = attacker_id;
     } else {
-        log::info!("No opponent found for Attacker:{}", attacker_id);
-        return Err(ErrorBadRequest("No opponent found"));
-    };
+        let random_opponent_id = web::block(move || {
+            Ok(util::get_random_opponent_id(
+                attacker_id,
+                &mut conn,
+                redis_conn,
+            )?) as anyhow::Result<Option<i32>>
+        })
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+
+        opponent_id = if let Some(id) = random_opponent_id {
+            id
+        } else {
+            log::info!("No opponent found for Attacker:{}", attacker_id);
+            return Err(ErrorBadRequest("No opponent found"));
+        };
+    }
 
     log::info!(
         "Opponent:{} found for Attacker:{}",
@@ -136,10 +142,10 @@ async fn init_attack(
 
     log::info!("User details fetched for Opponent:{}", opponent_id);
 
-    //Create game
+    //Create a new game
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let game_id = web::block(move || {
-        Ok(util::add_game(attacker_id, opponent_id, map_id, &mut conn)?) as anyhow::Result<i32>
+        Ok(util::add_game(attacker_id, opponent_id, map_id, &mut conn, is_self_attack)?) as anyhow::Result<i32>
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
@@ -199,6 +205,12 @@ async fn socket_handler(
     let query_params = req.query_string().split('&').collect::<Vec<&str>>();
     let user_token = query_params[0].split('=').collect::<Vec<&str>>()[1];
     let attack_token = query_params[1].split('=').collect::<Vec<&str>>()[1];
+    let is_self_attack = query_params[2]
+        .split('=')
+        .collect::<Vec<&str>>()
+        .get(1)
+        .map(|&s| s == "true")
+        .unwrap_or(false);
 
     let attacker_id =
         util::decode_user_token(user_token).map_err(|err| error::handle_error(err.into()))?;
@@ -224,9 +236,16 @@ async fn socket_handler(
     }
 
     let defender_id = attack_token_data.defender_id;
-    if attacker_id == defender_id {
-        log::info!("Attacker:{} is trying to attack himself", attacker_id);
-        return Err(ErrorBadRequest("Can't attack yourself"));
+    if !is_self_attack {
+        if attacker_id == defender_id {
+            log::info!("Attacker:{} is trying to attack himself", attacker_id);
+            return Err(ErrorBadRequest("Can't attack yourself"));
+        }
+    } else {
+        if attacker_id != defender_id {
+            log::info!("Attacker:{} is trying to attack someone else", attacker_id);
+            return Err(ErrorBadRequest("Can't attack someone else"));
+        }
     }
 
     let mut redis_conn = redis_pool
@@ -394,6 +413,7 @@ async fn socket_handler(
             nd: 0,
             oa: 0,
             od: 0,
+            sc: 0,
         },
     };
 
@@ -424,6 +444,7 @@ async fn socket_handler(
             hut_defenders,
             mines,
             buildings,
+            None,
         );
         game_state.set_total_hp_buildings();
         game_state.get_sentries();
@@ -487,6 +508,7 @@ async fn socket_handler(
                                             &mut conn,
                                             &damaged_base_items.buildings_damaged,
                                             &mut redis_conn,
+                                            is_self_attack,
                                         )
                                         .is_err()
                                         {
@@ -545,6 +567,15 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
+                                    } else if response.result_type == ResultType::BulletHit {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    }
+                                    else if response.result_type == ResultType::UAV {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
                                     } else if response.result_type == ResultType::Nothing
                                         && session_clone1.text(response_json).await.is_err()
                                     {
@@ -581,11 +612,15 @@ async fn socket_handler(
                     }
                 }
                 Message::Close(_s) => {
+                    if game_logs.d.is_pragyan {
+                        //challenge game terminate
+                    }
                     if util::terminate_game(
                         game_logs,
                         &mut conn,
                         &damaged_base_items.buildings_damaged,
                         &mut redis_conn,
+                        is_self_attack,
                     )
                     .is_err()
                     {
@@ -643,6 +678,9 @@ async fn socket_handler(
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
                     companion: None,
+                    challenge: None,
+                    bullet_hits: None,
+                    revealed_mines: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {

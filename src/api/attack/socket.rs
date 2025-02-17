@@ -40,6 +40,13 @@ pub struct SocketResponse {
     pub message: Option<String>,
     pub shoot_bullets: Option<Vec<BulletSpawnResponse>>,
     pub companion: Option<CompanionResult>,
+    pub challenge: Option<ChallengeResponse>,
+    pub bullet_hits: Option<Vec<BulletHit>>,
+    pub revealed_mines: Option<Vec<MineDetails>>,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChallengeResponse {
+    pub score: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -52,6 +59,8 @@ pub enum ActionType {
     Idle,
     Terminate,
     SelfDestruct,
+    CheckBullets,
+    UavStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -65,6 +74,8 @@ pub enum ResultType {
     PlacedAttacker,
     PlacedCompanion,
     Nothing,
+    BulletHit,
+    UAV,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -124,4 +135,12 @@ pub struct GameStateResponse {
     pub mines: Vec<MineDetails>,
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BulletHit {
+    pub defender_id: i32,
+    pub target_id: i32,
+    pub damage: i32,
+    pub position: Coords,
 }
