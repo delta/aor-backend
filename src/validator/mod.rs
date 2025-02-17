@@ -66,8 +66,10 @@ pub fn game_handler(
                 }));
             }
             // Process only new frames
-            let ranged_attack_result =
-                _game_state.defender_ranged_attack(socket_request.frame_number, socket_request.current_position.unwrap());
+            let ranged_attack_result = _game_state.defender_ranged_attack(
+                socket_request.frame_number,
+                socket_request.current_position.unwrap(),
+            );
             _game_state.last_processed_frame = socket_request.frame_number;
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,

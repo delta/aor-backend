@@ -1,4 +1,4 @@
-    use std::{
+use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -15,7 +15,9 @@ use crate::constants::{
     PERCENTANGE_ARTIFACTS_OBTAINABLE,
 };
 use crate::{
-    api::attack::socket::{BuildingDamageResponse, DefenderDamageResponse, DefenderResponse , BulletHit},
+    api::attack::socket::{
+        BuildingDamageResponse, BulletHit, DefenderDamageResponse, DefenderResponse,
+    },
     validator::util::{
         get_companion_priority, Attacker, BuildingDetails, CompanionTarget, Coords,
         DefenderDetails, DefenderReturnType, InValidation, MineDetails, SourceDestXY,
@@ -957,7 +959,7 @@ impl State {
 
                     if defender.current_health <= 0 {
                         defender.current_health = 0;
-                        defender.is_alive=false;
+                        defender.is_alive = false;
                     }
 
                     defenders_damaged.push(DefenderDamageResponse {
@@ -1213,7 +1215,7 @@ impl State {
                                 max(0, attacker.attacker_health - defender.damage);
                         }
                     }
-                    
+
                     DefenderTarget::Companion => {
                         let companion = self.companion.as_mut().unwrap();
                         let default_next_hop = Path {
@@ -1260,8 +1262,7 @@ impl State {
                         }
                     }
                 }
-                }
-
+            }
         }
         let companion_health = if let Some(companion) = self.companion.as_ref() {
             companion.companion_health
@@ -1278,9 +1279,13 @@ impl State {
         }
     }
 
-    pub fn defender_ranged_attack(&mut self, frame_number: i32, coords: Coords) -> DefenderReturnType {
+    pub fn defender_ranged_attack(
+        &mut self,
+        frame_number: i32,
+        coords: Coords,
+    ) -> DefenderReturnType {
         // log::info!("Starting defender_ranged_attack for frame_number: {}", frame_number);
-    
+
         if frame_number <= self.last_processed_frame {
             return DefenderReturnType {
                 attacker_health: self.attacker.as_ref().unwrap().attacker_health,
@@ -1290,20 +1295,18 @@ impl State {
                 companion_health: 0,
             };
         }
-    
+
         let state_clone = self.clone(); // Clone the state before borrowing self mutably
         let attacker = self.attacker.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
         let mut bullet_hits: Vec<BulletHit> = Vec::new();
         let mut attackers: Vec<u32> = Vec::new();
         let attacker_pos = coords;
-    
+
         // log::info!(
         //     "Attacker position is ({:?})",
         //     attacker_posF
         // );
-        log::info!("Companion position is ({:?})", companion_pos);
-    
         for defender in self.defenders.iter_mut() {
             log::info!(
                 "Defender ID: {}, Target ID: {:?}, Position: ({}, {})",
@@ -1319,33 +1322,44 @@ impl State {
                 continue;
             }
             // log::info!("Defender range is {}", defender.range);
-    
+
             let start = SystemTime::now();
-            let now = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
+            let now = start
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards");
             let time_interval = defender.frequency as u128;
-    
+
             if defender.last_attack == 0 {
                 defender.last_attack = now.as_millis();
                 // log::info!("Initializing defender {} last_attack to {}", defender.map_space_id, defender.last_attack);
             }
-    
+
             let time_elapsed = now.as_millis() >= defender.last_attack as u128 + time_interval;
-    
+
             if time_elapsed {
                 defender.last_attack = now.as_millis();
                 let target_pos = if defender.target_id == Some(DefenderTarget::Attacker) {
                     attacker_pos
-                } else {
+                } else if defender.target_id == Some(DefenderTarget::Companion) {
+                    let companion = self.companion.as_mut().unwrap();
+                    let companion_pos = companion.companion_pos;
                     companion_pos
+                } else {
+                    Coords { x: -1, y: -1 }
                 };
-    
+
                 // Check if target is within defender's range
                 let distance = (((defender.defender_pos.x - target_pos.x).pow(2)
                     + (defender.defender_pos.y - target_pos.y).pow(2))
                     as f32)
                     .sqrt();
-                log::info!("Distance between defender {} , with position {:?}, and target: {}", defender.map_space_id, defender.defender_pos, distance);
-    
+                log::info!(
+                    "Distance between defender {} , with position {:?}, and target: {}",
+                    defender.map_space_id,
+                    defender.defender_pos,
+                    distance
+                );
+
                 if distance <= defender.range as f32 {
                     // log::info!("Positions of companion and defender are: ({}, {}), ({}, {})", companion_pos.x, companion_pos.y, defender.defender_pos.x, defender.defender_pos.y);
                     // log::info!("Defender {} is within range of target", defender.map_space_id);
@@ -1382,14 +1396,23 @@ impl State {
                                 }
                             }
                         }
-    
+
                         if !blocked {
                             if defender.target_id == Some(DefenderTarget::Attacker) {
-                                log::info!("Defender {} successfully attacks attacker", defender.map_space_id);
-                                log::info!("Positions of attacker and defender are: ({}, {}), ({}, {})", attacker_pos.x, attacker_pos.y, defender.defender_pos.x, defender.defender_pos.y);
+                                log::info!(
+                                    "Defender {} successfully attacks attacker",
+                                    defender.map_space_id
+                                );
+                                log::info!(
+                                    "Positions of attacker and defender are: ({}, {}), ({}, {})",
+                                    attacker_pos.x,
+                                    attacker_pos.y,
+                                    defender.defender_pos.x,
+                                    defender.defender_pos.y
+                                );
                                 attacker.attacker_health =
                                     attacker.attacker_health.saturating_sub(defender.damage);
-                                if attacker.attacker_health<=0{
+                                if attacker.attacker_health <= 0 {
                                     defender.target_id = None;
                                 }
                                 defenders_damaged.push(DefenderResponse {
@@ -1407,12 +1430,21 @@ impl State {
                             } else if defender.target_id == Some(DefenderTarget::Companion) {
                                 let companion = self.companion.as_mut().unwrap();
                                 let companion_pos = companion.companion_pos;
-                                log::info!("Defender {} successfully attacks companion", defender.map_space_id);
-                                log::info!("Positions of companion and defender are: ({}, {}), ({}, {})", companion_pos.x, companion_pos.y, defender.defender_pos.x, defender.defender_pos.y);
+                                log::info!(
+                                    "Defender {} successfully attacks companion",
+                                    defender.map_space_id
+                                );
+                                log::info!(
+                                    "Positions of companion and defender are: ({}, {}), ({}, {})",
+                                    companion_pos.x,
+                                    companion_pos.y,
+                                    defender.defender_pos.x,
+                                    defender.defender_pos.y
+                                );
                                 companion.companion_health =
                                     companion.companion_health.saturating_sub(defender.damage);
-                                if companion.companion_health<=0{
-                                        defender.target_id = None;
+                                if companion.companion_health <= 0 {
+                                    defender.target_id = None;
                                 }
                                 defenders_damaged.push(DefenderResponse {
                                     map_space_id: defender.map_space_id,
@@ -1441,24 +1473,33 @@ impl State {
                         );
                     }
                 } else {
-                    log::info!("Defender {} is out of range of target", defender.map_space_id);
+                    log::info!(
+                        "Defender {} is out of range of target",
+                        defender.map_space_id
+                    );
                     log::info!("Defender range is {}", defender.range);
-                    defender.target_id=None;
+                    defender.target_id = None;
                 }
             } else {
                 // log::info!("Time not elapsed for defender {}. Skipping attack.", defender.map_space_id);
             }
         }
-    
+
         // log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
         log::info!("Defenders who attacked in this frame: {:?}", attackers);
-    
+
+        let companion_health = if let Some(companion) = self.companion.as_mut() {
+            companion.companion_health
+        } else {
+            0
+        };
+
         DefenderReturnType {
             attacker_health: attacker.attacker_health,
             defender_response: defenders_damaged,
             bullet_hits,
             state: state_clone,
-            companion_health: companion.companion_health,
+            companion_health,
         }
     }
 }
