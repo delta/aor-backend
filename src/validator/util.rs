@@ -11,6 +11,7 @@ use crate::validator::state::State;
 use futures::future::LocalBoxFuture;
 use oauth2::url::OpaqueOrigin;
 use serde::{Deserialize, Serialize};
+use crate::api::attack::util::reset_taunt_status;
 
 #[derive(Debug, Eq, Hash, PartialEq, Serialize, Clone)]
 pub struct SourceDestXY {
@@ -282,6 +283,7 @@ pub struct Challenge {
 }
 
 pub fn send_terminate_game_message(frame_number: i32, message: String) -> SocketResponse {
+    reset_taunt_status();
     SocketResponse {
         frame_number,
         result_type: ResultType::GameOver,
@@ -296,6 +298,7 @@ pub fn send_terminate_game_message(frame_number: i32, message: String) -> Socket
         is_sync: false,
         is_game_over: true,
         shoot_bullets: None,
+        new_taunt: None,
         message: Some(message),
         companion: None,
         challenge: None,

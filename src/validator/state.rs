@@ -9,6 +9,7 @@ use super::util::{
     Sentry,
 };
 use crate::api::attack::{self, socket::BaseItemsDamageResponse};
+use crate::{api::attack::{get_taunt, util::TAUNTS}, constants::{MAX_TAUNT_REQUESTS, TAUNT_DELAY_TIME}};
 use crate::constants::{
     BOMB_DAMAGE_MULTIPLIER, BULLET_COLLISION_TIME, DAMAGE_PER_BULLET_LEVEL_1,
     DAMAGE_PER_BULLET_LEVEL_2, DAMAGE_PER_BULLET_LEVEL_3, LEVEL, LIVES,
@@ -1074,6 +1075,22 @@ impl State {
 
                 if prev_state != new_state && new_state == true {
                     //log::info!("sentry activated");
+                    unsafe {
+                        if TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                            && (SystemTime::now()
+                                .duration_since(TAUNTS.prev_taunt_time)
+                                .unwrap()
+                                .as_millis()
+                                > TAUNT_DELAY_TIME
+                                || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                        {
+                            log::info!("taunt_generator is being called");
+                            let future = get_taunt(format!("Sentry has been activated since the attacker has entered the range of the sentry building. Base Damage Percentage: {}. Artifacts collected by attacker: {}. Number of Attackers remaining: {}, Attacker Health: {}", self.damage_percentage, self.artifacts, self.attacker_death_count, self.attacker.as_ref().unwrap().attacker_health));
+                            tokio::spawn(future);
+                            log::info!("taunt_generator has been called");
+                            log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                        }
+                    }
                     sentry.sentry_start_time = SystemTime::now();
                     if is_attacker_in_range {
                         sentry.target_id = 0;

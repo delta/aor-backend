@@ -1,16 +1,19 @@
-use std::collections::{HashMap, HashSet};
-
 use self::{
     state::State,
     util::{send_terminate_game_message, Attacker, BombType, DefenderReturnType, MineDetails},
 };
 use crate::{
+    api::attack::util::reset_taunt_status,
+    constants::{MAX_TAUNT_REQUESTS, TAUNT_DELAY_TIME},
+};
+use crate::{
     api::attack::{
+        get_taunt,
         socket::{
             ActionType, BaseItemsDamageResponse, ChallengeResponse, ResultType, SocketRequest,
             SocketResponse,
         },
-        util::{EventResponse, GameLog},
+        util::{EventResponse, GameLog, TauntStatus, TAUNTS},
     },
     constants::COMPANION_BOT_RANGE,
     models::AttackerType,
@@ -21,6 +24,13 @@ use challenges::maze_place_attacker_handle;
 use util::{Companion, CompanionResult, MineResponse, Path};
 
 pub mod challenges;
+use r2d2::event;
+use std::time::{Duration, SystemTime};
+use std::{
+    char::MAX,
+    collections::{HashMap, HashSet},
+    time::UNIX_EPOCH,
+};
 pub mod error;
 pub mod state;
 pub mod util;
@@ -53,6 +63,7 @@ pub fn game_handler(
                     defender_damaged: None,
                     total_damage_percentage: Some(_game_state.damage_percentage),
                     is_sync: false,
+                    new_taunt: None,
                     is_game_over: false,
                     message: Some(String::from("Skipped repeated or invalid frame")),
                     bullet_hits: Some(vec![]),
@@ -80,6 +91,7 @@ pub fn game_handler(
                 defender_damaged: None,
                 total_damage_percentage: Some(_game_state.damage_percentage),
                 is_sync: false,
+                new_taunt: None,
                 is_game_over: false,
                 message: Some(String::from("Bullet Hit")),
                 bullet_hits: Some(ranged_attack_result.bullet_hits),
@@ -105,6 +117,7 @@ pub fn game_handler(
                     total_damage_percentage: Some(_game_state.damage_percentage),
                     is_sync: false,
                     is_game_over: false,
+                    new_taunt: None,
                     message: Some(String::from("UAV Reveal")),
                     bullet_hits: None,
                     revealed_mines: Some(revealed_mines.clone()),
@@ -120,6 +133,7 @@ pub fn game_handler(
                     frame_number: socket_request.frame_number,
                     result_type: ResultType::UAV,
                     is_alive: Some(true),
+                    new_taunt: None,
                     attacker_health: None,
                     exploded_mines: None,
                     defender_damaged: None,
@@ -229,6 +243,7 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::PlacedAttacker,
                 is_alive: Some(true),
+                new_taunt: None,
                 attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
@@ -287,7 +302,7 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::PlacedCompanion,
                 is_alive: Some(true),
-
+                new_taunt: None,
                 attacker_health: None,
                 exploded_mines: None,
                 // triggered_defenders: None,
@@ -341,6 +356,41 @@ pub fn game_handler(
                 defender_damaged_result = _game_state
                     .defender_movement_one_tick(socket_request.current_position?, _shortest_path);
 
+                // for coord in attacker_delta {
+                //     let mut direction = Direction::Up;
+
+                //     let prev_pos = _game_log.e.last().unwrap().coords;
+                //     if prev_pos.x < coord.x {
+                //         direction = Direction::Down;
+                //     } else if prev_pos.x > coord.x {
+                //         direction = Direction::Up;
+                //     } else if prev_pos.y < coord.y {
+                //         direction = Direction::Left;
+                //     } else if prev_pos.y > coord.y {
+                //         direction = Direction::Right;
+                //     }
+
+                //     let event_response = EventResponse {
+                //         attacker_id: None,
+                //         bomb_id: None,
+                //         coords: coord,
+                //         direction,
+                //         is_bomb: false,
+                //     };
+
+                //     _game_log.e.push(event_response.clone());
+                // }
+
+                // let mut bool_temp = false;
+                // if attacker_result_clone.unwrap().trigger_defender {
+                //     bool_temp = true;
+                // }
+                // let result_type = if bool_temp {
+                //     ResultType::DefendersDamaged
+                // } else {
+                //     ResultType::Nothing
+                // };
+
                 let mut is_attacker_alive = true;
 
                 if let Some(attacker) = &_game_state.attacker {
@@ -365,6 +415,19 @@ pub fn game_handler(
                     return Some(Ok(response));
                 }
 
+                let mut taunt_string: Option<String> = None;
+                unsafe {
+                    if TAUNTS.taunt_status == TauntStatus::NewTauntAvailable {
+                        taunt_string = Some(
+                            TAUNTS
+                                .taunt_list
+                                .last()
+                                .unwrap_or(&String::from(""))
+                                .to_string(),
+                        );
+                    }
+                }
+
                 let spawn_result = _game_state
                     .spawn_hut_defender(
                         _roads,
@@ -387,7 +450,8 @@ pub fn game_handler(
                     _game_state.cause_bullet_damage();
                 }
 
-                let companion_res = _game_state.move_companion(_roads, _shortest_path);
+                let companion_res = _game_state
+                    .move_companion(_roads, _shortest_path);
 
                 //if we get companion result we get set base_items_damaged
                 let damaged_base_items = if let Some(companion_res) = companion_res.as_ref() {
@@ -423,8 +487,40 @@ pub fn game_handler(
                 let hut_triggered = !spawn_result.is_empty();
 
                 let result_type = if hut_triggered {
+                    unsafe {
+                        if TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                            && (SystemTime::now()
+                                .duration_since(TAUNTS.prev_taunt_time)
+                                .unwrap()
+                                .as_millis()
+                                > TAUNT_DELAY_TIME
+                                || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                        {
+                            log::info!("taunt_generator is being called");
+                            let future = get_taunt(format!("Defender Hut is triggered. A barrage of hut defenders will now chase the attacker. Base Damage Percentage: {}. Artifacts collected by attacker: {}. Number of Attackers remaining: {}, Attacker Health: {}", _game_state.damage_percentage, _game_state.artifacts, _game_state.attacker_death_count, _game_state.attacker.as_ref().unwrap().attacker_health));
+                            tokio::spawn(future);
+                            log::info!("taunt_generator has been called");
+                            log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                        }
+                    }
                     ResultType::SpawnHutDefender
                 } else if defender_damaged_result.clone().defender_response.len() > 0 {
+                    unsafe {
+                        if TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                            && (SystemTime::now()
+                                .duration_since(TAUNTS.prev_taunt_time)
+                                .unwrap()
+                                .as_millis()
+                                > TAUNT_DELAY_TIME
+                                || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                        {
+                            log::info!("taunt_generator is being called");
+                            let future = get_taunt(format!("Defenders activated and chasing the attacker. Base Damage Percentage: {}. Artifacts collected by attacker: {}. Number of Attackers remaining: {}, Attacker Health: {}", _game_state.damage_percentage, _game_state.artifacts, _game_state.attacker_death_count, _game_state.attacker.as_ref().unwrap().attacker_health));
+                            tokio::spawn(future);
+                            log::info!("taunt_generator has been called");
+                            log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                        }
+                    }
                     ResultType::DefendersDamaged
                 } else {
                     ResultType::BuildingsDamaged
@@ -452,6 +548,7 @@ pub fn game_handler(
                     total_damage_percentage: Some(_game_state.damage_percentage),
                     is_sync: false,
                     is_game_over: false,
+                    new_taunt: taunt_string,
                     shoot_bullets: Some(shoot_bullets),
                     message: Some(String::from("Movement Response")),
                     companion: companion_res,
@@ -477,6 +574,39 @@ pub fn game_handler(
                 ResultType::Nothing
             };
 
+            unsafe {
+                if result_type == ResultType::MinesExploded
+                    && TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                    && (SystemTime::now()
+                        .duration_since(TAUNTS.prev_taunt_time)
+                        .unwrap()
+                        .as_millis()
+                        > TAUNT_DELAY_TIME
+                        || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                {
+                    log::info!("taunt_generator is being called");
+                    let future = get_taunt(format!("Mine Exploded. Base Damage Percentage: {}. Artifacts collected: {}. Number of Attackers remaining: {}, Attacker Health: {}", _game_state.damage_percentage, _game_state.artifacts, _game_state.attacker_death_count, _game_state.attacker.as_ref().unwrap().attacker_health));
+                    tokio::spawn(future);
+                    log::info!("taunt_generator has been called");
+                    log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                } else if _game_state.damage_percentage > 50.0
+                    && _game_state.damage_percentage < 55.0
+                    && TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                    && (SystemTime::now()
+                        .duration_since(TAUNTS.prev_taunt_time)
+                        .unwrap()
+                        .as_millis()
+                        > TAUNT_DELAY_TIME
+                        || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                {
+                    log::info!("taunt_generator is being called");
+                    let future = get_taunt(format!("Attacker has destroyed half the base. Base Damage Percentage: {}. Artifacts collected: {}. Number of Attackers remaining: {}, Attacker Health: {}", _game_state.damage_percentage, _game_state.artifacts, _game_state.attacker_death_count, _game_state.attacker.as_ref().unwrap().attacker_health));
+                    tokio::spawn(future);
+                    log::info!("taunt_generator has been called");
+                    log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                }
+            }
+
             let mut is_attacker_alive = true;
 
             if let Some(attacker) = &_game_state.attacker {
@@ -492,6 +622,19 @@ pub fn game_handler(
                 )));
             }
 
+            let mut taunt_string: Option<String> = None;
+            unsafe {
+                if TAUNTS.taunt_status == TauntStatus::NewTauntAvailable {
+                    taunt_string = Some(
+                        TAUNTS
+                            .taunt_list
+                            .last()
+                            .unwrap_or(&String::from(""))
+                            .to_string(),
+                    );
+                }
+            }
+
             let attacker_health = _game_state
                 .attacker
                 .as_ref()
@@ -501,6 +644,7 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type,
                 is_alive: Some(is_attacker_alive),
+                new_taunt: taunt_string,
                 attacker_health,
                 exploded_mines: Some(exploded_mines_result),
                 // triggered_defenders: None,
@@ -573,12 +717,56 @@ pub fn game_handler(
             } else {
                 ResultType::Nothing
             };
+            unsafe {
+                if result_type == ResultType::BuildingsDamaged
+                    && TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                    && (SystemTime::now()
+                        .duration_since(TAUNTS.prev_taunt_time)
+                        .unwrap()
+                        .as_millis()
+                        > TAUNT_DELAY_TIME
+                        || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                {
+                    log::info!("taunt_generator is being called");
+                    let future = get_taunt(format!("Attacker dropped a bomb and damaged buildings. Base Damage Percentage: {}. Artifacts collected by attacker: {}. Number of Attackers remaining: {}, Attacker Health: {}", _game_state.damage_percentage, _game_state.artifacts, _game_state.attacker_death_count, _game_state.attacker.as_ref().unwrap().attacker_health));
+                    tokio::spawn(future);
+                    log::info!("taunt_generator has been called");
+                    log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                } else if result_type == ResultType::Nothing
+                    && TAUNTS.taunt_count < MAX_TAUNT_REQUESTS
+                    && (SystemTime::now()
+                        .duration_since(TAUNTS.prev_taunt_time)
+                        .unwrap()
+                        .as_millis()
+                        > TAUNT_DELAY_TIME
+                        || TAUNTS.prev_taunt_time == UNIX_EPOCH)
+                {
+                    log::info!("taunt_generator is being called");
+                    let future = get_taunt(format!("Attacker dropped a bomb but no buildings were damaged. Base Damage Percentage: {}. Artifacts collected by attacker: {}. Number of Attackers remaining: {}, Attacker Health: {}", _game_state.damage_percentage, _game_state.artifacts, _game_state.attacker_death_count, _game_state.attacker.as_ref().unwrap().attacker_health));
+                    tokio::spawn(future);
+                    log::info!("taunt_generator has been called");
+                    log::info!("Taunt count : {}", TAUNTS.taunt_count);
+                }
+            }
 
             if _game_state.in_validation.is_invalidated {
                 return Some(Ok(send_terminate_game_message(
                     socket_request.frame_number,
                     _game_state.in_validation.message.clone(),
                 )));
+            }
+
+            let mut taunt_string: Option<String> = None;
+            unsafe {
+                if TAUNTS.taunt_status == TauntStatus::NewTauntAvailable {
+                    taunt_string = Some(
+                        TAUNTS
+                            .taunt_list
+                            .last()
+                            .unwrap_or(&String::from(""))
+                            .to_string(),
+                    );
+                }
             }
 
             let attacker_health = _game_state
@@ -589,6 +777,7 @@ pub fn game_handler(
             return Some(Ok(SocketResponse {
                 frame_number: socket_request.frame_number,
                 result_type,
+                new_taunt: taunt_string,
                 is_alive: Some(true),
                 attacker_health,
                 exploded_mines: None,
@@ -609,6 +798,18 @@ pub fn game_handler(
             }));
         }
         ActionType::Idle => {
+            let mut taunt_string: Option<String> = None;
+            unsafe {
+                if TAUNTS.taunt_status == TauntStatus::NewTauntAvailable {
+                    taunt_string = Some(
+                        TAUNTS
+                            .taunt_list
+                            .last()
+                            .unwrap_or(&String::from(""))
+                            .to_string(),
+                    );
+                }
+            }
             let attacker_health = _game_state
                 .attacker
                 .as_ref()
@@ -617,6 +818,7 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::Nothing,
                 is_alive: Some(true),
+                new_taunt: taunt_string,
                 attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
@@ -646,6 +848,7 @@ pub fn game_handler(
                 is_alive: None,
                 attacker_health,
                 exploded_mines: None,
+                new_taunt: None,
                 // triggered_defenders: None,
                 defender_damaged: None,
                 damaged_base_items: None,
@@ -661,9 +864,22 @@ pub fn game_handler(
                 bullet_hits: None,
                 revealed_mines: None,
             };
+            reset_taunt_status();
             return Some(Ok(socket_response));
         }
         ActionType::SelfDestruct => {
+            let mut taunt_string: Option<String> = None;
+            unsafe {
+                if TAUNTS.taunt_status == TauntStatus::NewTauntAvailable {
+                    taunt_string = Some(
+                        TAUNTS
+                            .taunt_list
+                            .last()
+                            .unwrap_or(&String::from(""))
+                            .to_string(),
+                    );
+                }
+            }
             _game_state.self_destruct();
             let attacker_health = _game_state
                 .attacker
@@ -673,6 +889,7 @@ pub fn game_handler(
                 frame_number: socket_request.frame_number,
                 result_type: ResultType::Nothing,
                 is_alive: Some(false),
+                new_taunt: taunt_string,
                 attacker_health,
                 exploded_mines: None,
                 // triggered_defenders: None,
