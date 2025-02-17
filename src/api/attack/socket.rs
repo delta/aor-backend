@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 // use crate::validator::util::Coords;
-use crate::{
-    validator::util::Coords,
-    validator::util::{Attacker, BombType, BuildingDetails, DefenderDetails, MineDetails},
+use crate::validator::{
+    self,
+    util::{
+        Attacker, BombType, BuildingDetails, BulletSpawnResponse, CompanionResult, Coords,
+        DefenderDetails, DefenderTarget, MineDetails,
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -12,8 +15,8 @@ pub struct SocketRequest {
     pub action_type: ActionType,
     pub attacker_id: Option<i32>,
     pub bomb_id: Option<i32>,
-    pub start_position: Option<Coords>,
-    pub attacker_path: Vec<Coords>,
+    pub current_position: Option<Coords>,
+    // pub attacker_path: Vec<Coords>,
     pub bomb_position: Coords,
     pub is_game_over: Option<bool>,
 }
@@ -24,28 +27,41 @@ pub struct SocketResponse {
     pub result_type: ResultType,
     pub is_alive: Option<bool>,
     pub attacker_health: Option<i32>,
-    pub exploded_mines: Option<Vec<MineDetails>>,
+    pub exploded_mines: Option<Vec<validator::util::MineResponse>>,
     // pub triggered_defenders: Option<Vec<DefenderResponse>>,
     pub defender_damaged: Option<Vec<DefenderResponse>>,
     pub hut_triggered: bool,
     pub hut_defenders: Option<Vec<DefenderDetails>>,
-    pub damaged_buildings: Option<Vec<BuildingResponse>>,
+    pub damaged_base_items: Option<BaseItemsDamageResponse>,
     pub total_damage_percentage: Option<f32>,
     pub is_sync: bool,
+    pub new_taunt: Option<String>,
     // pub state: Option<GameStateResponse>,
     pub is_game_over: bool,
     pub message: Option<String>,
+    pub shoot_bullets: Option<Vec<BulletSpawnResponse>>,
+    pub companion: Option<CompanionResult>,
+    pub challenge: Option<ChallengeResponse>,
+    pub bullet_hits: Option<Vec<BulletHit>>,
+    pub revealed_mines: Option<Vec<MineDetails>>,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChallengeResponse {
+    pub score: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum ActionType {
     IsMine,
     PlaceAttacker,
+    PlaceCompanion,
     MoveAttacker,
     PlaceBombs,
     Idle,
     Terminate,
     SelfDestruct,
+    CheckBullets,
+    UavStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -57,7 +73,10 @@ pub enum ResultType {
     BuildingsDamaged,
     GameOver,
     PlacedAttacker,
+    PlacedCompanion,
     Nothing,
+    BulletHit,
+    UAV,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -70,17 +89,31 @@ pub struct MineResponse {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct DefenderResponse {
-    pub id: i32,
+    pub map_space_id: i32,
     pub position: Coords,
     pub damage: i32,
+    pub target_id: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct BuildingResponse {
+pub struct BuildingDamageResponse {
     pub id: i32,
     pub position: Coords,
     pub hp: i32,
     pub artifacts_if_damaged: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DefenderDamageResponse {
+    pub map_space_id: i32,
+    pub position: Coords,
+    pub health: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BaseItemsDamageResponse {
+    pub buildings_damaged: Vec<BuildingDamageResponse>,
+    pub defenders_damaged: Vec<DefenderDamageResponse>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -103,4 +136,12 @@ pub struct GameStateResponse {
     pub mines: Vec<MineDetails>,
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BulletHit {
+    pub defender_id: i32,
+    pub target_id: i32,
+    pub damage: i32,
+    pub position: Coords,
 }

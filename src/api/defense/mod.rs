@@ -8,12 +8,26 @@ use super::PgPool;
 use super::RedisPool;
 use crate::api::error;
 use crate::api::util::HistoryboardQuery;
+use crate::constants::MOD_USER_BASE_PATH;
 use crate::models::*;
+use crate::validator::util::BombType;
+use crate::validator::util::Coords;
 use actix_web::error::{ErrorBadRequest, ErrorNotFound};
+use actix_web::web::Query;
 use actix_web::web::{self, Data, Json};
 use actix_web::{Responder, Result};
+use diesel::PgConnection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::fs::OpenOptions;
+use std::hash::Hash;
+use std::io::Read;
+use std::io::Write;
+use util::AdminBaseRequest;
+use util::AdminSaveData;
+use util::ChallengeData;
 
 pub mod shortest_path;
 pub mod util;
@@ -25,10 +39,13 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
             .route(web::put().to(set_base_details))
             .route(web::get().to(get_user_base_details)),
     )
+    .service(web::resource("/admin_base").route(web::get().to(get_admin_base)))
     .service(web::resource("/top").route(web::get().to(get_top_defenses)))
     .service(web::resource("/transfer").route(web::post().to(post_transfer_artifacts)))
     .service(web::resource("/batch_transfer").route(web::post().to(post_batch_transfer_artifacts)))
     .service(web::resource("/save").route(web::put().to(confirm_base_details)))
+    .service(web::resource("/save_admin").route(web::put().to(save_admin_base)))
+    .service(web::resource("/delete_admin/{map_id}").route(web::delete().to(delete_admin_base)))
     .service(web::resource("/game/{id}").route(web::get().to(get_game_base_details)))
     .service(web::resource("/history").route(web::get().to(defense_history)))
     .service(web::resource("/{defender_id}").route(web::get().to(get_other_base_details)))
@@ -217,7 +234,10 @@ async fn post_batch_transfer_artifacts(
     }
 
     let transfers = batch_transfer.into_inner().transfers;
-    let total_artifact_differ: i32 = transfers.iter().map(|transfer| transfer.artifacts_differ).sum();    
+    let total_artifact_differ: i32 = transfers
+        .iter()
+        .map(|transfer| transfer.artifacts_differ)
+        .sum();
     let mut responses = Vec::new();
     let mut accum_val: i32 = 0;
 
@@ -275,8 +295,8 @@ async fn post_batch_transfer_artifacts(
         })
         .await?
         .map_err(|err| error::handle_error(err.into()))?;
-        
-        if total_artifact_differ > bank_artifact_count+accum_val {
+
+        if total_artifact_differ > bank_artifact_count + accum_val {
             return Err(ErrorBadRequest("Not enough artifacts in the bank"));
         }
 
@@ -356,6 +376,59 @@ async fn get_user_base_details(pool: Data<PgPool>, user: AuthUser) -> Result<imp
     .map_err(|err| error::handle_error(err.into()))?;
 
     Ok(Json(response))
+}
+
+async fn get_admin_base(
+    base_req: Query<AdminBaseRequest>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let defender_id = user.0;
+    let base_req = base_req.into_inner();
+    let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
+        pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let is_mod = web::block(move || fetch_user(&mut conn, defender_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+        .unwrap()
+        .is_mod;
+
+    //log::info!("{:?}", base_req.map_id);
+    let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+    //log::info!("Json path: {}", json_path.display());
+    let mut json_data_str = String::new();
+    if json_path.exists() {
+        let mut file = fs::File::open(json_path.clone())?;
+        file.read_to_string(&mut json_data_str)?;
+    }
+
+    let json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
+        HashMap::new()
+    } else {
+        serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+    };
+
+    let default_user_rec = HashMap::new();
+    let map_data = json_data.get(&defender_id).unwrap_or(&default_user_rec);
+    let map_data = map_data
+        .get(&base_req.map_id)
+        .unwrap_or(&AdminSaveData {
+            map_id: base_req.map_id,
+            building: Vec::new(),
+            defenders: Vec::new(),
+            mine_type: Vec::new(),
+            road: Vec::new(),
+            challenge: ChallengeData {
+                start_tile: Coords { x: 0, y: 0 },
+                end_tile: Coords { x: 0, y: 0 },
+                attacker_health: 0,
+                bomb_damage: 0,
+                bomb_radius: 0,
+            },
+        })
+        .clone();
+    Ok(Json(map_data))
 }
 
 async fn get_other_base_details(
@@ -462,7 +535,8 @@ async fn confirm_base_details(
     }
 
     let map_spaces = map_spaces.into_inner();
-    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
+        pool.get().map_err(|err| error::handle_error(err.into()))?;
     let (map, blocks, mut level_constraints, buildings, defenders, mines, user_artifacts) =
         web::block(move || {
             let map = util::fetch_map_layout(&mut conn, &defender_id)?;
@@ -508,6 +582,102 @@ async fn confirm_base_details(
     .map_err(|err| error::handle_error(err.into()))?;
 
     Ok("Saved successfully")
+}
+
+async fn save_admin_base(
+    save_data: Json<AdminSaveData>,
+    redis_pool: Data<RedisPool>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let defender_id = user.0;
+    let save_data = save_data.into_inner();
+    let mut conn: r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> =
+        pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let is_mod = web::block(move || fetch_user(&mut conn, defender_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+        .unwrap()
+        .is_mod;
+
+    if is_mod {
+        log::info!("save data response: {:?}", save_data);
+        let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+        //log::info!("Json path: {}", json_path.display());
+        let mut json_data_str = String::new();
+        if json_path.exists() {
+            let mut file = fs::File::open(json_path.clone())?;
+            file.read_to_string(&mut json_data_str)?;
+        }
+
+        let mut json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
+            HashMap::new()
+        } else {
+            serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+        };
+        let user_record = json_data.get_mut(&defender_id);
+        if let Some(user_record) = user_record {
+            user_record.insert(save_data.map_id, save_data);
+        } else {
+            let mut user_record = HashMap::new();
+            user_record.insert(save_data.map_id, save_data);
+            json_data.insert(defender_id, user_record);
+        }
+
+        //log::info!("Json data {:?}", json_data);
+
+        let updated_json_str = serde_json::to_string_pretty(&json_data)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(json_path)?;
+        file.write_all(updated_json_str.as_bytes())?;
+    }
+    Ok("Saved Admin")
+}
+
+async fn delete_admin_base(
+    map_id: web::Path<i32>,
+    pool: Data<PgPool>,
+    user: AuthUser,
+) -> Result<impl Responder> {
+    let defender_id = user.0;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+
+    let is_mod = web::block(move || fetch_user(&mut conn, defender_id))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+        .unwrap()
+        .is_mod;
+
+    if is_mod {
+        let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
+        //log::info!("Json path: {}", json_path.display());
+        let mut json_data_str = String::new();
+        if json_path.exists() {
+            let mut file = fs::File::open(json_path.clone())?;
+            file.read_to_string(&mut json_data_str)?;
+        }
+
+        let mut json_data: HashMap<i32, HashMap<i32, AdminSaveData>> = if json_data_str.is_empty() {
+            HashMap::new()
+        } else {
+            serde_json::from_str(&json_data_str).unwrap_or_else(|_| HashMap::new())
+        };
+        let user_record = json_data.get_mut(&defender_id);
+        if let Some(user_record) = user_record {
+            user_record.remove(&map_id);
+        }
+
+        let updated_json_str = serde_json::to_string_pretty(&json_data)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(json_path)?;
+        file.write_all(updated_json_str.as_bytes())?;
+    }
+    Ok("Deleted")
 }
 
 async fn defense_history(

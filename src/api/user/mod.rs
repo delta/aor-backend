@@ -5,7 +5,7 @@ use crate::models::UpdateUser;
 use actix_web::error::{ErrorBadRequest, ErrorConflict, ErrorNotFound};
 use actix_web::web::{self, Data, Json, Path};
 use actix_web::{Responder, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 pub mod util;
 
@@ -13,7 +13,8 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/update").route(web::patch().to(update_user)))
         .service(web::resource("/profile/{player_id}").route(web::get().to(view_user_profile)))
         .service(web::resource("/register").route(web::post().to(register)))
-        .service(web::resource("/{id}/stats").route(web::get().to(get_user_stats)));
+        .service(web::resource("/{id}/stats").route(web::get().to(get_user_stats)))
+        .service(web::resource("/update-avatar").route(web::patch().to(update_avatar_id)));
 }
 
 #[derive(Clone, Deserialize)]
@@ -22,14 +23,14 @@ pub struct InputUser {
     username: String,
 }
 
-#[derive(Debug, Serialize)]
-struct ErrorResponse {
-    message: String,
-}
-#[derive(Debug, Serialize)]
-struct SuccessResponse {
-    message: String,
-}
+// #[derive(Debug, Serialize)]
+// struct ErrorResponse {
+//     message: String,
+// }
+// #[derive(Debug, Serialize)]
+// struct SuccessResponse {
+//     message: String,
+// }
 async fn register(
     pg_pool: Data<PgPool>,
     redis_pool: Data<RedisPool>,
@@ -138,4 +139,13 @@ async fn view_user_profile(player_id: Path<i32>, pool: Data<PgPool>) -> Result<i
     } else {
         Err(ErrorNotFound("User not found"))
     }
+}
+
+async fn update_avatar_id(pool: Data<PgPool>, user: AuthUser, user_details: Json<UpdateUser>) -> Result<impl Responder> {
+    let user_id = user.0;
+    let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
+    web::block(move || util::update_user(&mut conn, user_id, &user_details))
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?;
+    Ok("Avatar updated successfully")
 }

@@ -15,14 +15,13 @@ use crate::api::{self, RedisConn};
 use crate::constants::*;
 use crate::error::DieselError;
 use crate::models::{
-    Artifact, AttackerType, AvailableBlocks, BlockCategory, BlockType, BuildingType, DefenderType,
-    EmpType, Game, LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop,
-    User,
+    Artifact, AttackerType, BlockCategory, BlockType, BuildingType, DefenderType, EmpType, Game,
+    LevelsFixture, MapLayout, MapSpaces, MineType, NewAttackerPath, NewGame, Prop, User,
 };
-use crate::schema::{block_type, building_type, defender_type, map_spaces, prop, user};
+use crate::schema::{block_type, building_type, defender_type, map_layout, map_spaces, prop, user};
 use crate::util::function;
-use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
+use crate::validator::util::{Coords, HutDefenderDetails};
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use chrono;
@@ -33,8 +32,34 @@ use rand::seq::IteratorRandom;
 use redis::Commands;
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::socket::BuildingResponse;
+use super::socket::BuildingDamageResponse;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ContentPart {
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TauntContent {
+    pub parts: Vec<ContentPart>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RequestBody {
+    pub contents: Vec<TauntContent>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TauntCandidate {
+    pub content: TauntContent,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ApiResponse {
+    pub candidates: Vec<TauntCandidate>,
+}
 
 #[derive(Debug, Serialize)]
 pub struct DefensePosition {
@@ -64,13 +89,13 @@ pub struct AttackToken {
     pub iat: usize,
     pub exp: usize,
 }
-#[derive(Serialize, Clone, Debug)]
-pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
+// #[derive(Serialize, Clone, Debug)]
+// pub enum Direction {
+//     Up,
+//     Down,
+//     Left,
+//     Right,
+// }
 
 #[derive(Serialize, Clone, Debug)]
 pub struct EventResponse {
@@ -78,7 +103,7 @@ pub struct EventResponse {
     pub attacker_id: Option<i32>,
     pub bomb_id: Option<i32>,
     pub coords: Coords,
-    pub direction: Direction,
+    // pub direction: Direction,
     pub is_bomb: bool,
 }
 
@@ -92,6 +117,7 @@ pub struct ResultResponse {
     pub nd: i32, //new_defender_trophies
     pub oa: i32, //old_attacker_trophies
     pub od: i32, //old_defender_trophies
+    pub sc: i32, //challenge_score
 }
 
 #[derive(Serialize, Clone)]
@@ -102,6 +128,55 @@ pub struct GameLog {
     pub b: SimulationBaseResponse, //base
     pub e: Vec<EventResponse>,     //events
     pub r: ResultResponse,         //result
+}
+
+#[derive(Deserialize, Debug)]
+pub struct GeminiApiResponse {
+    pub candidates: Vec<TauntCandidate>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Candidate {
+    pub content: TauntContent,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Content {
+    pub parts: Vec<Part>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Part {
+    pub text: String,
+}
+
+pub struct Taunts {
+    pub taunt_list: Vec<String>,
+    pub taunt_count: i32,
+    pub prev_taunt_time: SystemTime,
+    pub taunt_status: TauntStatus
+}
+
+#[derive(PartialEq)]
+pub enum TauntStatus {
+    NewTauntAvailable,
+    TauntSentToOpponent,
+}
+
+pub static mut TAUNTS: Taunts = Taunts {
+    taunt_list: Vec::new(),
+    taunt_count: 0,
+    prev_taunt_time: UNIX_EPOCH,
+    taunt_status: TauntStatus::TauntSentToOpponent,
+};
+
+pub fn reset_taunt_status() {
+    unsafe {
+        TAUNTS.taunt_status = TauntStatus::TauntSentToOpponent;
+        TAUNTS.taunt_count = 0;
+        TAUNTS.prev_taunt_time = UNIX_EPOCH;
+        TAUNTS.taunt_list = Vec::new();
+    }
 }
 
 pub fn get_map_id(defender_id: &i32, conn: &mut PgConnection) -> Result<Option<i32>> {
@@ -144,6 +219,7 @@ pub fn add_game(
     defender_id: i32,
     map_layout_id: i32,
     conn: &mut PgConnection,
+    is_self_attack: bool,
 ) -> Result<i32> {
     use crate::schema::game;
 
@@ -161,8 +237,9 @@ pub fn add_game(
         is_game_over: &false,
         date: &chrono::Local::now().date_naive(),
     };
-
-    let inserted_game: Game = diesel::insert_into(game::table)
+    let inserted_game: Game;
+    if !is_self_attack {
+        inserted_game = diesel::insert_into(game::table)
         .values(&new_game)
         .get_result(conn)
         .map_err(|err| DieselError {
@@ -170,8 +247,10 @@ pub fn add_game(
             function: function!(),
             error: err,
         })?;
-
-    Ok(inserted_game.id)
+        Ok(inserted_game.id)
+    } else {
+        Ok(-1)
+    }
 }
 
 pub fn fetch_attack_history(
@@ -425,7 +504,7 @@ pub fn add_game_id_to_redis(
     mut redis_conn: RedisConn,
 ) -> Result<()> {
     redis_conn
-        .set_ex(
+        .set_ex::<_, _, ()>(
             format!("Attacker:{}", attacker_id),
             game_id,
             GAME_AGE_IN_MINUTES * 60,
@@ -433,7 +512,7 @@ pub fn add_game_id_to_redis(
         .map_err(|err| anyhow::anyhow!("Failed to set attacker key: {}", err))?;
 
     redis_conn
-        .set_ex(
+        .set_ex::<_, _, ()>(
             format!("Defender:{}", defender_id),
             game_id,
             GAME_AGE_IN_MINUTES * 60,
@@ -467,10 +546,10 @@ pub fn delete_game_id_from_redis(
     redis_conn: &mut RedisConn,
 ) -> Result<()> {
     redis_conn
-        .del(format!("Attacker:{}", attacker_id))
+        .del::<_, ()>(format!("Attacker:{}", attacker_id))
         .map_err(|err| anyhow::anyhow!("Failed to delete attacker key: {}", err))?;
     redis_conn
-        .del(format!("Defender:{}", defender_id))
+        .del::<_, ()>(format!("Defender:{}", defender_id))
         .map_err(|err| anyhow::anyhow!("Failed to delete defender key: {}", err))?;
 
     Ok(())
@@ -554,18 +633,23 @@ pub fn get_mines(conn: &mut PgConnection, map_id: i32) -> Result<Vec<MineDetails
                 x: map_space.x_coordinate,
                 y: map_space.y_coordinate,
             },
+            name: mine_type.name,
         })
         .collect();
 
     Ok(mines)
 }
 
+/*
+* to get defenders of a map, just map_id is enough
+* TODO: Remove this redundnat user_id variable
+ */
 pub fn get_defenders(
     conn: &mut PgConnection,
     map_id: i32,
     user_id: i32,
 ) -> Result<Vec<DefenderDetails>> {
-    use crate::schema::{available_blocks, block_type, defender_type, map_spaces};
+    use crate::schema::{block_type, defender_type, map_spaces};
     // let result: Vec<(
     //     MapSpaces,
     //     (BlockType, AvailableBlocks, BuildingType, DefenderType),
@@ -588,23 +672,39 @@ pub fn get_defenders(
     //         error: err,
     //     })?;
 
-    let result: Vec<(
-        MapSpaces,
-        (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
-    )> = map_spaces::table
+    // let result = available_blocks::table
+    // .inner_join(block_type::table)
+    // .filter(block_type::category.eq(BlockCategory::Defender))
+    // .inner_join(defender_type::table.on(block_type::category_id.eq(defender_type::id)))
+    // .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+    // .inner_join(map_spaces::table.on(block_type::id.eq(map_spaces::block_type_id)))
+    // .filter(map_spaces::map_id.eq(map_id))
+    // .filter(available_blocks::user_id.eq(user_id))
+    // .load::<(AvailableBlocks, BlockType, DefenderType, Prop, MapSpaces)>(conn)
+    // .map_err(|err| DieselError {
+    //     table: "map_spaces",
+    //     function: function!(),
+    //     error: err,
+    // })?;
+
+    let result = map_spaces::table
+        .inner_join(map_layout::table)
+        .filter(map_layout::player.eq(user_id))
+        .inner_join(block_type::table.on(map_spaces::block_type_id.eq(block_type::id)))
         .inner_join(
-            block_type::table
-                .inner_join(available_blocks::table)
-                .inner_join(building_type::table)
-                .inner_join(defender_type::table)
-                .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id))),
+            defender_type::table
+                .on(defender_type::id.eq(block_type::defender_type.assume_not_null())),
         )
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
         .filter(map_spaces::map_id.eq(map_id))
-        .filter(available_blocks::user_id.eq(user_id))
-        .load::<(
-            MapSpaces,
-            (BlockType, AvailableBlocks, BuildingType, DefenderType, Prop),
-        )>(conn)
+        .filter(block_type::category.eq(BlockCategory::Defender))
+        .select((
+            map_spaces::all_columns,
+            block_type::all_columns,
+            defender_type::all_columns,
+            prop::all_columns,
+        ))
+        .load::<(MapSpaces, BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "map_spaces",
             function: function!(),
@@ -613,11 +713,12 @@ pub fn get_defenders(
 
     let mut defenders: Vec<DefenderDetails> = Vec::new();
 
-    for (map_space, (block_type, _, _, defender, prop)) in result.iter() {
+    for (map_space, block_type, defender, prop) in result.iter() {
         let (hut_x, hut_y) = (map_space.x_coordinate, map_space.y_coordinate);
         // let path: Vec<(i32, i32)> = vec![(hut_x, hut_y)];
         defenders.push(DefenderDetails {
-            id: defender.id,
+            map_space_id: map_space.id,
+            name: defender.name.clone(),
             radius: prop.range,
             speed: defender.speed,
             damage: defender.damage,
@@ -628,6 +729,11 @@ pub fn get_defenders(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender.level,
+            current_health: defender.max_health,
+            max_health: defender.max_health,
+            range: prop.range,
+            frequency: prop.frequency,
+            last_attack: 0,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -657,7 +763,8 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
         .into_iter()
         .map(
             |(map_space, (block_type, building, prop))| BuildingDetails {
-                id: map_space.id,
+                block_id: block_type.id,
+                map_space_id: map_space.id,
                 current_hp: building.hp,
                 total_hp: building.hp,
                 artifacts_obtained: 0,
@@ -665,11 +772,11 @@ pub fn get_buildings(conn: &mut PgConnection, map_id: i32) -> Result<Vec<Buildin
                     x: map_space.x_coordinate,
                     y: map_space.y_coordinate,
                 },
+                level: building.level,
                 width: building.width,
-                name: building.name,
                 range: prop.range,
                 frequency: prop.frequency,
-                block_id: block_type.id,
+                name: building.name,
             },
         )
         .collect();
@@ -684,16 +791,19 @@ pub fn get_hut_defender(
         .inner_join(defender_type::table)
         .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
         .filter(defender_type::name.eq("Hut_Defender"));
-    let hut_defenders: Vec<DefenderDetails> = joined_table
+    let hut_defenders = joined_table
         .load::<(BlockType, DefenderType, Prop)>(conn)
         .map_err(|err| DieselError {
             table: "defender_type",
             function: function!(),
             error: err,
         })?
-        .into_iter()
-        .map(|(block_type, defender_type, prop)| DefenderDetails {
-            id: defender_type.id,
+        .into_iter();
+    let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
+    for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
+        hut_defender_array.push(DefenderDetails {
+            map_space_id: -1,
+            name: defender_type.name.clone(),
             radius: prop.range,
             speed: defender_type.speed,
             damage: defender_type.damage,
@@ -704,8 +814,15 @@ pub fn get_hut_defender(
             path_in_current_frame: Vec::new(),
             block_id: block_type.id,
             level: defender_type.level,
-        })
-        .collect();
+            current_health: defender_type.max_health,
+            max_health: defender_type.max_health,
+            range: 0,
+            frequency: 0,
+            last_attack:0 ,
+        });
+        log::info!("hut_defenders {:?}", i);
+    }
+    log::info!("hut_defenders array {:?}", hut_defender_array);
 
     let joined_table = map_spaces::table
         .inner_join(block_type::table)
@@ -725,14 +842,55 @@ pub fn get_hut_defender(
         .map(|(map_spaces, _, building)| (map_spaces.id, building.level))
         .collect();
 
+    log::info!("hut defeners {:?}", hut_defender_array);
     let mut hut_defenders_res: HashMap<i32, DefenderDetails> = HashMap::new();
-    for hut in huts {
-        if let Some(hut_defender) = hut_defenders.iter().find(|hd| hd.level == hut.1) {
+    for hut in huts.iter() {
+        log::info!("hut mapspaceid{:?}", hut.0);
+        if let Some(hut_defender) = hut_defender_array.iter().find(|hd| hd.level == hut.1) {
             hut_defenders_res.insert(hut.0, hut_defender.clone());
         }
     }
     log::info!("{:?}", hut_defenders_res);
     Ok(hut_defenders_res)
+}
+
+pub fn get_hut_defender_types(conn: &mut PgConnection) -> Result<Vec<DefenderDetails>> {
+    let joined_table = block_type::table
+        .inner_join(defender_type::table)
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+        .filter(defender_type::name.eq("Hut_Defender"));
+    let hut_defenders = joined_table
+        .load::<(BlockType, DefenderType, Prop)>(conn)
+        .map_err(|err| DieselError {
+            table: "defender_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter();
+    let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
+    for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
+        hut_defender_array.push(DefenderDetails {
+            map_space_id: -1,
+            name: defender_type.name.clone(),
+            radius: prop.range,
+            speed: defender_type.speed,
+            damage: defender_type.damage,
+            defender_pos: Coords { x: 0, y: 0 },
+            is_alive: true,
+            damage_dealt: false,
+            target_id: None,
+            path_in_current_frame: Vec::new(),
+            block_id: block_type.id,
+            level: defender_type.level,
+            current_health: defender_type.max_health,
+            max_health: defender_type.max_health,
+            frequency: prop.frequency,
+            range: prop.range,
+            last_attack: 0,
+        });
+        log::info!("hut_defenders {:?}", i);
+    }
+    Ok(hut_defender_array)
 }
 
 pub fn get_bomb_types(conn: &mut PgConnection) -> Result<Vec<BombType>> {
@@ -781,7 +939,8 @@ pub fn update_buidling_artifacts(
 
     // Update the buildings with the artifact count
     for building in buildings.iter_mut() {
-        building.artifacts_obtained = *artifact_count.get(&building.id).unwrap_or(&0) as i32;
+        building.artifacts_obtained =
+            *artifact_count.get(&building.map_space_id).unwrap_or(&0) as i32;
     }
 
     Ok(buildings)
@@ -790,30 +949,31 @@ pub fn update_buidling_artifacts(
 pub fn terminate_game(
     game_log: &mut GameLog,
     conn: &mut PgConnection,
-    damaged_buildings: &[BuildingResponse],
+    damaged_buildings: &[BuildingDamageResponse],
     redis_conn: &mut RedisConn,
+    is_self_attack: bool,
 ) -> Result<()> {
-    use crate::schema::{artifact, game};
     let attacker_id = game_log.a.id;
     let defender_id = game_log.d.id;
-    let damage_done = game_log.r.d;
-    let bombs_used = game_log.r.b;
-    let artifacts_collected = game_log.r.a;
     let game_id = game_log.g;
-    log::info!(
-        "Terminating game for game:{} and attacker:{} and opponent:{}",
-        game_id,
-        attacker_id,
-        defender_id
-    );
+    if !is_self_attack {
+        use crate::schema::{artifact, game};
+        let damage_done = game_log.r.d;
+        let bombs_used = game_log.r.b;
+        let artifacts_collected = game_log.r.a;
+        log::info!(
+            "Terminating game for game:{} and attacker:{} and opponent:{}",
+            game_id,
+            attacker_id,
+            defender_id
+        );
 
-    let (attack_score, defense_score) = if damage_done < WIN_THRESHOLD {
-        (damage_done - 100, 100 - damage_done)
-    } else {
-        (damage_done, -damage_done)
-    };
-
-    let attacker_details = user::table
+        let (attack_score, defense_score) = if damage_done < WIN_THRESHOLD {
+            (damage_done - 100, 100 - damage_done)
+        } else {
+            (damage_done, -damage_done)
+        };
+        let attacker_details = user::table
         .filter(user::id.eq(attacker_id))
         .first::<User>(conn)
         .map_err(|err| DieselError {
@@ -822,102 +982,102 @@ pub fn terminate_game(
             error: err,
         })?;
 
-    let defender_details = user::table
-        .filter(user::id.eq(defender_id))
-        .first::<User>(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
+        let defender_details = user::table
+            .filter(user::id.eq(defender_id))
+            .first::<User>(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
 
-    let attack_score = attack_score as f32 / 100_f32;
-    let defence_score = defense_score as f32 / 100_f32;
+        let attack_score = attack_score as f32 / 100_f32;
+        let defence_score = defense_score as f32 / 100_f32;
 
-    let new_trophies = new_rating(
-        attacker_details.trophies,
-        defender_details.trophies,
-        attack_score,
-        defence_score,
-    );
-
-    //Add bonus trophies (just call the function)
-
-    game_log.r.oa = attacker_details.trophies;
-    game_log.r.od = defender_details.trophies;
-    game_log.r.na = new_trophies.0;
-    game_log.r.nd = new_trophies.1;
-
-    diesel::update(game::table.find(game_id))
-        .set((
-            game::damage_done.eq(damage_done),
-            game::is_game_over.eq(true),
-            game::emps_used.eq(bombs_used),
-            game::attack_score.eq(new_trophies.0 - attacker_details.trophies),
-            game::defend_score.eq(new_trophies.1 - defender_details.trophies),
-            game::artifacts_collected.eq(artifacts_collected),
-        ))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
-
-    let (attacker_wins, defender_wins) = if damage_done < WIN_THRESHOLD {
-        (0, 1)
-    } else {
-        (1, 0)
-    };
-
-    diesel::update(user::table.find(&game_log.a.id))
-        .set((
-            user::artifacts.eq(user::artifacts + artifacts_collected),
-            user::trophies.eq(user::trophies + new_trophies.0 - attacker_details.trophies),
-            user::attacks_won.eq(user::attacks_won + attacker_wins),
-        ))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
-
-    if deduct_artifacts_from_building(damaged_buildings.to_vec(), conn).is_err() {
-        log::info!(
-            "Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}",
-            game_id,
-            attacker_id,
-            defender_id
+        let new_trophies = new_rating(
+            attacker_details.trophies,
+            defender_details.trophies,
+            attack_score,
+            defence_score,
         );
+
+        //Add bonus trophies (just call the function)
+
+        game_log.r.oa = attacker_details.trophies;
+        game_log.r.od = defender_details.trophies;
+        game_log.r.na = new_trophies.0;
+        game_log.r.nd = new_trophies.1;
+
+        diesel::update(game::table.find(game_id))
+            .set((
+                game::damage_done.eq(damage_done),
+                game::is_game_over.eq(true),
+                game::emps_used.eq(bombs_used),
+                game::attack_score.eq(new_trophies.0 - attacker_details.trophies),
+                game::defend_score.eq(new_trophies.1 - defender_details.trophies),
+                game::artifacts_collected.eq(artifacts_collected),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+
+        let (attacker_wins, defender_wins) = if damage_done < WIN_THRESHOLD {
+            (0, 1)
+        } else {
+            (1, 0)
+        };
+
+        diesel::update(user::table.find(&game_log.a.id))
+            .set((
+                user::artifacts.eq(user::artifacts + artifacts_collected),
+                user::trophies.eq(user::trophies + new_trophies.0 - attacker_details.trophies),
+                user::attacks_won.eq(user::attacks_won + attacker_wins),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+
+        if deduct_artifacts_from_building(damaged_buildings.to_vec(), conn).is_err() {
+            log::info!(
+                "Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}",
+                game_id,
+                attacker_id,
+                defender_id
+            );
+        }
+        diesel::update(user::table.find(&game_log.d.id))
+            .set((
+                user::artifacts.eq(user::artifacts - artifacts_collected),
+                user::trophies.eq(user::trophies + new_trophies.1 - defender_details.trophies),
+                user::defenses_won.eq(user::defenses_won + defender_wins),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+
+        let attacker_map_id = get_user_map_id(attacker_id, conn)?;
+        let attacker_bank_block_type_id = get_block_id_of_bank(conn, &attacker_id)?;
+        let attacker_bank_map_space_id =
+            get_bank_map_space_id(conn, &attacker_map_id, &attacker_bank_block_type_id)?;
+
+        diesel::update(artifact::table.find(attacker_bank_map_space_id))
+            .set(artifact::count.eq(artifact::count + artifacts_collected))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "artifact",
+                function: function!(),
+                error: err,
+            })?;
     }
-    diesel::update(user::table.find(&game_log.d.id))
-        .set((
-            user::artifacts.eq(user::artifacts - artifacts_collected),
-            user::trophies.eq(user::trophies + new_trophies.1 - defender_details.trophies),
-            user::defenses_won.eq(user::defenses_won + defender_wins),
-        ))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
-
-    let attacker_map_id = get_user_map_id(attacker_id, conn)?;
-    let attacker_bank_block_type_id = get_block_id_of_bank(conn, &attacker_id)?;
-    let attacker_bank_map_space_id =
-        get_bank_map_space_id(conn, &attacker_map_id, &attacker_bank_block_type_id)?;
-
-    diesel::update(artifact::table.find(attacker_bank_map_space_id))
-        .set(artifact::count.eq(artifact::count + artifacts_collected))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "artifact",
-            function: function!(),
-            error: err,
-        })?;
-
     // if let Ok(sim_log) = serde_json::to_string(&game_log) {
     //     let new_simulation_log = NewSimulationLog {
     //         game_id: &game_id,
@@ -1034,7 +1194,7 @@ pub fn can_attack_happen(conn: &mut PgConnection, user_id: i32, is_attacker: boo
 }
 
 pub fn deduct_artifacts_from_building(
-    damaged_buildings: Vec<BuildingResponse>,
+    damaged_buildings: Vec<BuildingDamageResponse>,
     conn: &mut PgConnection,
 ) -> Result<()> {
     use crate::schema::artifact;
