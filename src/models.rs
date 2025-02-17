@@ -263,6 +263,7 @@ pub struct User {
     pub trophies: i32,
     pub avatar_id: i32,
     pub artifacts: i32,
+    pub is_mod: bool,
 }
 
 #[derive(Insertable, Debug)]
@@ -277,6 +278,7 @@ pub struct NewUser<'a> {
     pub trophies: &'a i32,
     pub avatar_id: &'a i32,
     pub artifacts: &'a i32,
+    pub is_mod: &'a bool,
 }
 
 #[derive(Queryable, Deserialize, Serialize)]
@@ -337,7 +339,7 @@ pub struct NewBlockType<'a> {
     pub category_id: &'a i32,
 }
 
-#[derive(Queryable, Clone, Debug, Serialize)]
+#[derive(Queryable, Clone, Debug, Serialize, Deserialize)]
 pub struct AttackerType {
     pub id: i32,
     pub max_health: i32,
@@ -354,4 +356,40 @@ pub struct Prop {
     pub id: i32,
     pub range: i32,
     pub frequency: i32,
+}
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct Challenge {
+    pub id: i32,
+    pub name: String,
+    pub start: NaiveDateTime,
+    pub end: NaiveDateTime,
+}
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct ChallengeMap {
+    pub id: i32,
+    pub challenge_id: i32,
+    pub user_id: i32,
+    pub map_id: i32,
+}
+
+#[derive(Queryable, Clone, Debug, Serialize)]
+pub struct ChallengeResponse {
+    pub id: i32,
+    pub attacker_id: i32,
+    pub challenge_id: i32,
+    pub map_id: i32,
+    pub score: i32,
+    pub attempts: i32,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = challenges_responses)]
+pub struct NewChallengeResponse<'a> {
+    pub attacker_id: &'a i32,
+    pub challenge_id: &'a i32,
+    pub map_id: &'a i32,
+    pub score: &'a i32,
+    pub attempts: &'a i32,
 }

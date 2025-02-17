@@ -20,8 +20,8 @@ use crate::models::{
 };
 use crate::schema::{block_type, building_type, defender_type, map_layout, map_spaces, prop, user};
 use crate::util::function;
-use crate::validator::util::Coords;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
+use crate::validator::util::{Coords, HutDefenderDetails};
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use chrono;
@@ -91,6 +91,7 @@ pub struct ResultResponse {
     pub nd: i32, //new_defender_trophies
     pub oa: i32, //old_attacker_trophies
     pub od: i32, //old_defender_trophies
+    pub sc: i32, //challenge_score
 }
 
 #[derive(Serialize, Clone)]
@@ -143,6 +144,7 @@ pub fn add_game(
     defender_id: i32,
     map_layout_id: i32,
     conn: &mut PgConnection,
+    is_self_attack: bool,
 ) -> Result<i32> {
     use crate::schema::game;
 
@@ -160,8 +162,9 @@ pub fn add_game(
         is_game_over: &false,
         date: &chrono::Local::now().date_naive(),
     };
-
-    let inserted_game: Game = diesel::insert_into(game::table)
+    let inserted_game: Game;
+    if !is_self_attack {
+        inserted_game = diesel::insert_into(game::table)
         .values(&new_game)
         .get_result(conn)
         .map_err(|err| DieselError {
@@ -169,8 +172,10 @@ pub fn add_game(
             function: function!(),
             error: err,
         })?;
-
-    Ok(inserted_game.id)
+        Ok(inserted_game.id)
+    } else {
+        Ok(-1)
+    }
 }
 
 pub fn fetch_attack_history(
@@ -553,6 +558,7 @@ pub fn get_mines(conn: &mut PgConnection, map_id: i32) -> Result<Vec<MineDetails
                 x: map_space.x_coordinate,
                 y: map_space.y_coordinate,
             },
+            name: mine_type.name,
         })
         .collect();
 
@@ -650,6 +656,9 @@ pub fn get_defenders(
             level: defender.level,
             current_health: defender.max_health,
             max_health: defender.max_health,
+            range: prop.range,
+            frequency: prop.frequency,
+            last_attack: 0,
         })
     }
     // Sorted to handle multiple defenders attack same attacker at same frame
@@ -732,6 +741,9 @@ pub fn get_hut_defender(
             level: defender_type.level,
             current_health: defender_type.max_health,
             max_health: defender_type.max_health,
+            range: 0,
+            frequency: 0,
+            last_attack:0 ,
         });
         log::info!("hut_defenders {:?}", i);
     }
@@ -765,6 +777,45 @@ pub fn get_hut_defender(
     }
     log::info!("{:?}", hut_defenders_res);
     Ok(hut_defenders_res)
+}
+
+pub fn get_hut_defender_types(conn: &mut PgConnection) -> Result<Vec<DefenderDetails>> {
+    let joined_table = block_type::table
+        .inner_join(defender_type::table)
+        .inner_join(prop::table.on(defender_type::prop_id.eq(prop::id)))
+        .filter(defender_type::name.eq("Hut_Defender"));
+    let hut_defenders = joined_table
+        .load::<(BlockType, DefenderType, Prop)>(conn)
+        .map_err(|err| DieselError {
+            table: "defender_type",
+            function: function!(),
+            error: err,
+        })?
+        .into_iter();
+    let mut hut_defender_array: Vec<DefenderDetails> = Vec::new();
+    for (i, (block_type, defender_type, prop)) in hut_defenders.enumerate() {
+        hut_defender_array.push(DefenderDetails {
+            map_space_id: -1,
+            name: defender_type.name.clone(),
+            radius: prop.range,
+            speed: defender_type.speed,
+            damage: defender_type.damage,
+            defender_pos: Coords { x: 0, y: 0 },
+            is_alive: true,
+            damage_dealt: false,
+            target_id: None,
+            path_in_current_frame: Vec::new(),
+            block_id: block_type.id,
+            level: defender_type.level,
+            current_health: defender_type.max_health,
+            max_health: defender_type.max_health,
+            frequency: prop.frequency,
+            range: prop.range,
+            last_attack: 0,
+        });
+        log::info!("hut_defenders {:?}", i);
+    }
+    Ok(hut_defender_array)
 }
 
 pub fn get_bomb_types(conn: &mut PgConnection) -> Result<Vec<BombType>> {
@@ -825,28 +876,29 @@ pub fn terminate_game(
     conn: &mut PgConnection,
     damaged_buildings: &[BuildingDamageResponse],
     redis_conn: &mut RedisConn,
+    is_self_attack: bool,
 ) -> Result<()> {
-    use crate::schema::{artifact, game};
     let attacker_id = game_log.a.id;
     let defender_id = game_log.d.id;
-    let damage_done = game_log.r.d;
-    let bombs_used = game_log.r.b;
-    let artifacts_collected = game_log.r.a;
     let game_id = game_log.g;
-    log::info!(
-        "Terminating game for game:{} and attacker:{} and opponent:{}",
-        game_id,
-        attacker_id,
-        defender_id
-    );
+    if !is_self_attack {
+        use crate::schema::{artifact, game};
+        let damage_done = game_log.r.d;
+        let bombs_used = game_log.r.b;
+        let artifacts_collected = game_log.r.a;
+        log::info!(
+            "Terminating game for game:{} and attacker:{} and opponent:{}",
+            game_id,
+            attacker_id,
+            defender_id
+        );
 
-    let (attack_score, defense_score) = if damage_done < WIN_THRESHOLD {
-        (damage_done - 100, 100 - damage_done)
-    } else {
-        (damage_done, -damage_done)
-    };
-
-    let attacker_details = user::table
+        let (attack_score, defense_score) = if damage_done < WIN_THRESHOLD {
+            (damage_done - 100, 100 - damage_done)
+        } else {
+            (damage_done, -damage_done)
+        };
+        let attacker_details = user::table
         .filter(user::id.eq(attacker_id))
         .first::<User>(conn)
         .map_err(|err| DieselError {
@@ -855,102 +907,102 @@ pub fn terminate_game(
             error: err,
         })?;
 
-    let defender_details = user::table
-        .filter(user::id.eq(defender_id))
-        .first::<User>(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
+        let defender_details = user::table
+            .filter(user::id.eq(defender_id))
+            .first::<User>(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
 
-    let attack_score = attack_score as f32 / 100_f32;
-    let defence_score = defense_score as f32 / 100_f32;
+        let attack_score = attack_score as f32 / 100_f32;
+        let defence_score = defense_score as f32 / 100_f32;
 
-    let new_trophies = new_rating(
-        attacker_details.trophies,
-        defender_details.trophies,
-        attack_score,
-        defence_score,
-    );
-
-    //Add bonus trophies (just call the function)
-
-    game_log.r.oa = attacker_details.trophies;
-    game_log.r.od = defender_details.trophies;
-    game_log.r.na = new_trophies.0;
-    game_log.r.nd = new_trophies.1;
-
-    diesel::update(game::table.find(game_id))
-        .set((
-            game::damage_done.eq(damage_done),
-            game::is_game_over.eq(true),
-            game::emps_used.eq(bombs_used),
-            game::attack_score.eq(new_trophies.0 - attacker_details.trophies),
-            game::defend_score.eq(new_trophies.1 - defender_details.trophies),
-            game::artifacts_collected.eq(artifacts_collected),
-        ))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
-
-    let (attacker_wins, defender_wins) = if damage_done < WIN_THRESHOLD {
-        (0, 1)
-    } else {
-        (1, 0)
-    };
-
-    diesel::update(user::table.find(&game_log.a.id))
-        .set((
-            user::artifacts.eq(user::artifacts + artifacts_collected),
-            user::trophies.eq(user::trophies + new_trophies.0 - attacker_details.trophies),
-            user::attacks_won.eq(user::attacks_won + attacker_wins),
-        ))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
-
-    if deduct_artifacts_from_building(damaged_buildings.to_vec(), conn).is_err() {
-        log::info!(
-            "Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}",
-            game_id,
-            attacker_id,
-            defender_id
+        let new_trophies = new_rating(
+            attacker_details.trophies,
+            defender_details.trophies,
+            attack_score,
+            defence_score,
         );
+
+        //Add bonus trophies (just call the function)
+
+        game_log.r.oa = attacker_details.trophies;
+        game_log.r.od = defender_details.trophies;
+        game_log.r.na = new_trophies.0;
+        game_log.r.nd = new_trophies.1;
+
+        diesel::update(game::table.find(game_id))
+            .set((
+                game::damage_done.eq(damage_done),
+                game::is_game_over.eq(true),
+                game::emps_used.eq(bombs_used),
+                game::attack_score.eq(new_trophies.0 - attacker_details.trophies),
+                game::defend_score.eq(new_trophies.1 - defender_details.trophies),
+                game::artifacts_collected.eq(artifacts_collected),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+
+        let (attacker_wins, defender_wins) = if damage_done < WIN_THRESHOLD {
+            (0, 1)
+        } else {
+            (1, 0)
+        };
+
+        diesel::update(user::table.find(&game_log.a.id))
+            .set((
+                user::artifacts.eq(user::artifacts + artifacts_collected),
+                user::trophies.eq(user::trophies + new_trophies.0 - attacker_details.trophies),
+                user::attacks_won.eq(user::attacks_won + attacker_wins),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+
+        if deduct_artifacts_from_building(damaged_buildings.to_vec(), conn).is_err() {
+            log::info!(
+                "Failed to deduct artifacts from building for game:{} and attacker:{} and opponent:{}",
+                game_id,
+                attacker_id,
+                defender_id
+            );
+        }
+        diesel::update(user::table.find(&game_log.d.id))
+            .set((
+                user::artifacts.eq(user::artifacts - artifacts_collected),
+                user::trophies.eq(user::trophies + new_trophies.1 - defender_details.trophies),
+                user::defenses_won.eq(user::defenses_won + defender_wins),
+            ))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
+
+        let attacker_map_id = get_user_map_id(attacker_id, conn)?;
+        let attacker_bank_block_type_id = get_block_id_of_bank(conn, &attacker_id)?;
+        let attacker_bank_map_space_id =
+            get_bank_map_space_id(conn, &attacker_map_id, &attacker_bank_block_type_id)?;
+
+        diesel::update(artifact::table.find(attacker_bank_map_space_id))
+            .set(artifact::count.eq(artifact::count + artifacts_collected))
+            .execute(conn)
+            .map_err(|err| DieselError {
+                table: "artifact",
+                function: function!(),
+                error: err,
+            })?;
     }
-    diesel::update(user::table.find(&game_log.d.id))
-        .set((
-            user::artifacts.eq(user::artifacts - artifacts_collected),
-            user::trophies.eq(user::trophies + new_trophies.1 - defender_details.trophies),
-            user::defenses_won.eq(user::defenses_won + defender_wins),
-        ))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
-
-    let attacker_map_id = get_user_map_id(attacker_id, conn)?;
-    let attacker_bank_block_type_id = get_block_id_of_bank(conn, &attacker_id)?;
-    let attacker_bank_map_space_id =
-        get_bank_map_space_id(conn, &attacker_map_id, &attacker_bank_block_type_id)?;
-
-    diesel::update(artifact::table.find(attacker_bank_map_space_id))
-        .set(artifact::count.eq(artifact::count + artifacts_collected))
-        .execute(conn)
-        .map_err(|err| DieselError {
-            table: "artifact",
-            function: function!(),
-            error: err,
-        })?;
-
     // if let Ok(sim_log) = serde_json::to_string(&game_log) {
     //     let new_simulation_log = NewSimulationLog {
     //         game_id: &game_id,
