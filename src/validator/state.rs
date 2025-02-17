@@ -1293,12 +1293,10 @@ impl State {
     
         let state_clone = self.clone(); // Clone the state before borrowing self mutably
         let attacker = self.attacker.as_mut().unwrap();
-        let companion = self.companion.as_mut().unwrap();
         let mut defenders_damaged: Vec<DefenderResponse> = Vec::new();
         let mut bullet_hits: Vec<BulletHit> = Vec::new();
         let mut attackers: Vec<u32> = Vec::new();
         let attacker_pos = coords;
-        let companion_pos = companion.companion_pos;
     
         // log::info!(
         //     "Attacker position is ({:?})",
@@ -1407,6 +1405,8 @@ impl State {
                                     position: defender.defender_pos,
                                 });
                             } else if defender.target_id == Some(DefenderTarget::Companion) {
+                                let companion = self.companion.as_mut().unwrap();
+                                let companion_pos = companion.companion_pos;
                                 log::info!("Defender {} successfully attacks companion", defender.map_space_id);
                                 log::info!("Positions of companion and defender are: ({}, {}), ({}, {})", companion_pos.x, companion_pos.y, defender.defender_pos.x, defender.defender_pos.y);
                                 companion.companion_health =

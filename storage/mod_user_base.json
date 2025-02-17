@@ -1,5 +1,5 @@
 {
-  "3": {
+  "2": {
     "1": {
       "mapId": 1,
       "building": [
@@ -8130,8 +8130,8 @@
           "y": 0
         },
         "attackerHealth": 650,
-        "bombDamage": 10,
-        "bombRadius": 10
+        "bombDamage": 50,
+        "bombRadius": 5
       }
     }
   }

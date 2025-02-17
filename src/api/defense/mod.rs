@@ -602,7 +602,7 @@ async fn save_admin_base(
         .is_mod;
 
     if is_mod {
-        //log::info!("{:?}", save_data);
+        log::info!("save data response: {:?}", save_data);
         let json_path = env::current_dir()?.join(MOD_USER_BASE_PATH);
         //log::info!("Json path: {}", json_path.display());
         let mut json_data_str = String::new();
