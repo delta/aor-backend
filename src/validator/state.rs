@@ -1321,6 +1321,9 @@ impl State {
             if defender.range == 0 {
                 continue;
             }
+            if defender.name == "Hut_Defender" {
+                continue;
+            }
             // log::info!("Defender range is {}", defender.range);
 
             let start = SystemTime::now();
