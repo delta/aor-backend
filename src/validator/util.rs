@@ -194,6 +194,7 @@ pub struct ValidatorResponse {
 pub enum CompanionTarget {
     Building,
     Defender,
+    NoTarget,
 }
 #[derive(Serialize, Clone, Debug)]
 pub struct CompanionPriorityResponse {
@@ -610,7 +611,8 @@ pub fn get_companion_priority(
         high_prior_tile = second_prior_building.1.clone();
         Some(CompanionTarget::Building)
     } else {
-        None
+        high_prior_tile = Some(companion.companion_pos);
+        Some(CompanionTarget::NoTarget)
     };
 
     CompanionPriorityResponse {

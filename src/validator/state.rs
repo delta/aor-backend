@@ -683,6 +683,13 @@ impl State {
                                     }
                                 }
                             }
+                            CompanionTarget::NoTarget => {
+                                companion.reached_dest = false;
+                                companion.target_building = None;
+                                companion.target_defender = None;
+                                companion.current_target = None;
+                                companion.target_tile = Some(companion.companion_pos);
+                            }
                         }
                     } else {
                         companion.reached_dest = false;
@@ -769,6 +776,7 @@ impl State {
                             -1
                         }
                     }
+                    CompanionTarget::NoTarget => -1,
                 }
             } else {
                 -1
