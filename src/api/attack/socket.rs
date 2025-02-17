@@ -35,6 +35,7 @@ pub struct SocketResponse {
     pub damaged_base_items: Option<BaseItemsDamageResponse>,
     pub total_damage_percentage: Option<f32>,
     pub is_sync: bool,
+    pub new_taunt: Option<String>,
     // pub state: Option<GameStateResponse>,
     pub is_game_over: bool,
     pub message: Option<String>,

@@ -32,8 +32,34 @@ use rand::seq::IteratorRandom;
 use redis::Commands;
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::socket::BuildingDamageResponse;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ContentPart {
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TauntContent {
+    pub parts: Vec<ContentPart>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RequestBody {
+    pub contents: Vec<TauntContent>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TauntCandidate {
+    pub content: TauntContent,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ApiResponse {
+    pub candidates: Vec<TauntCandidate>,
+}
 
 #[derive(Debug, Serialize)]
 pub struct DefensePosition {
@@ -102,6 +128,55 @@ pub struct GameLog {
     pub b: SimulationBaseResponse, //base
     pub e: Vec<EventResponse>,     //events
     pub r: ResultResponse,         //result
+}
+
+#[derive(Deserialize, Debug)]
+pub struct GeminiApiResponse {
+    pub candidates: Vec<TauntCandidate>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Candidate {
+    pub content: TauntContent,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Content {
+    pub parts: Vec<Part>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Part {
+    pub text: String,
+}
+
+pub struct Taunts {
+    pub taunt_list: Vec<String>,
+    pub taunt_count: i32,
+    pub prev_taunt_time: SystemTime,
+    pub taunt_status: TauntStatus
+}
+
+#[derive(PartialEq)]
+pub enum TauntStatus {
+    NewTauntAvailable,
+    TauntSentToOpponent,
+}
+
+pub static mut TAUNTS: Taunts = Taunts {
+    taunt_list: Vec::new(),
+    taunt_count: 0,
+    prev_taunt_time: UNIX_EPOCH,
+    taunt_status: TauntStatus::TauntSentToOpponent,
+};
+
+pub fn reset_taunt_status() {
+    unsafe {
+        TAUNTS.taunt_status = TauntStatus::TauntSentToOpponent;
+        TAUNTS.taunt_count = 0;
+        TAUNTS.prev_taunt_time = UNIX_EPOCH;
+        TAUNTS.taunt_list = Vec::new();
+    }
 }
 
 pub fn get_map_id(defender_id: &i32, conn: &mut PgConnection) -> Result<Option<i32>> {

@@ -799,6 +799,7 @@ async fn challenge_socket_handler(
                     hut_triggered: false,
                     hut_defenders: None,
                     damaged_base_items: None,
+                    new_taunt: None,
                     total_damage_percentage: None,
                     is_sync: false,
                     shoot_bullets: None,
