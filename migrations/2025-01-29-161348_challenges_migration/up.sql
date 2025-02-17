@@ -27,7 +27,7 @@ CREATE TABLE challenges_responses
     attempts INTEGER NOT NULL,
     CONSTRAINT chall_response_attacker FOREIGN KEY (attacker_id) REFERENCES "user"(id),
     CONSTRAINT chall_response_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id),
-    CONSTRAINT unique_attacker_challenge UNIQUE (attacker_id, challenge_id)
+    CONSTRAINT unique_attacker_challenge UNIQUE (attacker_id, challenge_id, map_id)
 );
 
 ALTER TABLE "user" ADD COLUMN is_mod BOOLEAN NOT NULL;

@@ -1,13 +1,13 @@
 use anyhow::{Ok, Result};
 use chrono::Utc;
-use diesel::dsl::sum;
-use diesel::dsl::Nullable;
+use diesel::dsl::{sql, sum};
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
 use diesel::PgConnection;
 use serde::Serialize;
 
 use crate::api::attack::util::GameLog;
+use crate::constants::MAX_CHALLENGE_ATTEMPTS;
 use crate::error::DieselError;
 use crate::models::ChallengeMap;
 use crate::models::ChallengeResponse;
@@ -123,7 +123,12 @@ pub fn is_challenge_possible(
         )
         .first::<ChallengeResponse>(conn)
         .optional()?;
-    let is_possible = challenge_response.is_none();
+
+    let is_possible = if let Some(challenge_response) = challenge_response {
+        challenge_response.attempts < MAX_CHALLENGE_ATTEMPTS
+    } else {
+        true
+    };
 
     Ok(is_possible)
 }
@@ -142,10 +147,22 @@ pub fn terminate_challenge(
         challenge_id: &challenge_id,
         map_id: &map_id,
         score: &score,
+        attempts: &1,
     };
 
     let inserted_response: ChallengeResponse = diesel::insert_into(challenges_responses::table)
         .values(&new_challenge_resp)
+        .on_conflict((
+            challenges_responses::attacker_id,
+            challenges_responses::challenge_id,
+            challenges_responses::map_id,
+        ))
+        .do_update()
+        .set((
+            challenges_responses::attempts.eq(challenges_responses::attempts + 1),
+            challenges_responses::score
+                .eq(sql("GREATEST(challenges_responses.score, EXCLUDED.score)")),
+        ))
         .get_result(conn)
         .map_err(|err| DieselError {
             table: "challenge_responses",
