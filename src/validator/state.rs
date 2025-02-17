@@ -48,6 +48,7 @@ pub struct State {
     pub mines: Vec<MineDetails>,
     pub buildings: Vec<BuildingDetails>,
     pub total_hp_buildings: i32,
+    pub current_hp_buildings: i32,
     pub in_validation: InValidation,
     pub sentries: Vec<Sentry>,
     pub hut_defenders_released: i32,
@@ -118,6 +119,7 @@ impl State {
             mines,
             buildings,
             total_hp_buildings: 0,
+            current_hp_buildings: 0,
             in_validation: InValidation {
                 message: "".to_string(),
                 is_invalidated: false,
@@ -197,6 +199,17 @@ impl State {
             total_hp += building.total_hp;
         }
         self.total_hp_buildings = total_hp;
+    }
+
+    pub fn update_current_building_hp(&mut self) {
+        let mut total_hp = 0;
+        for building in self.buildings.iter() {
+            total_hp += building.current_hp;
+        }
+        self.current_hp_buildings = total_hp;
+        self.damage_percentage = (self.total_hp_buildings - self.current_hp_buildings) as f32
+            / self.total_hp_buildings as f32
+            * 100.0_f32;
     }
 
     pub fn set_bombs(&mut self, bomb_type: BombType, bombs: i32) {
@@ -608,7 +621,9 @@ impl State {
                                             let mut artifacts_taken_by_destroying_building = 0;
                                             building.current_hp =
                                                 max(building.current_hp - companion.damage, 0);
-                                            self.damage_percentage += companion.damage as f32
+                                            self.damage_percentage = (self.total_hp_buildings
+                                                - self.current_hp_buildings)
+                                                as f32
                                                 / self.total_hp_buildings as f32
                                                 * 100.0_f32;
 
@@ -915,11 +930,15 @@ impl State {
                             (building.artifacts_obtained as f32 * PERCENTANGE_ARTIFACTS_OBTAINABLE)
                                 .floor() as i32;
                         self.artifacts += artifacts_taken_by_destroying_building;
-                        self.damage_percentage +=
-                            (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
+                        self.damage_percentage =
+                            (self.total_hp_buildings - self.current_hp_buildings) as f32
+                                / self.total_hp_buildings as f32
+                                * 100.0_f32;
                     } else {
-                        self.damage_percentage +=
-                            (current_damage as f32 / self.total_hp_buildings as f32) * 100.0_f32;
+                        self.damage_percentage =
+                            (self.total_hp_buildings - self.current_hp_buildings) as f32
+                                / self.total_hp_buildings as f32
+                                * 100.0_f32;
                     }
 
                     buildings_damaged.push(BuildingDamageResponse {
@@ -1308,13 +1327,13 @@ impl State {
         //     attacker_posF
         // );
         for defender in self.defenders.iter_mut() {
-            log::info!(
-                "Defender ID: {}, Target ID: {:?}, Position: ({}, {})",
-                defender.map_space_id,
-                defender.target_id,
-                defender.defender_pos.x,
-                defender.defender_pos.y
-            );
+            // log::info!(
+            //     "Defender ID: {}, Target ID: {:?}, Position: ({}, {})",
+            //     defender.map_space_id,
+            //     defender.target_id,
+            //     defender.defender_pos.x,
+            //     defender.defender_pos.y
+            // );
             if !defender.is_alive {
                 continue;
             }
@@ -1356,12 +1375,12 @@ impl State {
                     + (defender.defender_pos.y - target_pos.y).pow(2))
                     as f32)
                     .sqrt();
-                log::info!(
-                    "Distance between defender {} , with position {:?}, and target: {}",
-                    defender.map_space_id,
-                    defender.defender_pos,
-                    distance
-                );
+                // log::info!(
+                //     "Distance between defender {} , with position {:?}, and target: {}",
+                //     defender.map_space_id,
+                //     defender.defender_pos,
+                //     distance
+                // );
 
                 if distance <= defender.range as f32 {
                     // log::info!("Positions of companion and defender are: ({}, {}), ({}, {})", companion_pos.x, companion_pos.y, defender.defender_pos.x, defender.defender_pos.y);
@@ -1402,17 +1421,17 @@ impl State {
 
                         if !blocked {
                             if defender.target_id == Some(DefenderTarget::Attacker) {
-                                log::info!(
-                                    "Defender {} successfully attacks attacker",
-                                    defender.map_space_id
-                                );
-                                log::info!(
-                                    "Positions of attacker and defender are: ({}, {}), ({}, {})",
-                                    attacker_pos.x,
-                                    attacker_pos.y,
-                                    defender.defender_pos.x,
-                                    defender.defender_pos.y
-                                );
+                                // log::info!(
+                                //     "Defender {} successfully attacks attacker",
+                                //     defender.map_space_id
+                                // );
+                                // log::info!(
+                                //     "Positions of attacker and defender are: ({}, {}), ({}, {})",
+                                //     attacker_pos.x,
+                                //     attacker_pos.y,
+                                //     defender.defender_pos.x,
+                                //     defender.defender_pos.y
+                                // );
                                 attacker.attacker_health =
                                     attacker.attacker_health.saturating_sub(defender.damage);
                                 if attacker.attacker_health <= 0 {
@@ -1433,17 +1452,17 @@ impl State {
                             } else if defender.target_id == Some(DefenderTarget::Companion) {
                                 let companion = self.companion.as_mut().unwrap();
                                 let companion_pos = companion.companion_pos;
-                                log::info!(
-                                    "Defender {} successfully attacks companion",
-                                    defender.map_space_id
-                                );
-                                log::info!(
-                                    "Positions of companion and defender are: ({}, {}), ({}, {})",
-                                    companion_pos.x,
-                                    companion_pos.y,
-                                    defender.defender_pos.x,
-                                    defender.defender_pos.y
-                                );
+                                // log::info!(
+                                //     "Defender {} successfully attacks companion",
+                                //     defender.map_space_id
+                                // );
+                                // log::info!(
+                                //     "Positions of companion and defender are: ({}, {}), ({}, {})",
+                                //     companion_pos.x,
+                                //     companion_pos.y,
+                                //     defender.defender_pos.x,
+                                //     defender.defender_pos.y
+                                // );
                                 companion.companion_health =
                                     companion.companion_health.saturating_sub(defender.damage);
                                 if companion.companion_health <= 0 {
@@ -1466,21 +1485,21 @@ impl State {
                             // log::info!("Defender {} attack is blocked", defender.map_space_id);
                         }
                     } else {
-                        log::info!(
-                            "Defender {} is not aligned with target. Defender position: ({}, {}), Target position: ({}, {})",
-                            defender.map_space_id,
-                            defender.defender_pos.x,
-                            defender.defender_pos.y,
-                            target_pos.x,
-                            target_pos.y
-                        );
+                        // log::info!(
+                        //     "Defender {} is not aligned with target. Defender position: ({}, {}), Target position: ({}, {})",
+                        //     defender.map_space_id,
+                        //     defender.defender_pos.x,
+                        //     defender.defender_pos.y,
+                        //     target_pos.x,
+                        //     target_pos.y
+                        // );
                     }
                 } else {
-                    log::info!(
-                        "Defender {} is out of range of target",
-                        defender.map_space_id
-                    );
-                    log::info!("Defender range is {}", defender.range);
+                    // log::info!(
+                    //     "Defender {} is out of range of target",
+                    //     defender.map_space_id
+                    // );
+                    // log::info!("Defender range is {}", defender.range);
                     defender.target_id = None;
                 }
             } else {
@@ -1489,7 +1508,7 @@ impl State {
         }
 
         // log::info!("Defender ranged attack completed for frame_number: {}", frame_number);
-        log::info!("Defenders who attacked in this frame: {:?}", attackers);
+        //log::info!("Defenders who attacked in this frame: {:?}", attackers);
 
         let companion_health = if let Some(companion) = self.companion.as_mut() {
             companion.companion_health

@@ -418,6 +418,8 @@ pub fn game_handler(
 
                 _game_state.defender_trigger();
 
+                _game_state.update_current_building_hp();
+
                 let hut_triggered = !spawn_result.is_empty();
 
                 let result_type = if hut_triggered {

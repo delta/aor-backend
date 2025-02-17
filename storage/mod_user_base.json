@@ -8133,6 +8133,737 @@
         "bombDamage": 50,
         "bombRadius": 5
       }
+    },
+    "2": {
+      "mapId": 2,
+      "building": [
+        {
+          "id": 64,
+          "cost": 0,
+          "blockId": 64,
+          "mapSpaceId": 0,
+          "level": 1,
+          "name": "coin",
+          "widthInTiles": 1,
+          "lengthInTiles": 1,
+          "posX": 13,
+          "posY": 6,
+          "artifacts": 0,
+          "hp": 0,
+          "isBank": false,
+          "isDefenceBuilding": false,
+          "capacity": 0,
+          "range": 0,
+          "frequency": 0,
+          "isPlaced": true
+        },
+        {
+          "id": 64,
+          "cost": 0,
+          "blockId": 64,
+          "mapSpaceId": 1,
+          "level": 1,
+          "name": "coin",
+          "widthInTiles": 1,
+          "lengthInTiles": 1,
+          "posX": 9,
+          "posY": 6,
+          "artifacts": 0,
+          "hp": 0,
+          "isBank": false,
+          "isDefenceBuilding": false,
+          "capacity": 0,
+          "range": 0,
+          "frequency": 0,
+          "isPlaced": true
+        },
+        {
+          "id": 12,
+          "cost": 10,
+          "blockId": 12,
+          "mapSpaceId": 2,
+          "level": 1,
+          "name": "Building_12",
+          "widthInTiles": 5,
+          "lengthInTiles": 5,
+          "posX": 15,
+          "posY": 3,
+          "artifacts": 0,
+          "hp": 130,
+          "isBank": false,
+          "isDefenceBuilding": false,
+          "capacity": 110,
+          "range": 0,
+          "frequency": 0,
+          "isPlaced": true
+        },
+        {
+          "id": 58,
+          "cost": 10,
+          "blockId": 58,
+          "mapSpaceId": 3,
+          "level": 1,
+          "name": "Defender_Hut",
+          "widthInTiles": 3,
+          "lengthInTiles": 3,
+          "posX": 35,
+          "posY": 6,
+          "artifacts": 0,
+          "hp": 120,
+          "isBank": false,
+          "isDefenceBuilding": true,
+          "capacity": 120,
+          "range": 0,
+          "frequency": 0,
+          "isPlaced": true
+        },
+        {
+          "id": 61,
+          "cost": 10,
+          "blockId": 61,
+          "mapSpaceId": 4,
+          "level": 1,
+          "name": "Sentry",
+          "widthInTiles": 3,
+          "lengthInTiles": 3,
+          "posX": 35,
+          "posY": 17,
+          "artifacts": 0,
+          "hp": 120,
+          "isBank": false,
+          "isDefenceBuilding": true,
+          "capacity": 120,
+          "range": 0,
+          "frequency": 0,
+          "isPlaced": true
+        }
+      ],
+      "defenders": [],
+      "mineType": [],
+      "road": [
+        {
+          "id": 0,
+          "mapSpaceId": 5,
+          "blockId": 0,
+          "posX": 0,
+          "posY": 0
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 6,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 0
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 7,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 1
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 8,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 9,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 3
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 10,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 4
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 11,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 5
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 12,
+          "blockId": 0,
+          "posX": 1,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 13,
+          "blockId": 0,
+          "posX": 2,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 14,
+          "blockId": 0,
+          "posX": 3,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 15,
+          "blockId": 0,
+          "posX": 4,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 16,
+          "blockId": 0,
+          "posX": 5,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 17,
+          "blockId": 0,
+          "posX": 6,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 18,
+          "blockId": 0,
+          "posX": 7,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 19,
+          "blockId": 0,
+          "posX": 8,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 20,
+          "blockId": 0,
+          "posX": 9,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 21,
+          "blockId": 0,
+          "posX": 10,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 22,
+          "blockId": 0,
+          "posX": 11,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 23,
+          "blockId": 0,
+          "posX": 12,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 24,
+          "blockId": 0,
+          "posX": 13,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 25,
+          "blockId": 0,
+          "posX": 13,
+          "posY": 3
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 26,
+          "blockId": 0,
+          "posX": 13,
+          "posY": 4
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 27,
+          "blockId": 0,
+          "posX": 13,
+          "posY": 5
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 28,
+          "blockId": 0,
+          "posX": 13,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 29,
+          "blockId": 0,
+          "posX": 14,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 30,
+          "blockId": 0,
+          "posX": 15,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 31,
+          "blockId": 0,
+          "posX": 16,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 32,
+          "blockId": 0,
+          "posX": 17,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 33,
+          "blockId": 0,
+          "posX": 18,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 34,
+          "blockId": 0,
+          "posX": 19,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 35,
+          "blockId": 0,
+          "posX": 20,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 36,
+          "blockId": 0,
+          "posX": 21,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 37,
+          "blockId": 0,
+          "posX": 22,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 38,
+          "blockId": 0,
+          "posX": 23,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 39,
+          "blockId": 0,
+          "posX": 24,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 40,
+          "blockId": 0,
+          "posX": 25,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 41,
+          "blockId": 0,
+          "posX": 26,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 42,
+          "blockId": 0,
+          "posX": 27,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 43,
+          "blockId": 0,
+          "posX": 28,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 44,
+          "blockId": 0,
+          "posX": 29,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 45,
+          "blockId": 0,
+          "posX": 30,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 46,
+          "blockId": 0,
+          "posX": 31,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 47,
+          "blockId": 0,
+          "posX": 32,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 48,
+          "blockId": 0,
+          "posX": 33,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 49,
+          "blockId": 0,
+          "posX": 34,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 50,
+          "blockId": 0,
+          "posX": 35,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 51,
+          "blockId": 0,
+          "posX": 36,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 52,
+          "blockId": 0,
+          "posX": 37,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 53,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 2
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 54,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 3
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 55,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 4
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 56,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 5
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 57,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 6
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 58,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 7
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 59,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 8
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 60,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 9
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 61,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 10
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 62,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 11
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 63,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 12
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 64,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 13
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 65,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 14
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 66,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 15
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 67,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 16
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 68,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 17
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 69,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 18
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 70,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 19
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 71,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 20
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 72,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 21
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 73,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 22
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 74,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 23
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 75,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 24
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 76,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 25
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 77,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 26
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 78,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 27
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 79,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 28
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 80,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 29
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 81,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 30
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 82,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 31
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 83,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 32
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 84,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 33
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 85,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 34
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 86,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 35
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 87,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 36
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 88,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 37
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 89,
+          "blockId": 0,
+          "posX": 38,
+          "posY": 38
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 90,
+          "blockId": 0,
+          "posX": 39,
+          "posY": 38
+        },
+        {
+          "id": 0,
+          "mapSpaceId": 91,
+          "blockId": 0,
+          "posX": 39,
+          "posY": 39
+        }
+      ],
+      "challenge": {
+        "startTile": {
+          "x": 39,
+          "y": 39
+        },
+        "endTile": {
+          "x": 0,
+          "y": 0
+        },
+        "attackerHealth": 150,
+        "bombDamage": 10,
+        "bombRadius": 10
+      }
     }
   }
 }
