@@ -4,7 +4,8 @@ RUN apt-get update -y && apt-get install -y \
     libpq-dev \
     netcat-traditional \
     pkg-config \
-    libssl-dev
+    libssl-dev \
+    curl
 RUN cargo install cargo-chef
 
 FROM base AS planner

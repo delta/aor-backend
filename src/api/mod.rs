@@ -1,5 +1,6 @@
 pub mod attack;
 pub mod auth;
+pub mod challenges;
 pub mod defense;
 pub mod error;
 pub mod game;

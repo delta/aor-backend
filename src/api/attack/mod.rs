@@ -1,4 +1,6 @@
-use self::util::{get_valid_road_paths, AttackResponse, GameLog, ResultResponse};
+use self::util::{
+    get_valid_road_paths, AttackResponse, GameLog, GeminiApiResponse, ResultResponse,
+};
 use super::auth::session::AuthUser;
 use super::defense::shortest_path::run_shortest_paths;
 use super::defense::util::{
@@ -6,21 +8,25 @@ use super::defense::util::{
 };
 use super::user::util::fetch_user;
 use super::{error, PgPool, RedisPool};
-use crate::api::attack::socket::{BuildingResponse, ResultType, SocketRequest, SocketResponse};
+use crate::api::attack::socket::{
+    BuildingDamageResponse, ResultType, SocketRequest, SocketResponse,
+};
 use crate::api::util::HistoryboardQuery;
-use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
+use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK, BASE_PROMPT};
 use crate::models::{AttackerType, User};
 use crate::validator::state::State;
-use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails};
+use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails, Path};
 use crate::validator::util::{Coords, SourceDestXY};
 use actix_rt;
 use actix_web::error::ErrorBadRequest;
 use actix_web::web::{Data, Json};
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
 use log;
+use socket::BaseItemsDamageResponse;
+use util::reset_taunt_status;
 use std::collections::{HashMap, HashSet};
 use std::time;
-
+use self::util::TauntStatus;
 use crate::validator::game_handler;
 use actix_ws::Message;
 use futures_util::stream::StreamExt;
@@ -42,6 +48,8 @@ async fn init_attack(
     user: AuthUser,
 ) -> Result<impl Responder> {
     let attacker_id = user.0;
+
+    reset_taunt_status();
 
     log::info!("Attacker:{} is trying to initiate an attack", attacker_id);
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
@@ -103,6 +111,10 @@ async fn init_attack(
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
+
+    for defender in opponent_base.defender_types.iter() {
+        log::info!("defender ids {} ", defender.defender_id)
+    }
 
     log::info!("Base details of Opponent:{} fetched", opponent_id);
 
@@ -272,7 +284,7 @@ async fn socket_handler(
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
 
     let shortest_paths = web::block(move || {
-        Ok(run_shortest_paths(&mut conn, map_id)?) as anyhow::Result<HashMap<SourceDestXY, Coords>>
+        Ok(run_shortest_paths(&mut conn, map_id)?) as anyhow::Result<HashMap<SourceDestXY, Path>>
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
@@ -292,6 +304,8 @@ async fn socket_handler(
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
+
+    log::info!("hut defender map: {:?}", hut_defenders);
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let mines = web::block(move || {
@@ -365,7 +379,10 @@ async fn socket_handler(
         return Err(ErrorBadRequest("Internal Server Error"));
     }
 
-    let mut damaged_buildings: Vec<BuildingResponse> = Vec::new();
+    let mut damaged_base_items: BaseItemsDamageResponse = BaseItemsDamageResponse {
+        buildings_damaged: Vec::new(),
+        defenders_damaged: Vec::new(),
+    };
 
     let game_log = GameLog {
         g: game_id,
@@ -382,6 +399,7 @@ async fn socket_handler(
             nd: 0,
             oa: 0,
             od: 0,
+            sc: 0,
         },
     };
 
@@ -412,8 +430,10 @@ async fn socket_handler(
             hut_defenders,
             mines,
             buildings,
+            None,
         );
         game_state.set_total_hp_buildings();
+        game_state.get_sentries();
 
         let game_logs = &mut game_log.clone();
 
@@ -472,7 +492,7 @@ async fn socket_handler(
                                         if util::terminate_game(
                                             game_logs,
                                             &mut conn,
-                                            &damaged_buildings,
+                                            &damaged_base_items.buildings_damaged,
                                             &mut redis_conn,
                                         )
                                         .is_err()
@@ -483,23 +503,40 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                    } else if response.result_type == ResultType::DefendersDamaged {
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::DefendersTriggered
+                                    } else if response.result_type == ResultType::DefendersDamaged
+                                        || response.result_type == ResultType::DefendersTriggered
+                                        || response.result_type == ResultType::SpawnHutDefender
                                     {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                    } else if response.result_type == ResultType::SpawnHutDefender {
-                                        // game_state.hut.hut_defenders_count -= 1;
-                                        if session_clone1.text(response_json).await.is_err() {
-                                            return;
-                                        }
-                                    } else if response.result_type == ResultType::BuildingsDamaged {
-                                        damaged_buildings
-                                            .extend(response.damaged_buildings.unwrap());
+                                    }
+                                    // else if response.result_type == ResultType::DefendersTriggered
+                                    // {
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // } else if response.result_type == ResultType::SpawnHutDefender {
+                                    //     // game_state.hut.hut_defenders_count -= 1;
+                                    //     if session_clone1.text(response_json).await.is_err() {
+                                    //         return;
+                                    //     }
+                                    // }
+                                    else if response.result_type == ResultType::BuildingsDamaged {
+                                        damaged_base_items.buildings_damaged.extend(
+                                            response
+                                                .damaged_base_items
+                                                .clone()
+                                                .unwrap()
+                                                .buildings_damaged,
+                                        );
+                                        damaged_base_items.defenders_damaged.extend(
+                                            response
+                                                .damaged_base_items
+                                                .clone()
+                                                .unwrap()
+                                                .defenders_damaged,
+                                        );
                                         // if util::deduct_artifacts_from_building(
                                         //     response.damaged_buildings.unwrap(),
                                         //     &mut conn,
@@ -512,6 +549,15 @@ async fn socket_handler(
                                             return;
                                         }
                                     } else if response.result_type == ResultType::PlacedAttacker {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    } else if response.result_type == ResultType::BulletHit {
+                                        if session_clone1.text(response_json).await.is_err() {
+                                            return;
+                                        }
+                                    }
+                                    else if response.result_type == ResultType::UAV {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
@@ -551,10 +597,13 @@ async fn socket_handler(
                     }
                 }
                 Message::Close(_s) => {
+                    if game_logs.d.is_pragyan {
+                        //challenge game terminate
+                    }
                     if util::terminate_game(
                         game_logs,
                         &mut conn,
-                        &damaged_buildings,
+                        &damaged_base_items.buildings_damaged,
                         &mut redis_conn,
                     )
                     .is_err()
@@ -606,11 +655,17 @@ async fn socket_handler(
                     defender_damaged: None,
                     hut_triggered: false,
                     hut_defenders: None,
-                    damaged_buildings: None,
+                    damaged_base_items: None,
+                    new_taunt: None,
                     total_damage_percentage: None,
                     is_sync: false,
+                    shoot_bullets: None,
                     is_game_over: true,
                     message: Some("Connection timed out".to_string()),
+                    companion: None,
+                    challenge: None,
+                    bullet_hits: None,
+                    revealed_mines: None,
                 })
                 .unwrap();
                 if session_clone2.text(response_json).await.is_err() {
@@ -662,3 +717,139 @@ async fn get_top_attacks(pool: web::Data<PgPool>, user: AuthUser) -> Result<impl
     .map_err(|err| error::handle_error(err.into()))?;
     Ok(web::Json(response))
 }
+
+pub async fn get_taunt(
+    event_description: String,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let mut response_text: String = "".to_string();
+    let google_api_key =
+        std::env::var("GEMINI_API_KEY_FINE_TUNED").unwrap_or_else(|_| "YOUR_API_KEY".to_string());
+    let model_id =
+        std::env::var("GEMINI_MODEL_ID").unwrap_or_else(|_| "YOUR_MODEL_ID".to_string());
+
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1/{}:generateContent?key={}",
+        model_id,
+        google_api_key
+    );
+    let prompt = format!("You are a defender robot who is supposed to demotivate the attacker bot in the game of Attack on Robots. Every response of yours is supposed to be against the attacker. There are only five moods. The mood must be one of these: Exhilarated – When the attacker is doing badly. Surprised – When the attacker seems to be changing the game around. Sad – When the attacker seems like winning. Frustrated – When the attacker is crushing the game. Angry – When the attacker is successful in changing the course of the game. Your response should be in this format : 'Reaction Type: reaction_type, Response: generated_text'.This has happened now: {}", event_description);
+    let body = serde_json::json!({
+        "contents": [   
+            {
+                "role": "user", 
+                "parts": [
+                    { "text": prompt }
+                ] 
+            }
+        ]
+    });
+    let client = reqwest::Client::new();
+    unsafe {
+        util::TAUNTS.taunt_count += 1;
+        util::TAUNTS.prev_taunt_time = time::SystemTime::now();
+    }
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        response_text = response.text().await?;
+        // log::info!("Response: {}", response_text);
+        let api_response: GeminiApiResponse = serde_json::from_str(&response_text)?;
+        if let Some(candidate) = api_response.candidates.first() {
+            if let Some(part) = candidate.content.parts.first() {
+                log::info!("prompt event: {}", event_description);
+                log::info!("Extracted text: {}", part.text.trim());
+                unsafe {
+                    util::TAUNTS.taunt_list.push(part.text.trim().to_string());
+                    util::TAUNTS.taunt_status = TauntStatus::NewTauntAvailable;
+                };
+                return Ok(part.text.trim().to_string());
+            }
+        }
+    } else {
+        log::info!(
+            "Gemini API request failed, and Failed with status: {}",
+            response.status()
+        );
+    }
+
+    Ok(response_text)
+}
+
+
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+
+// Add response structures
+#[derive(Deserialize, Debug)]
+struct Candidate {
+    content: Content,
+}
+
+#[derive(Deserialize, Debug)]
+struct Content {
+    parts: Vec<ContentPart>,
+}
+
+#[derive(Deserialize, Debug)]
+struct ContentPart {
+    text: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ApiResponse {
+    candidates: Vec<Candidate>,
+}
+
+// pub async fn get_taunt(event_description: String) -> Result<String, Box<dyn std::error::Error>> {
+//     let google_api_key = std::env::var("GEMINI_API_KEY_FINE_TUNED")
+//         .unwrap_or_else(|_| "YOUR_API_KEY".to_string());
+    
+//     // Correct URL format for tuned models
+//     let url = format!(
+//         "https://generativelanguage.googleapis.com/v1/tunedModels/copy-of-copy-of-aor-tuning-uk3nmdlu547p:generateContent?key={}",
+//         google_api_key
+//     );
+
+//     let prompt = format!("{}", event_description);
+
+//     let body = json!({
+//         "contents": [{
+//             "parts": [{
+//                 "text": prompt
+//             }]
+//         }]
+//     });
+
+//     let client = reqwest::Client::new();
+    
+//     // Your existing taunt code
+//     unsafe {
+//         util::TAUNTS.taunt_count += 1;
+//         util::TAUNTS.prev_taunt_time = std::time::SystemTime::now();
+//     }
+
+//     let response = client
+//         .post(&url)
+//         .header("Content-Type", "application/json")
+//         .json(&body)
+//         .send()
+//         .await?;
+
+//     // Parse the JSON response
+//     let api_response: ApiResponse = response.json().await?;
+
+//     // Extract response text
+//     let response_text = api_response
+//         .candidates
+//         .first()
+//         .and_then(|c| c.content.parts.first())
+//         .map(|p| p.text.clone())
+//         .unwrap_or_else(|| "No response generated".to_string());
+
+//     Ok(response_text)
+// }
