@@ -452,8 +452,9 @@ pub fn game_handler(
                     _game_state.cause_bullet_damage();
                 }
 
-                let companion_res = _game_state
-                    .move_companion(_roads, _shortest_path);
+                let companion_res = _game_state.move_companion(_roads, _shortest_path);
+                _game_log.r.d = _game_state.damage_percentage as i32;
+                _game_log.r.a = _game_state.artifacts;
 
                 //if we get companion result we get set base_items_damaged
                 let damaged_base_items = if let Some(companion_res) = companion_res.as_ref() {
