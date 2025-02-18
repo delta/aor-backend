@@ -32,7 +32,7 @@ COPY public.levels_fixture FROM stdin;
 \.
 
 COPY public.user FROM stdin;
-1	Bot	donwick32@gmail.com	bot	true	0	0	1000	0	500	false
+1	Bot	akshay.iit6@gmail.com	bot	true	0	0	1000	0	500	false
 \.
 
 COPY public.map_layout FROM stdin;
