@@ -240,13 +240,13 @@ pub fn add_game(
     let inserted_game: Game;
     if !is_self_attack {
         inserted_game = diesel::insert_into(game::table)
-        .values(&new_game)
-        .get_result(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
+            .values(&new_game)
+            .get_result(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
         Ok(inserted_game.id)
     } else {
         Ok(-1)
@@ -818,7 +818,7 @@ pub fn get_hut_defender(
             max_health: defender_type.max_health,
             range: 0,
             frequency: 0,
-            last_attack:0 ,
+            last_attack: 0,
         });
         log::info!("hut_defenders {:?}", i);
     }
@@ -974,13 +974,13 @@ pub fn terminate_game(
             (damage_done, -damage_done)
         };
         let attacker_details = user::table
-        .filter(user::id.eq(attacker_id))
-        .first::<User>(conn)
-        .map_err(|err| DieselError {
-            table: "game",
-            function: function!(),
-            error: err,
-        })?;
+            .filter(user::id.eq(attacker_id))
+            .first::<User>(conn)
+            .map_err(|err| DieselError {
+                table: "game",
+                function: function!(),
+                error: err,
+            })?;
 
         let defender_details = user::table
             .filter(user::id.eq(defender_id))
@@ -1077,6 +1077,15 @@ pub fn terminate_game(
                 function: function!(),
                 error: err,
             })?;
+        if delete_game_id_from_redis(game_log.a.id, game_log.d.id, redis_conn).is_err() {
+            log::info!(
+                "Can't remove game:{} and attacker:{} and opponent:{} from redis",
+                game_id,
+                attacker_id,
+                defender_id
+            );
+            return Err(anyhow::anyhow!("Can't remove game from redis"));
+        }
     }
     // if let Ok(sim_log) = serde_json::to_string(&game_log) {
     //     let new_simulation_log = NewSimulationLog {
@@ -1096,16 +1105,6 @@ pub fn terminate_game(
     //         })?;
     //     println!("Done Inserting into similation log, game id: {}", game_id);
     // }
-
-    if delete_game_id_from_redis(game_log.a.id, game_log.d.id, redis_conn).is_err() {
-        log::info!(
-            "Can't remove game:{} and attacker:{} and opponent:{} from redis",
-            game_id,
-            attacker_id,
-            defender_id
-        );
-        return Err(anyhow::anyhow!("Can't remove game from redis"));
-    }
 
     // for event in game_log.events.iter() {
     //     println!("Event: {:?}\n", event);
