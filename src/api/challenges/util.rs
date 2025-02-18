@@ -31,6 +31,7 @@ pub struct ChallengeMapsResponse {
     pub user_id: i32,
     pub map_id: i32,
     pub completed: bool,
+    pub attempts: i32,
 }
 
 #[derive(Serialize)]
@@ -70,6 +71,16 @@ pub fn get_challenge_maps(
     challenge_id: i32,
     attacker_id: i32,
 ) -> Result<Vec<ChallengeMapsResponse>> {
+    let user_challenge_response = challenges_responses::table
+        .filter(challenges_responses::attacker_id.eq(attacker_id))
+        .filter(challenges_responses::challenge_id.eq(challenge_id))
+        .load::<ChallengeResponse>(conn)
+        .map_err(|err| DieselError {
+            table: "challenges_responses",
+            function: function!(),
+            error: err,
+        })?;
+
     let challenge_maps_resp: Vec<ChallengeMapsResponse> = challenge_maps::table
         .inner_join(challenges::table)
         .filter(challenges::id.eq(challenge_id))
@@ -99,6 +110,10 @@ pub fn get_challenge_maps(
                 id: challenge_map.id,
                 user_id: challenge_map.user_id,
                 map_id: challenge_map.map_id,
+                attempts: user_challenge_response
+                    .iter()
+                    .find(|&x| x.map_id == challenge_map.map_id)
+                    .map_or(0, |x| x.attempts),
                 completed,
             }
         })
@@ -106,7 +121,6 @@ pub fn get_challenge_maps(
 
     Ok(challenge_maps_resp)
 }
-
 pub fn is_challenge_possible(
     conn: &mut PgConnection,
     user_id: i32,
