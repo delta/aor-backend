@@ -1,3 +1,4 @@
+use self::util::TauntStatus;
 use self::util::{
     get_valid_road_paths, AttackResponse, GameLog, GeminiApiResponse, ResultResponse,
 };
@@ -12,8 +13,9 @@ use crate::api::attack::socket::{
     BuildingDamageResponse, ResultType, SocketRequest, SocketResponse,
 };
 use crate::api::util::HistoryboardQuery;
-use crate::constants::{GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK, BASE_PROMPT};
+use crate::constants::{BASE_PROMPT, GAME_AGE_IN_MINUTES, MAX_BOMBS_PER_ATTACK};
 use crate::models::{AttackerType, User};
+use crate::validator::game_handler;
 use crate::validator::state::State;
 use crate::validator::util::{BombType, BuildingDetails, DefenderDetails, MineDetails, Path};
 use crate::validator::util::{Coords, SourceDestXY};
@@ -21,15 +23,13 @@ use actix_rt;
 use actix_web::error::ErrorBadRequest;
 use actix_web::web::{Data, Json};
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
-use log;
-use socket::BaseItemsDamageResponse;
-use util::reset_taunt_status;
-use std::collections::{HashMap, HashSet};
-use std::time;
-use self::util::TauntStatus;
-use crate::validator::game_handler;
 use actix_ws::Message;
 use futures_util::stream::StreamExt;
+use log;
+use socket::BaseItemsDamageResponse;
+use std::collections::{HashMap, HashSet};
+use std::time;
+use util::reset_taunt_status;
 
 mod rating;
 pub mod socket;
@@ -322,15 +322,14 @@ async fn socket_handler(
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let defenders: Vec<DefenderDetails> = web::block(move || {
-        Ok(util::get_defenders(&mut conn, map_id, defender_id)?)
-            as anyhow::Result<Vec<DefenderDetails>>
+        Ok(util::get_defenders(&mut conn, map_id, map_id)?) as anyhow::Result<Vec<DefenderDetails>>
     })
     .await?
     .map_err(|err| error::handle_error(err.into()))?;
 
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
     let hut_defenders: HashMap<i32, DefenderDetails> = web::block(move || {
-        Ok(util::get_hut_defender(&mut conn, defender_id)?)
+        Ok(util::get_hut_defender(&mut conn, map_id)?)
             as anyhow::Result<HashMap<i32, DefenderDetails>>
     })
     .await?
@@ -758,22 +757,20 @@ pub async fn get_taunt(
     let mut response_text: String = "".to_string();
     let google_api_key =
         std::env::var("GEMINI_API_KEY_FINE_TUNED").unwrap_or_else(|_| "YOUR_API_KEY".to_string());
-    let model_id =
-        std::env::var("GEMINI_MODEL_ID").unwrap_or_else(|_| "YOUR_MODEL_ID".to_string());
+    let model_id = std::env::var("GEMINI_MODEL_ID").unwrap_or_else(|_| "YOUR_MODEL_ID".to_string());
 
     let url = format!(
         "https://generativelanguage.googleapis.com/v1/{}:generateContent?key={}",
-        model_id,
-        google_api_key
+        model_id, google_api_key
     );
     let prompt = format!("You are a defender robot who is supposed to demotivate the attacker bot in the game of Attack on Robots. Every response of yours is supposed to be against the attacker. There are only five moods. The mood must be one of these: Exhilarated – When the attacker is doing badly. Surprised – When the attacker seems to be changing the game around. Sad – When the attacker seems like winning. Frustrated – When the attacker is crushing the game. Angry – When the attacker is successful in changing the course of the game. Your response should be in this format : 'Reaction Type: reaction_type, Response: generated_text'.This has happened now: {}", event_description);
     let body = serde_json::json!({
-        "contents": [   
+        "contents": [
             {
-                "role": "user", 
+                "role": "user",
                 "parts": [
                     { "text": prompt }
-                ] 
+                ]
             }
         ]
     });
@@ -814,7 +811,6 @@ pub async fn get_taunt(
     Ok(response_text)
 }
 
-
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -842,7 +838,7 @@ struct ApiResponse {
 // pub async fn get_taunt(event_description: String) -> Result<String, Box<dyn std::error::Error>> {
 //     let google_api_key = std::env::var("GEMINI_API_KEY_FINE_TUNED")
 //         .unwrap_or_else(|_| "YOUR_API_KEY".to_string());
-    
+
 //     // Correct URL format for tuned models
 //     let url = format!(
 //         "https://generativelanguage.googleapis.com/v1/tunedModels/copy-of-copy-of-aor-tuning-uk3nmdlu547p:generateContent?key={}",
@@ -860,7 +856,7 @@ struct ApiResponse {
 //     });
 
 //     let client = reqwest::Client::new();
-    
+
 //     // Your existing taunt code
 //     unsafe {
 //         util::TAUNTS.taunt_count += 1;
