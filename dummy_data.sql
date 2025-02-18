@@ -11,6 +11,9 @@ SET row_security = off;
 
 DELETE FROM public.artifact;
 DELETE FROM public.map_spaces;
+DELETE FROM public.challenges;
+DELETE FROM public.challenges_responses;
+DELETE FROM public.challenge_maps;
 DELETE FROM public.available_attackers;
 DELETE FROM public.available_emps;
 DELETE FROM public.level_constraints;
@@ -26,6 +29,7 @@ DELETE FROM public.map_layout;
 DELETE FROM public.user;
 DELETE FROM public.levels_fixture;
 DELETE FROM public.prop;
+
 
 COPY public.levels_fixture FROM stdin;
 1	2025_01_01 00:00:00	2026_01_01 00:00:00	40	1	3
@@ -130,9 +134,9 @@ COPY public.defender_type FROM stdin;
 7	1	21	3	-1	Defender_1	7	840
 8	1	17	3	-1	Defender_2	8	960
 9	1	24	3	-1	Defender_3	9	720
-10	1	60	1	-1	Hut_Defender	19	280
-11	1	120	2	-1	Hut_Defender	20	560
-12	1	180	3	-1	Hut_Defender	21	840
+10	1	40	1	-1	Hut_Defender	19	280
+11	1	60	2	-1	Hut_Defender	20	560
+12	1	80	3	-1	Hut_Defender	21	840
 \.
 
 COPY public.emp_type FROM stdin;
