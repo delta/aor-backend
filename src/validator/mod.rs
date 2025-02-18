@@ -332,6 +332,8 @@ pub fn game_handler(
                 // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
                 // let attacker_delta_clone = attacker_delta.clone();
 
+                _game_state.defender_trigger();
+
                 let _attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
@@ -452,6 +454,8 @@ pub fn game_handler(
 
                 let companion_res = _game_state
                     .move_companion(_roads, _shortest_path);
+                _game_log.r.d = _game_state.damage_percentage as i32;
+                _game_log.r.a = _game_state.artifacts;
 
                 //if we get companion result we get set base_items_damaged
                 let damaged_base_items = if let Some(companion_res) = companion_res.as_ref() {
@@ -479,8 +483,6 @@ pub fn game_handler(
                         defenders_damaged: Vec::new(),
                     })
                 };
-
-                _game_state.defender_trigger();
 
                 _game_state.update_current_building_hp();
 

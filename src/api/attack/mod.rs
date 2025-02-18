@@ -149,11 +149,21 @@ async fn init_attack(
 
     //Create a new game
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let game_id = web::block(move || {
-        Ok(util::add_game(attacker_id, opponent_id, map_id, &mut conn, is_self_attack)?) as anyhow::Result<i32>
-    })
-    .await?
-    .map_err(|err| error::handle_error(err.into()))?;
+    let game_id = if !is_self_attack {
+        web::block(move || {
+            Ok(util::add_game(
+                attacker_id,
+                opponent_id,
+                map_id,
+                &mut conn,
+                is_self_attack,
+            )?) as anyhow::Result<i32>
+        })
+        .await?
+        .map_err(|err| error::handle_error(err.into()))?
+    } else {
+        -2
+    };
 
     log::info!(
         "Game:{} created for Attacker:{} and Opponent:{}",
@@ -257,14 +267,16 @@ async fn socket_handler(
         .get()
         .map_err(|err| error::handle_error(err.into()))?;
 
-    if let Ok(Some(_)) = util::get_game_id_from_redis(attacker_id, &mut redis_conn, true) {
-        log::info!("Attacker:{} has an ongoing game", attacker_id);
-        return Err(ErrorBadRequest("Attacker has an ongoing game"));
-    }
+    if !is_self_attack {
+        if let Ok(Some(_)) = util::get_game_id_from_redis(attacker_id, &mut redis_conn, true) {
+            log::info!("Attacker:{} has an ongoing game", attacker_id);
+            return Err(ErrorBadRequest("Attacker has an ongoing game"));
+        }
 
-    if let Ok(Some(_)) = util::get_game_id_from_redis(defender_id, &mut redis_conn, false) {
-        log::info!("Defender:{} has an ongoing game", defender_id);
-        return Err(ErrorBadRequest("Defender has an ongoing game"));
+        if let Ok(Some(_)) = util::get_game_id_from_redis(defender_id, &mut redis_conn, false) {
+            log::info!("Defender:{} has an ongoing game", defender_id);
+            return Err(ErrorBadRequest("Defender has an ongoing game"));
+        }
     }
 
     if util::check_and_remove_incomplete_game(&attacker_id, &defender_id, &game_id, &mut conn)
@@ -393,9 +405,11 @@ async fn socket_handler(
         .get()
         .map_err(|err| error::handle_error(err.into()))?;
 
-    if util::add_game_id_to_redis(attacker_id, defender_id, game_id, redis_conn).is_err() {
-        println!("Cannot add game:{} to redis", game_id);
-        return Err(ErrorBadRequest("Internal Server Error"));
+    if !is_self_attack {
+        if util::add_game_id_to_redis(attacker_id, defender_id, game_id, redis_conn).is_err() {
+            println!("Cannot add game:{} to redis", game_id);
+            return Err(ErrorBadRequest("Internal Server Error"));
+        }
     }
 
     let mut damaged_base_items: BaseItemsDamageResponse = BaseItemsDamageResponse {
@@ -576,8 +590,7 @@ async fn socket_handler(
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }
-                                    }
-                                    else if response.result_type == ResultType::UAV {
+                                    } else if response.result_type == ResultType::UAV {
                                         if session_clone1.text(response_json).await.is_err() {
                                             return;
                                         }

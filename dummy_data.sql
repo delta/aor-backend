@@ -32,7 +32,7 @@ COPY public.levels_fixture FROM stdin;
 \.
 
 COPY public.user FROM stdin;
-1	Bot	donwick32@gmail.com	bot	true	0	0	1000	0	500	false
+1	Bot	akshay.iit6@gmail.com	bot	true	0	0	1000	0	500	false
 \.
 
 COPY public.map_layout FROM stdin;
@@ -41,18 +41,18 @@ COPY public.map_layout FROM stdin;
 
 COPY public.prop FROM stdin;
 0	0	0
-1	8	0
-2	10	0
-3	6	0
-4	7	0
-5	8	0
-6	9	0
-7	9	0
-8	10	0
-9	8	0
-10	5	0
-11	6	0
-12	7	0
+1	6	900
+2	5	1000
+3	7	800
+4	7	600
+5	6	667
+6	8	533
+7	8	400
+8	7	445
+9	9	356
+10	7	0
+11	8	0
+12	9	0
 13	10	5000
 14	15	4000
 15	19	3000
@@ -60,109 +60,109 @@ COPY public.prop FROM stdin;
 17	10	2
 18	15	3
 19	5	0
-20	10	0
-21	15	0
+20	8	0
+21	11	0
 \.
 
 
 COPY public.building_type FROM stdin;
 0	Road	1	1	0	0	0	0	0
-1	Bank	3	3	2147483647	1	10	120	0
-2	Building_2	4	4	120	1	10	140	0
-3	Building_3	5	5	140	1	10	160	0
-4	Building_4	3	3	90	1	10	110	0
-5	Building_5	4	4	110	1	10	130	0
-6	Building_6	5	5	130	1	10	150	0
-7	Building_7	3	3	80	1	10	100	0
-8	Building_8	4	4	100	1	10	120	0
-9	Building_9	5	5	120	1	10	140	0
-10	Building_10	3	3	70	1	10	90	0
-11	Building_11	4	4	90	1	10	110	0
-12	Building_12	5	5	110	1	10	130	0
-13	Building_13	3	3	60	1	10	80	0
-14	Building_14	4	4	80	1	10	100	0
-15	Building_15	5	5	100	1	10	120	0
-16	Bank	3	3	2147483647	2	50	140	0
-17	Building_2	4	4	130	2	75	160	0
-18	Building_3	5	5	150	2	100	180	0
-19	Building_4	3	3	100	2	25	120	0
-20	Building_5	4	4	120	2	50	140	0
-21	Building_6	5	5	140	2	75	160	0
-22	Building_7	3	3	90	2	20	110	0
-23	Building_8	4	4	110	2	45	130	0
-24	Building_9	5	5	130	2	70	150	0
-25	Building_10	3	3	80	2	15	100	0
-26	Building_11	4	4	100	2	40	120	0
-27	Building_12	5	5	120	2	65	140	0
-28	Building_13	3	3	70	2	10	90	0
-29	Building_14	4	4	90	2	35	110	0
-30	Building_15	5	5	110	2	60	130	0
-31	Bank	3	3	2147483647	3	-1	160	0
-32	Building_2	4	4	140	3	-1	180	0
-33	Building_3	5	5	160	3	-1	200	0
-34	Building_4	3	3	110	3	-1	140	0
-35	Building_5	4	4	130	3	-1	160	0
-36	Building_6	5	5	150	3	-1	180	0
-37	Building_7	3	3	100	3	-1	120	0
-38	Building_8	4	4	120	3	-1	140	0
-39	Building_9	5	5	140	3	-1	160	0
-40	Building_10	3	3	90	3	-1	110	0
-41	Building_11	4	4	110	3	-1	130	0
-42	Building_12	5	5	130	3	-1	150	0
-43	Building_13	3	3	80	3	-1	100	0
-44	Building_14	4	4	100	3	-1	120	0
-45	Building_15	5	5	120	3	-1	140	0
-46	Defender_Hut	3	3	120	1	10	120	13
-47	Defender_Hut	3	3	120	2	75	140	14
-48	Defender_Hut	3	3	120	3	-1	160	15
-49	Sentry	3	3	120	1	10	120	16
-50	Sentry	3	3	120	2	75	140	17
-51	Sentry	3	3	120	3	-1	160	18
+1	Bank	3	3	2147483647	1	250	350	0
+2	Building_2	4	4	120	1	75	140	0
+3	Building_3	5	5	140	1	95	160	0
+4	Building_4	3	3	90	1	55	120	0
+5	Building_5	4	4	110	1	75	140	0
+6	Building_6	5	5	130	1	95	160	0
+7	Building_7	3	3	80	1	55	120	0
+8	Building_8	4	4	100	1	75	140	0
+9	Building_9	5	5	120	1	95	160	0
+10	Building_10	3	3	70	1	55	120	0
+11	Building_11	4	4	90	1	75	140	0
+12	Building_12	5	5	110	1	95	160	0
+13	Building_13	3	3	60	1	55	120	0
+14	Building_14	4	4	80	1	75	140	0
+15	Building_15	5	5	100	1	95	160	0
+16	Bank	3	3	2147483647	2	500	750	0
+17	Building_2	4	4	130	2	160	280	0
+18	Building_3	5	5	150	2	190	320	0
+19	Building_4	3	3	100	2	130	240	0
+20	Building_5	4	4	120	2	160	280	0
+21	Building_6	5	5	140	2	190	320	0
+22	Building_7	3	3	90	2	130	240	0
+23	Building_8	4	4	110	2	160	280	0
+24	Building_9	5	5	130	2	190	320	0
+25	Building_10	3	3	80	2	130	240	0
+26	Building_11	4	4	100	2	160	280	0
+27	Building_12	5	5	120	2	190	320	0
+28	Building_13	3	3	70	2	130	240	0
+29	Building_14	4	4	90	2	160	280	0
+30	Building_15	5	5	110	2	190	320	0
+31	Bank	3	3	2147483647	3	-1	1050	0
+32	Building_2	4	4	140	3	-1	420	0
+33	Building_3	5	5	160	3	-1	480	0
+34	Building_4	3	3	110	3	-1	360	0
+35	Building_5	4	4	130	3	-1	420	0
+36	Building_6	5	5	150	3	-1	480	0
+37	Building_7	3	3	100	3	-1	360	0
+38	Building_8	4	4	120	3	-1	420	0
+39	Building_9	5	5	140	3	-1	480	0
+40	Building_10	3	3	90	3	-1	360	0
+41	Building_11	4	4	110	3	-1	420	0
+42	Building_12	5	5	130	3	-1	480	0
+43	Building_13	3	3	80	3	-1	360	0
+44	Building_14	4	4	100	3	-1	420	0
+45	Building_15	5	5	120	3	-1	480	0
+46	Defender_Hut	3	3	120	1	180	175	13
+47	Defender_Hut	3	3	120	2	360	350	14
+48	Defender_Hut	3	3	120	3	-1	750	15
+49	Sentry	3	3	120	1	200	300	16
+50	Sentry	3	3	120	2	400	600	17
+51	Sentry	3	3	120	3	-1	1000	18
 \.
 
 COPY public.defender_type FROM stdin;
-1	1	5	1	10	Defender_1	1	120
-2	1	4	1	10	Defender_2	2	150
-3	1	3	1	10	Defender_3	3	180
-4	1	6	2	150	Defender_1	4	140
-5	1	7	2	250	Defender_2	5	170
-6	1	8	2	350	Defender_3	6	200
-7	1	9	3	-1	Defender_1	7	160
-8	1	10	3	-1	Defender_2	8	190
-9	1	11	3	-1	Defender_3	9	220
-10	1	5	1	-1	Hut_Defender	19	100
-11	1	6	2	-1	Hut_Defender	20	120
-12	1	7	3	-1	Hut_Defender	21	140
+1	1	10	1	70	Defender_1	1	280
+2	1	8	1	60	Defender_2	2	320
+3	1	12	1	80	Defender_3	3	240
+4	1	14	2	180	Defender_1	4	560
+5	1	12	2	140	Defender_2	5	640
+6	1	16	2	220	Defender_3	6	480
+7	1	21	3	-1	Defender_1	7	840
+8	1	17	3	-1	Defender_2	8	960
+9	1	24	3	-1	Defender_3	9	720
+10	1	60	1	-1	Hut_Defender	19	280
+11	1	120	2	-1	Hut_Defender	20	560
+12	1	180	3	-1	Hut_Defender	21	840
 \.
 
 COPY public.emp_type FROM stdin;
-1	Bomb_1	3	20	10	Bomb_1	1
-2	Bomb_2	5	30	10	Bomb_2	1
-3	Bomb_3	4	25	10	Bomb_3	1
-4	Bomb_1	4	30	120	Bomb_1	2
-5	Bomb_2	6	40	180	Bomb_2	2
-6	Bomb_3	5	35	150	Bomb_3	2
-7	Bomb_1	5	40	-1	Bomb_1	3
-8	Bomb_2	7	50	-1	Bomb_2	3
-9	Bomb_3	6	45	-1	Bomb_3	3
+1	Bomb_1	3	170	90	Bomb_1	1
+2	Bomb_2	5	130	100	Bomb_2	1
+3	Bomb_3	4	150	95	Bomb_3	1
+4	Bomb_1	4	340	180	Bomb_1	2
+5	Bomb_2	6	260	200	Bomb_2	2
+6	Bomb_3	5	300	190	Bomb_3	2
+7	Bomb_1	5	510	-1	Bomb_1	3
+8	Bomb_2	7	390	-1	Bomb_2	3
+9	Bomb_3	6	450	-1	Bomb_3	3
 \.
 
 COPY public.mine_type FROM stdin;
-1	50	1	10	Mine_1	10
-2	70	2	120	Mine_1	11
-3	90	3	-1	Mine_1	12
+1	50	1	60	Mine_1	10
+2	100	2	150	Mine_1	11
+3	150	3	-1	Mine_1	12
 \.
 
 COPY public.attacker_type FROM stdin;
-1	100	1	10	1	10	Attacker_1	0
-2	120	1	12	1	10	Attacker_2	0
-3	80	1	8	1	10	Attacker_3	0
-4	150	1	15	2	80	Attacker_1	0
-5	180	1	18	2	100	Attacker_2	0
-6	120	1	12	2	60	Attacker_3	0
-7	200	1	20	3	-1	Attacker_1	0
-8	240	1	24	3	-1	Attacker_2	0
-9	160	1	16	3	-1	Attacker_3	0
+1	150	1	10	1	110	Attacker_1	0
+2	120	1	12	1	110	Attacker_2	0
+3	180	1	8	1	110	Attacker_3	0
+4	200	1	15	2	250	Attacker_1	0
+5	160	1	18	2	250	Attacker_2	0
+6	240	1	12	2	250	Attacker_3	0
+7	250	1	20	3	-1	Attacker_1	0
+8	200	1	24	3	-1	Attacker_2	0
+9	300	1	16	3	-1	Attacker_3	0
 \.
 
 COPY public.block_type FROM stdin;
