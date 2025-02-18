@@ -149,7 +149,7 @@ async fn init_attack(
 
     //Create a new game
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    let game_id = if is_self_attack {
+    let game_id = if !is_self_attack {
         web::block(move || {
             Ok(util::add_game(
                 attacker_id,
@@ -267,14 +267,16 @@ async fn socket_handler(
         .get()
         .map_err(|err| error::handle_error(err.into()))?;
 
-    if let Ok(Some(_)) = util::get_game_id_from_redis(attacker_id, &mut redis_conn, true) {
-        log::info!("Attacker:{} has an ongoing game", attacker_id);
-        return Err(ErrorBadRequest("Attacker has an ongoing game"));
-    }
+    if !is_self_attack {
+        if let Ok(Some(_)) = util::get_game_id_from_redis(attacker_id, &mut redis_conn, true) {
+            log::info!("Attacker:{} has an ongoing game", attacker_id);
+            return Err(ErrorBadRequest("Attacker has an ongoing game"));
+        }
 
-    if let Ok(Some(_)) = util::get_game_id_from_redis(defender_id, &mut redis_conn, false) {
-        log::info!("Defender:{} has an ongoing game", defender_id);
-        return Err(ErrorBadRequest("Defender has an ongoing game"));
+        if let Ok(Some(_)) = util::get_game_id_from_redis(defender_id, &mut redis_conn, false) {
+            log::info!("Defender:{} has an ongoing game", defender_id);
+            return Err(ErrorBadRequest("Defender has an ongoing game"));
+        }
     }
 
     if util::check_and_remove_incomplete_game(&attacker_id, &defender_id, &game_id, &mut conn)

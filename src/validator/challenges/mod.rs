@@ -48,7 +48,7 @@ pub fn attacker_movement_challenge_handle(
                             challenge.score += score_increment;
                             challenge.challenge_completed = true;
                             game_state.in_validation = InValidation {
-                                message: "gomma aor mass da".to_string(),
+                                message: "Challenge Invalidated".to_string(),
                                 is_invalidated: true,
                             }
                         }
