@@ -332,6 +332,8 @@ pub fn game_handler(
                 // let attacker_delta: Vec<Coords> = socket_request.attacker_path;
                 // let attacker_delta_clone = attacker_delta.clone();
 
+                _game_state.defender_trigger();
+
                 let _attacker_result = _game_state.attacker_movement(
                     socket_request.frame_number,
                     _roads,
@@ -479,8 +481,6 @@ pub fn game_handler(
                         defenders_damaged: Vec::new(),
                     })
                 };
-
-                _game_state.defender_trigger();
 
                 _game_state.update_current_building_hp();
 
