@@ -54,9 +54,11 @@ async fn init_attack(
     let is_self_attack = *is_self.get("is_self").unwrap_or(&false);
     log::info!("Attacker:{} is trying to initiate an attack", attacker_id);
     let mut conn = pool.get().map_err(|err| error::handle_error(err.into()))?;
-    if let Ok(check) = util::can_attack_happen(&mut conn, attacker_id, true) {
-        if !check {
-            return Err(ErrorBadRequest("You've reached the max limit of attacks"));
+    if !is_self_attack {
+        if let Ok(check) = util::can_attack_happen(&mut conn, attacker_id, true) {
+            if !check {
+                return Err(ErrorBadRequest("You've reached the max limit of attacks"));
+            }
         }
     }
 
