@@ -1,5 +1,5 @@
 pub const MAP_SIZE: usize = 40;
-pub const TOTAL_ATTACKS_PER_DAY: i64 = 50;
+pub const TOTAL_ATTACKS_PER_DAY: i64 = 70;
 pub const ROAD_ID: i32 = 0;
 pub const BANK_BUILDING_NAME: &str = "Bank";
 pub const INITIAL_RATING: i32 = 1000;
@@ -58,4 +58,3 @@ pub const DAMAGE_PER_BULLET_LEVEL_1: i32 = 5;
 pub const DAMAGE_PER_BULLET_LEVEL_2: i32 = 7;
 pub const DAMAGE_PER_BULLET_LEVEL_3: i32 = 10;
 pub const BULLET_COLLISION_TIME: i32 = 2;
-
